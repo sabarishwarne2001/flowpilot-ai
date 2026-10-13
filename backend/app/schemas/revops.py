@@ -239,6 +239,8 @@ class RevenueMetricsOut(BaseModel):
     compare_days: int
     currencies: dict[str, dict[str, Any]]
     receivables: dict[str, dict[str, int]]
+    #: Campaign session 4 (N-069): per currency, money refunded at the gateway in the window.
+    refunds: dict[str, dict[str, int]] = {}
     unpriced_subscriptions: list[dict[str, Any]]
     promo_redemptions: dict[str, dict[str, int]]
     snapshots: list[dict[str, Any]]

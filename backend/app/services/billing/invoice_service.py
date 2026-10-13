@@ -713,6 +713,30 @@ def void_invoice(db: Session, *, invoice: Invoice, reason: str) -> Invoice:
     return invoice
 
 
+def record_refund(
+    db: Session,
+    *,
+    invoice: Invoice,
+    amount_refunded_micros: int,
+    refunded_at: Optional[datetime] = None,
+) -> int:
+    """Set how much of the invoice's payment has been refunded; return the change (N-069).
+
+    The figure is the gateway's running total for the charge, so this sets rather than adds: a
+    repeated event changes nothing, events in any order converge, and a refund that later fails
+    brings it back down. Never more than was paid (also a database check). The invoice keeps its
+    status: the payment happened, and the gateway shows a refunded invoice as paid too.
+    """
+    target = max(0, min(int(amount_refunded_micros), int(invoice.amount_paid_micros)))
+    change = target - int(invoice.amount_refunded_micros or 0)
+    if change:
+        invoice.amount_refunded_micros = target
+        if change > 0:
+            invoice.refunded_at = refunded_at or datetime.now(timezone.utc)
+        db.flush()
+    return change
+
+
 def record_payment(
     db: Session,
     *,

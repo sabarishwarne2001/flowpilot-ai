@@ -417,7 +417,9 @@ password. (The compose file deliberately does not pass these two to the running 
 **9. Point billing at your server (test mode)** *(not run here)*.
 
 In Stripe (Developers, Webhooks) add the endpoint `https://app.example.com/api/v1/billing/webhooks/stripe`
-and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
+for the events `checkout.session.completed`, `customer.subscription.*`, `invoice.*`,
+`payment_intent.payment_failed`, `charge.refunded` and `charge.refund.updated` (the last two record
+refunds on the customer's invoice, N-069), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
 listed, separated by commas, while you rotate one). For Dodo the endpoint is
 `https://app.example.com/api/v1/billing/webhooks/dodo` and the secret goes in
 `DODO_WEBHOOK_SECRET`. Use the lowercase gateway name. After editing `.env.production`, run

@@ -15,7 +15,7 @@ import {
   getInvoices,
 } from "@/services/api/billing";
 import { billingKeys } from "@/services/api/queryKeys";
-import { formatMicros, parseQuantity } from "@/types/billing";
+import { formatMicros, invoiceStatusLabel, parseQuantity } from "@/types/billing";
 import { ErrorState } from "@/components/common/ErrorState";
 import { errorMessage } from "@/services/api/errors";
 
@@ -110,7 +110,11 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
                   {formatMicros(invoice.total_micros, invoice.currency)}
                 </span>
                 <span className="block text-xs text-muted-foreground">
-                  {invoice.status}
+                  {invoiceStatusLabel(invoice)}
+                  {(invoice.amount_refunded_micros ?? 0) > 0 &&
+                  (invoice.amount_refunded_micros ?? 0) < invoice.amount_paid_micros
+                    ? ` · ${formatMicros(invoice.amount_refunded_micros ?? 0, invoice.currency)} refunded`
+                    : ""}
                 </span>
               </span>
             </button>

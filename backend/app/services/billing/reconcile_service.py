@@ -307,6 +307,56 @@ def reconcile_invoice(db: Session, event: StripeEvent) -> ReconcileOutcome:
     )
 
 
+def reconcile_charge_refund(db: Session, event: StripeEvent) -> ReconcileOutcome:
+    """Record the refunds of a charge against the invoice it paid (campaign session 4, N-069).
+
+    `charge.refunded` carries the charge; `charge.refund.updated` (a refund that later failed or
+    was cancelled) carries the refund, which names its charge. Either way the charge is re-fetched
+    and its running refunded total is written to the invoice, so delivery order does not matter.
+    """
+    from app.services.billing import invoice_service
+
+    obj = event.data_object
+    object_id = str(obj.get("id") or "")
+    if not object_id:
+        raise ReconcileRefused(f"Event {event.id} names no charge or refund.")
+    gateway = stripe_gateway.get_gateway()
+    charge_id = gateway.fetch_refund_charge_id(object_id) if object_id.startswith("re_") else object_id
+
+    charge = gateway.fetch_charge(charge_id)
+    if not charge.invoice_id:
+        return ReconcileOutcome.ignored("refund_without_invoice", charge_id=charge_id)
+    invoice = invoice_service.get_by_stripe_id(db, stripe_invoice_id=charge.invoice_id)
+    if invoice is None:
+        return ReconcileOutcome.ignored(
+            "refund_unmapped_to_invoice", charge_id=charge_id, stripe_invoice_id=charge.invoice_id
+        )
+
+    refunded_micros = charge.amount_refunded_cents * invoice_service.MICROS_PER_CENT
+    change = invoice_service.record_refund(
+        db, invoice=invoice, amount_refunded_micros=refunded_micros, refunded_at=event.created
+    )
+    organization_id = invoice.billing_account.organization_id
+    if change > 0:
+        from app.services import organization_notification_service as notices
+
+        notices.notify_refund_recorded(
+            db,
+            organization_id=organization_id,
+            invoice_number=invoice.number,
+            amount_micros=change,
+            currency=invoice.currency,
+            fully_refunded=invoice.amount_refunded_micros >= invoice.amount_paid_micros,
+        )
+    return ReconcileOutcome.processed(
+        organization_id=organization_id,
+        stripe_invoice_id=charge.invoice_id,
+        invoice_number=invoice.number,
+        amount_refunded_micros=int(invoice.amount_refunded_micros),
+        change_micros=change,
+    )
+
+
 # ============================================================================
 # Dispatch table
 # ============================================================================
@@ -329,6 +379,8 @@ RECONCILERS: dict[str, Reconciler] = {
     "invoice.payment_failed": reconcile_invoice,
     "invoice.marked_uncollectible": reconcile_invoice,
     "invoice.voided": reconcile_invoice,
+    "charge.refunded": reconcile_charge_refund,
+    "charge.refund.updated": reconcile_charge_refund,
 }
 
 KNOWN_UNHANDLED: dict[str, str] = {
@@ -338,7 +390,6 @@ KNOWN_UNHANDLED: dict[str, str] = {
     "invoiceitem.created": "we_do_not_push_line_items",
     "charge.succeeded": "covered_by_invoice_paid",
     "charge.failed": "covered_by_invoice_payment_failed",
-    "charge.refunded": "credit_note_not_modelled",
     "payment_intent.succeeded": "covered_by_invoice_paid",
     "payment_intent.payment_failed": "covered_by_invoice_payment_failed",
     "payment_method.attached": "portal_owned",
@@ -379,6 +430,7 @@ __all__ = [
     "ReconcileOutcome",
     "ReconcileRefused",
     "Reconciler",
+    "reconcile_charge_refund",
     "event_from_row",
     "reconcile_customer",
     "reconcile_event",

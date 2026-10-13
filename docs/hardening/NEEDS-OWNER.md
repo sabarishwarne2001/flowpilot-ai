@@ -1154,3 +1154,29 @@ The server now refuses anything it cannot honour (an unknown zone, a currency th
 a date format the product does not render), where before it stored any text and quietly fell back.
 Nothing about prices or billing currency changes: this is the workspace's operating currency for
 reading documents, not what FlowPilot charges in.
+
+
+# Pre-launch campaign, session 4 (2026-10-13): experience, operations, certification
+
+The owner delegated founder authority for the campaign. Each item below is **DECIDED (campaign
+session 4)**, built and tested on branch `claude/kind-hamilton-5lpp19` (PR #23).
+
+## N-069 — Refunds
+**DECIDED (campaign session 4): record every gateway refund on the invoice it pays back, tell the
+organization, and show refunds as their own cash figure.** A refund is made by the owner in the
+Stripe Dashboard (there is no refund button in FlowPilot: a refund is a money decision a person
+takes, usually after a support conversation; see the refund playbook in RUNBOOK §9.8). When Stripe
+reports it (`charge.refunded`, and `charge.refund.updated` if the bank later returns it), FlowPilot
+re-reads the charge and records on the invoice how much of the payment was refunded and when; the
+invoice keeps "paid" as its status, because the payment did happen, and the list says "Refunded" or
+"Partially refunded · $X refunded", as Stripe's own invoice page does. Owners and Billing members get
+a billing notice (always emailed, N-062). The RevOps console shows money refunded per currency in the
+last 30 days next to receivables. **Why not a credit-note document and negative revenue lines:**
+FlowPilot's recurring revenue (MRR) is what subscriptions are worth each month, and a refund does not
+change that (a cancellation does, and is already counted as churn); a credit-note PDF is a document
+customers in some countries need for their tax records, and Stripe issues one when the owner refunds
+through "Credit note" rather than "Refund" in the Dashboard. Recording the refund where the customer
+and the operator look is what was missing. Dodo Payments is the merchant of record and owns refunds
+there, as before. **Owner action:** add `charge.refunded` and `charge.refund.updated` to the Stripe
+webhook's events (RUNBOOK §9.2 step 9).
+

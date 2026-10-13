@@ -74,6 +74,8 @@ class FakeStripeGateway(StripeGateway):
         self.current: dict[str, dict[str, Any]] = {}
         self.customers: dict[str, dict[str, Any]] = {}
         self.invoices: dict[str, dict[str, Any]] = {}
+        self.charges: dict[str, dict[str, Any]] = {}
+        self.refunds: dict[str, dict[str, Any]] = {}
         self.fetch_calls: list[str] = []
         self.seat_calls: list[tuple[str, int, str]] = []
         self.fail_next_fetch: Optional[Exception] = None
@@ -126,6 +128,20 @@ class FakeStripeGateway(StripeGateway):
 
     def fetch_invoice_total_cents(self, invoice_id: str) -> int:
         return self.fetch_invoice(invoice_id).total_cents
+
+    def fetch_charge(self, charge_id: str):
+        from app.services.billing.stripe_gateway import charge_snapshot
+
+        raw = self.charges.get(charge_id)
+        if raw is None:
+            raise StripeObjectNotFoundError(f"no such charge {charge_id}")
+        return charge_snapshot(raw, fallback_id=charge_id)
+
+    def fetch_refund_charge_id(self, refund_id: str) -> str:
+        raw = self.refunds.get(refund_id)
+        if raw is None:
+            raise StripeObjectNotFoundError(f"no such refund {refund_id}")
+        return str(raw["charge"])
 
     def set_subscription_seats(
         self,

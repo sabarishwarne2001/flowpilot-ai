@@ -69,6 +69,8 @@ class InvoiceSummary(BaseModel):
     tax_micros: int
     total_micros: int
     amount_paid_micros: int
+    amount_refunded_micros: int = 0
+    refunded_at: Optional[datetime] = None
     seats_billed: int
     finalized_at: Optional[datetime] = None
     stripe_invoice_id: Optional[str] = None

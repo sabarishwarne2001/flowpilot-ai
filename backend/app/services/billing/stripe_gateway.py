@@ -145,6 +145,24 @@ class StripeInvoiceSnapshot:
 
 
 @dataclass(frozen=True)
+class StripeChargeSnapshot:
+    """A charge, in Stripe's units (cents): what was paid and how much of it was refunded.
+
+    Campaign session 4 (N-069). `amount_refunded_cents` is Stripe's running total across every
+    refund of the charge, so re-reading it is the whole reconciliation, in any event order.
+    """
+
+    id: str
+    invoice_id: Optional[str]
+    customer_id: Optional[str]
+    currency: Optional[str]
+    amount_cents: int
+    amount_refunded_cents: int
+    refunded: bool
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class StripeSeatChangePreview:
     """What Stripe says a seat change costs, before anyone commits to it.
 
@@ -846,6 +864,27 @@ class StripeGateway:
     def fetch_invoice_total_cents(self, invoice_id: str) -> int:
         return self.fetch_invoice(invoice_id).total_cents
 
+    def fetch_charge(self, charge_id: str) -> StripeChargeSnapshot:
+        client = self._stripe_client()
+        try:
+            obj = client.v1.charges.retrieve(
+                charge_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(exc, context=f"charge {charge_id}") from exc
+        return charge_snapshot(_as_mapping(obj), fallback_id=charge_id)
+
+    def fetch_refund_charge_id(self, refund_id: str) -> str:
+        """The charge a refund belongs to, read from the gateway (not the event body)."""
+        client = self._stripe_client()
+        try:
+            obj = client.v1.refunds.retrieve(
+                refund_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(exc, context=f"refund {refund_id}") from exc
+        return _customer_id(_as_mapping(obj).get("charge"))
+
     # -- sessions (Tranche 4) -------------------------------------------
 
     def create_portal_session(
@@ -986,6 +1025,21 @@ class StripeGateway:
 # ============================================================================
 # Idempotency keys
 # ============================================================================
+
+
+def charge_snapshot(raw: Mapping[str, Any], *, fallback_id: str = "") -> StripeChargeSnapshot:
+    """A charge object (from the API or a test's fake) as a snapshot."""
+    invoice = raw.get("invoice")
+    return StripeChargeSnapshot(
+        id=str(raw.get("id") or fallback_id),
+        invoice_id=_customer_id(invoice) if invoice else None,
+        customer_id=_customer_id(raw.get("customer")) if raw.get("customer") else None,
+        currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+        amount_cents=int(raw.get("amount") or 0),
+        amount_refunded_cents=int(raw.get("amount_refunded") or 0),
+        refunded=bool(raw.get("refunded", False)),
+        raw=dict(raw),
+    )
 
 
 def idempotency_key(*parts: str) -> str:
