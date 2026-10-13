@@ -203,8 +203,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
         register_all()
         with SessionLocal() as db, db.begin():
-            job = job_service.enqueue(db, job_type=args.job, payload={})
-        print(json.dumps({"queued": args.job, "job_id": str(job.id)}))
+            job_id = str(job_service.enqueue(db, job_type=args.job, payload={}).id)
+        print(json.dumps({"queued": args.job, "job_id": job_id}))
         return 0
 
     state = _load()

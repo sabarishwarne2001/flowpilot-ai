@@ -204,8 +204,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       session 1 is finished.
       _Done (session 4): `backend/tests/engines/test_billing_jobs_live.py` and
       `test_erp_delivery_through_the_mock_target_live.py`; found and fixed F-339 (overage never charged)._
-- [ ] **The one-week trial journey** in the browser: sign up → trial → reminder → trial ends →
+- [x] **The one-week trial journey** in the browser: sign up → trial → reminder → trial ends →
       subscribe → everything back (N-052; HANDOFF "Owner request").
+      _Done (session 4): `frontend/e2e/tests/61-journey-trial-ends.spec.ts` (journey 2 of §D), with the
+      clock and gateway stand-in `backend/scripts/e2e_stand_in.py`._
 - [ ] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
 
 ### 4.2 Operations gaps found in the 2026-10-12 review
