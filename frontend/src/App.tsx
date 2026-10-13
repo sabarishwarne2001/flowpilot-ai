@@ -21,8 +21,13 @@ import { AuthLayout } from "@/layouts/AuthLayout";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { OrganizationLayout } from "@/layouts/OrganizationLayout";
 
-import { Assistant } from "@/pages/Assistant/Assistant";
-import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
+// §B.1 (session 4): pages are lazy (only the small 404 page is not). A page imported statically
+// here is downloaded by every visitor before the first screen renders, with its libraries: the
+// assistant canvas alone put pdf.js (~125 KB gzipped) on the login screen.
+const Assistant = lazy(() =>
+  import("@/pages/Assistant/Assistant").then((m) => ({ default: m.Assistant })),
+);
+const AssistantCanvas = lazy(() => import("@/pages/Assistant/AssistantCanvas"));
 
 const OrganizationMembers = lazy(
   () => import("@/pages/organization/OrganizationMembers"),
@@ -142,25 +147,26 @@ const TolerancePolicyEditor = lazy(
   () => import("@/pages/procurement/TolerancePolicyEditor"),
 );
 
-import { Login } from "@/pages/Auth/Login";
-import { SsoComplete } from "@/pages/Auth/SsoComplete";
-import { Register } from "@/pages/Auth/Register";
-import VerifyEmail from "@/pages/Auth/VerifyEmail";
-import ForgotPassword from "@/pages/Auth/ForgotPassword";
-import ResetPassword from "@/pages/Auth/ResetPassword";
-import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
-import ConfirmEmailChange from "@/pages/Auth/ConfirmEmailChange";
-import { Automation } from "@/pages/Automation/Automation";
-import { Dashboard } from "@/pages/Dashboard/Dashboard";
+const Login = lazy(() => import("@/pages/Auth/Login"));
+const SsoComplete = lazy(() => import("@/pages/Auth/SsoComplete"));
+const Register = lazy(() => import("@/pages/Auth/Register"));
+const VerifyEmail = lazy(() => import("@/pages/Auth/VerifyEmail"));
+const ForgotPassword = lazy(() => import("@/pages/Auth/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/Auth/ResetPassword"));
+const InvitationAcceptPage = lazy(() => import("@/pages/Auth/InvitationAcceptPage"));
+const ConfirmEmailChange = lazy(() => import("@/pages/Auth/ConfirmEmailChange"));
+const Automation = lazy(() => import("@/pages/Automation/Automation"));
+const Dashboard = lazy(() => import("@/pages/Dashboard/Dashboard"));
+const Notifications = lazy(() => import("@/pages/Notifications/Notifications"));
+const WorkItemDetails = lazy(() => import("@/pages/WorkItems/WorkItemDetails"));
+const WorkItems = lazy(() => import("@/pages/WorkItems/WorkItems"));
+const Settings = lazy(() => import("@/pages/Settings/Settings"));
+const CreateOrganizationPage = lazy(() => import("@/pages/Tenant/CreateOrganizationPage"));
+const NoAccess = lazy(() => import("@/pages/Tenant/NoAccess"));
+const WorkspacePicker = lazy(() => import("@/pages/Tenant/WorkspacePicker"));
+const CreateWorkspacePage = lazy(() => import("@/pages/Tenant/CreateWorkspacePage"));
+
 import { NotFound } from "@/pages/NotFound";
-import { Notifications } from "@/pages/Notifications/Notifications";
-import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
-import { WorkItems } from "@/pages/WorkItems/WorkItems";
-import Settings from "@/pages/Settings/Settings";
-import CreateOrganizationPage from "@/pages/Tenant/CreateOrganizationPage";
-import NoAccess from "@/pages/Tenant/NoAccess";
-import WorkspacePicker from "@/pages/Tenant/WorkspacePicker";
-import CreateWorkspacePage from "@/pages/Tenant/CreateWorkspacePage";
 
 import LegacyRouteRedirect from "@/routes/LegacyRouteRedirect";
 import { PrivateRoute } from "@/routes/PrivateRoute";
