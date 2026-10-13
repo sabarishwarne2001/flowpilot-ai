@@ -4,7 +4,7 @@ import { ArrowRight } from "lucide-react";
 
 import { Brand } from "@/components/branding/Brand";
 import { BUTTON_GHOST, BUTTON_PRIMARY } from "@/components/ui/primitives";
-import { ROUTES } from "@/constants/routes";
+import { PUBLIC_PAGE_LINKS, ROUTES } from "@/constants/routes";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { useAuthStore } from "@/store/useAuthStore";
 
@@ -15,12 +15,6 @@ import { useAuthStore } from "@/store/useAuthStore";
  * header offers "Sign in" and "Start free trial" to a visitor and "Open the app" to someone
  * with a session. The page itself owns the single `h1`; this shell has none.
  */
-
-export const PUBLIC_FOOTER_LINKS: ReadonlyArray<{ readonly to: string; readonly label: string }> = [
-  { to: ROUTES.PRICING, label: "Pricing" },
-  { to: ROUTES.TERMS, label: "Terms of service" },
-  { to: ROUTES.PRIVACY, label: "Privacy policy" },
-];
 
 const NAV_LINK =
   "rounded-md px-2 py-1 text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
@@ -84,7 +78,7 @@ export const PublicPageShell: React.FC<PublicPageShellProps> = ({ title, childre
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
           <span>© {year} FlowPilot AI</span>
           <nav aria-label="Pricing and legal" className="flex flex-wrap items-center gap-x-1 gap-y-1">
-            {PUBLIC_FOOTER_LINKS.map((link) => (
+            {PUBLIC_PAGE_LINKS.map((link) => (
               <Link key={link.to} to={link.to} className={NAV_LINK}>
                 {link.label}
               </Link>
