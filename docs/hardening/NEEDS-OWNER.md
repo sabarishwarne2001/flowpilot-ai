@@ -1215,3 +1215,18 @@ Stripe (seats in advance, usage in arrears). Also decided:
 - **Dodo** cannot take usage lines yet (`supports_usage_billing` is false pending verification, N-026):
   on Dodo, statements are written and overage is not billed. Stripe is the launch gateway.
 - **Owner action:** none in code. Keep `invoice.*` in the Stripe webhook's events (RUNBOOK §9.2 step 9).
+
+## N-072 — What happens when a card is declined (Stripe)
+**DECIDED (campaign session 4): Stripe retries, FlowPilot tells, and the account becomes read-only only
+when Stripe gives up.** When a renewal is declined, Stripe's Smart Retries try the card again over about
+two weeks. Each failed attempt emails the organization's owners and Billing members (FlowPilot's three
+notices: "Payment could not be processed", "Payment still outstanding", "Final notice before access
+changes"), and the app shows "Payment failed" with an "Update payment method" button from the first
+one (F-341). FlowPilot's own dunning stops at those notices (`BILLING_DUNNING_MAX_STEP=NOTIFY_3`, so
+two systems never race to restrict). When the retries run out, Stripe marks the subscription **unpaid**
+and FlowPilot makes the organization read-only: everything can still be read, searched and exported,
+nothing is deleted, and writes are refused with the reason. Paying the open invoice (a new card in the
+billing portal) restores everything at once. This is the standard Stripe setup for B2B SaaS: no data
+loss, a clear path back. **Owner action:** in the Stripe Dashboard, Billing → Revenue recovery →
+Retries, choose Smart Retries and set "If all retries for a payment fail" to **Mark the subscription as
+unpaid** (not cancel). Proven by journey 5 (`frontend/e2e/tests/64-journey-payment-fails.spec.ts`).
