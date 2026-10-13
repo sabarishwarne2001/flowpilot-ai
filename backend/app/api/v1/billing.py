@@ -170,9 +170,8 @@ def list_plans(
 
         # ARCH-29 Tranche 2 (D-1, F-2).
         #
-        # This block previously read
-        #     price_id = getattr(settings, "BILLING_SEAT_PRICE_ID", None)
-        # INSIDE this loop, which is loop-invariant: every tier received the
+        # This block previously read the one global BILLING_SEAT_PRICE_ID setting
+        # (since removed) INSIDE this loop, which is loop-invariant: every tier received the
         # same gateway price while advertising different entitlements. Setting
         # that env var would have charged an Enterprise subscriber the one
         # global amount and granted them Enterprise limits, with nothing in

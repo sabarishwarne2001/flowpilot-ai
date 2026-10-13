@@ -108,11 +108,9 @@ x-app-env: &app-env
 
   # The platform's own LLM credentials. Tenants who bring their own key (BYOK) do not
   # need them; everyone else gets an error from any AI feature without one.
-  LLM_PROVIDER: ${LLM_PROVIDER:-groq}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
   GROQ_MODEL_NAME: ${GROQ_MODEL_NAME:-openai/gpt-oss-120b}
-  GEMINI_MODEL_NAME: ${GEMINI_MODEL_NAME:-gemini-3.5-flash}
 
   # F-123. The address identity providers return users to (SAML ACS, OIDC
   # redirect_uri). Blank: FRONTEND_URL, because Caddy serves the API there.
