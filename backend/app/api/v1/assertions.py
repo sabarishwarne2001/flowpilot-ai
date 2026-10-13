@@ -455,6 +455,17 @@ def resolve_review(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
         ) from exc
+    except (
+        review_resolution.StaleVersionError,
+        review_resolution.ItemLockedError,
+        review_resolution.AlreadyResolvedError,
+    ) as exc:
+        # Campaign session 4 (F-334): someone else decided it, or holds it. The review hub
+        # answers that with 409 and the refusal code; this console answered 400.
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail={"code": exc.code, "message": str(exc)}
+        ) from exc
     except review_resolution.ReviewResolutionError as exc:
         raise _bad_request(exc) from exc
 
