@@ -1,5 +1,6 @@
 /** ARCH-32 — Redaction Studio API client. */
 
+import { downloadBlob } from "@/services/api/audit";
 import { apiClient } from "@/services/api/client";
 import type {
   RedactionBundle,
@@ -107,6 +108,22 @@ export const getBundle = async (
     `${base(workspaceId)}/${encodeURIComponent(jobId)}/bundle`,
   );
   return data;
+};
+
+/**
+ * F-356. Where the storage cannot presign a link (local disk) the bundle's URLs are empty: the API
+ * streams the same sealed file and the browser saves it from memory, fetched with the session.
+ */
+export const downloadSealedFile = async (
+  workspaceId: string,
+  jobId: string,
+  which: "document" | "manifest",
+): Promise<void> => {
+  const { data } = await apiClient.get<Blob>(
+    `${base(workspaceId)}/${encodeURIComponent(jobId)}/files/${which}`,
+    { responseType: "blob" },
+  );
+  downloadBlob(data, which === "document" ? `redacted-${jobId}.pdf` : `redaction-manifest-${jobId}.json`);
 };
 
 export const redactionKeys = {

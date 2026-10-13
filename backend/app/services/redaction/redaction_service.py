@@ -98,6 +98,7 @@ __all__ = [
     "approve_and_enqueue_apply",
     "render_source_page_png",
     "bundle_urls",
+    "open_sealed_file",
     "load_job",
 ]
 
@@ -849,6 +850,26 @@ def _meter_pages(db: Session, *, job: RedactionJob, pages: int) -> None:
 # ---------------------------------------------------------------------------
 # Bundle
 # ---------------------------------------------------------------------------
+
+
+def open_sealed_file(db: Session, *, job: RedactionJob, which: str) -> tuple[Any, str, str]:
+    """The sealed output ("document") or its manifest as (stream, filename, media type).
+
+    Campaign session 4 (F-356): for storage that cannot presign a link (local disk), where the
+    bundle's URLs are empty, the API streams the same files. Refused, like the bundle, until the
+    leak check has passed.
+    """
+    if not job.is_sealed:
+        raise InvalidJobState(
+            "This job has no verified output yet. A download is only offered "
+            "once the leak check has passed."
+        )
+    row = db.get(UploadedFile, job.output_file_id if which == "document" else job.manifest_file_id)
+    if row is None:
+        raise RedactionError("The output objects for this job are missing.")
+    if which == "document":
+        return get_storage_driver().stream(row.file_path), f"redacted-{job.id}.pdf", "application/pdf"
+    return get_storage_driver().stream(row.file_path), f"redaction-manifest-{job.id}.json", "application/json"
 
 
 def bundle_urls(db: Session, *, job: RedactionJob, expires_in: int = 900) -> dict[str, Any]:

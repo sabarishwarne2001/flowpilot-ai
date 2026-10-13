@@ -34,6 +34,7 @@ import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import {
   addRegion,
   applyRedaction,
+  downloadSealedFile,
   getBundle,
   getRedaction,
   pagePreviewUrl,
@@ -152,12 +153,15 @@ const RedactionStudio: React.FC = () => {
       const bundle = await getBundle(workspaceId as string, jobId);
       const url = which === "document" ? bundle.document_url : bundle.manifest_url;
       if (!url) {
-        throw new Error("The redacted file is not available yet.");
+        // F-356. Storage that cannot presign (local disk): the API streams the sealed file.
+        await downloadSealedFile(workspaceId as string, jobId, which);
       }
       return url;
     },
     onSuccess: (url) => {
-      window.location.assign(url);
+      if (url) {
+        window.location.assign(url);
+      }
     },
     onError: (caught: unknown) => report(caught),
   });

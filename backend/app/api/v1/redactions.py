@@ -7,6 +7,7 @@
     POST   /workspaces/{wid}/redactions/{jid}/regions          draw    [CONTRIBUTOR]
     POST   /workspaces/{wid}/redactions/{jid}/apply            approve [ADMIN]
     GET    /workspaces/{wid}/redactions/{jid}/bundle           download[VIEWER]
+    GET    /workspaces/{wid}/redactions/{jid}/files/{which}    stream it (no presign)[VIEWER]
 
 EVERY ROUTE IS CAPABILITY-GATED, INCLUDING THE READS
 ====================================================
@@ -51,9 +52,10 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Response, status
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api import capability_gate
@@ -423,3 +425,31 @@ def get_bundle(
             status_code=status.HTTP_409_CONFLICT, detail=str(exc)
         ) from exc
     return BundleResponse(**payload)
+
+
+@router.get(
+    "/workspaces/{workspace_id}/redactions/{job_id}/files/{which}",
+    summary="Stream the sealed redacted PDF or its manifest, where the storage cannot presign a URL",
+)
+def stream_sealed_file(
+    which: Literal["document", "manifest"],
+    workspace_id: uuid.UUID = Path(...),
+    job_id: uuid.UUID = Path(...),
+    context: TenantContext = Depends(RequireViewer),
+    db: Session = Depends(get_db),
+) -> StreamingResponse:
+    """F-356. The files the bundle's links serve, for local-disk storage (as F-138 for exports)."""
+    _assert_workspace(context, workspace_id)
+    _gate(db, context, "redaction.bundle")
+    try:
+        job = redaction_service.load_job(db, job_id=job_id, workspace_id=workspace_id)
+        stream, filename, media_type = redaction_service.open_sealed_file(db, job=job, which=which)
+    except redaction_service.JobNotFound as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except redaction_service.InvalidJobState as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    return StreamingResponse(
+        stream,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
