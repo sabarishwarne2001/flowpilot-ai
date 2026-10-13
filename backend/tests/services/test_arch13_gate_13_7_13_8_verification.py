@@ -21,6 +21,16 @@ from app.services import document_verification_service as dv
 pytestmark = pytest.mark.usefixtures("test_database")
 
 
+@pytest.fixture(autouse=True)
+def _job_handlers() -> None:
+    # Emitting an outcome event may enqueue automation runs, and enqueue refuses a job type with no
+    # handler. The API and the worker register them all at start; so must this module, which passed
+    # only when an earlier test happened to have done it (it failed when run on its own).
+    from app.workers.handlers import register_all
+
+    register_all()
+
+
 def _verification(
     db, tenant, work_item, *, status=VerificationStatus.PENDING, agents: int = 2
 ) -> DocumentVerification:
