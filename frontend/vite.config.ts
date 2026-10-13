@@ -115,9 +115,13 @@ export default defineConfig(({ mode, command }) => {
 
       rollupOptions: {
         output: {
+          // §B.1 (session 4): no "markdown" group. A manual chunk also takes its libraries'
+          // dependencies, and highlight.js is CommonJS, so the group took Rollup's shared CommonJS
+          // helper. React needs that helper too, so the entry imported the group and every visitor
+          // downloaded marked, DOMPurify and highlight.js (~76 KB gzipped) on the login screen.
+          // Ungrouped, they load with the page that renders markdown (the assistant canvas).
           manualChunks: {
             pdf: ["pdfjs-dist"],
-            markdown: ["marked", "dompurify", "highlight.js"],
           },
         },
       },
