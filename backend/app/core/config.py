@@ -159,8 +159,29 @@ class Settings(BaseSettings):
     GROQ_API_KEY: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
     LLM_PROVIDER: str = "groq"
+    #: F-353. The model the platform's own Groq key serves by default: what a new workspace
+    #: starts with, and what a call falls back to when its workspace chose a model that needs
+    #: the organization's own key. One of the models the platform serves (N-054):
+    #: openai/gpt-oss-120b (better answers) or openai/gpt-oss-20b (cheaper and faster).
     GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
     GEMINI_MODEL_NAME: str = "gemini-3.5-flash"
+
+    @field_validator("GROQ_MODEL_NAME")
+    @classmethod
+    def validate_groq_model_name(cls, v: str) -> str:
+        # Not app.core.ai_models: it imports the schemas package, whose modules import these
+        # settings, a cycle while they are being built. platform_models imports nothing.
+        from app.core.platform_models import PLATFORM_SERVED_MODELS
+
+        cleaned = (v or "").strip()
+        served = PLATFORM_SERVED_MODELS["groq"]
+        if cleaned not in served:
+            raise ValueError(
+                f"GROQ_MODEL_NAME={cleaned!r} is not a model the platform serves on its own Groq "
+                f"key. Use one of: {', '.join(served)} (N-054). Other models run on an "
+                "organization's own key, chosen in its AI settings."
+            )
+        return cleaned
 
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32

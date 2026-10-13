@@ -111,7 +111,7 @@ x-app-env: &app-env
   LLM_PROVIDER: ${LLM_PROVIDER:-groq}
   GROQ_API_KEY: ${GROQ_API_KEY:-}
   GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-  GROQ_MODEL_NAME: ${GROQ_MODEL_NAME:-llama-3.3-70b-versatile}
+  GROQ_MODEL_NAME: ${GROQ_MODEL_NAME:-openai/gpt-oss-120b}
   GEMINI_MODEL_NAME: ${GEMINI_MODEL_NAME:-gemini-3.5-flash}
 
   # F-123. The address identity providers return users to (SAML ACS, OIDC
