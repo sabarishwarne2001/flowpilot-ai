@@ -127,6 +127,28 @@ def test_a_person_signs_in_through_openid_connect(engines: Engines, provider: Pr
     assert me["email"] == email
 
 
+def test_an_openid_sign_in_is_in_the_audit_trail_as_a_saml_one_is(engines: Engines, provider: Provider) -> None:
+    # Campaign session 4 (F-348): the SAML ACS recorded every federated sign-in in the organization's
+    # audit trail (CREATED, SESSION, auth_method SAML2); the OIDC callback created the session and
+    # recorded nothing, so an Enterprise customer's audit export missed every OIDC sign-in.
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLog
+
+    state, nonce = _start(engines, provider)
+    email = f"owen-{uuid.uuid4().hex[:6]}@{provider.domain}"
+    provider.next_token = provider.id_token(email=email, nonce=nonce)
+    assert _callback(engines, state).status_code in (302, 303)
+    engines.refresh()
+    sessions = [
+        row for row in engines.db.execute(select(AuditLog).where(
+            AuditLog.organization_id == engines.org, AuditLog.resource_type == "SESSION")).scalars()
+        if (row.details or {}).get("auth_method") == "OIDC"
+    ]
+    assert len(sessions) == 1, [row.details for row in sessions]
+    assert sessions[0].action == "CREATED"
+
+
 def test_the_state_is_single_use(engines: Engines, provider: Provider) -> None:
     state, nonce = _start(engines, provider)
     provider.next_token = provider.id_token(email=f"once-{uuid.uuid4().hex[:6]}@{provider.domain}", nonce=nonce)

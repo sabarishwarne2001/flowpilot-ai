@@ -658,6 +658,11 @@ def oidc_callback(request: Request, code: str = Query(...),
                       authn_instant=claims.auth_time, user_id=result.user_id,
                       session_id=issued.session.id,
                       attributes={"sub": [claims.subject]}, source_ip=source_ip)
+    # Campaign session 4 (F-348): recorded like a SAML sign-in, so the audit trail has every one.
+    write_audit(db, organization_id=config.organization_id, action="CREATED",
+                resource_type="SESSION", resource_id=issued.session.id,
+                principal=principal_for_idp(config.id),
+                details={"auth_method": "OIDC", "user_id": str(result.user_id)})
     db.commit()
 
     target = (auth_request.redirect_path
