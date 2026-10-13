@@ -80,6 +80,20 @@ export async function loginAs(userKey: UserKey): Promise<ApiSession> {
   return apiLogin(USERS[userKey].email);
 }
 
+/**
+ * Campaign session 4 (browser-suite isolation). The seeded people are shared by tests running in
+ * parallel: ending every session of one ("sign out everywhere") signs it out of all of them. A test
+ * that needs it signs in a person of its own (`newCustomer` in support/journey.ts).
+ */
+export const SHARED_PERSONA_SIGN_OUT =
+  "A test tried to end every session of a seeded person (POST /auth/logout-all). Tests running in parallel " +
+  "share that person and would all be signed out. End only this test's own session (DELETE /auth/sessions/{id}), " +
+  "or sign in a person of the test's own (newCustomer in support/journey.ts).";
+
+export function isSharedPersona(email: string | null | undefined): boolean {
+  return Boolean(email) && Object.values(USERS).some((user) => user.email === email);
+}
+
 export async function api<T = unknown>(
   session: ApiSession | null,
   method: string,
@@ -87,6 +101,9 @@ export async function api<T = unknown>(
   body?: unknown,
   extraHeaders: Record<string, string> = {},
 ): Promise<ApiResult<T>> {
+  if (/^\/auth\/logout-all\b/.test(pathname) && isSharedPersona(session?.email)) {
+    throw new Error(SHARED_PERSONA_SIGN_OUT);
+  }
   const headers: Record<string, string> = { Accept: "application/json", ...extraHeaders };
   if (session) {
     headers.Authorization = `Bearer ${session.accessToken}`;
