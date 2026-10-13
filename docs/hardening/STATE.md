@@ -42,6 +42,20 @@ for real, and ERP delivery over HTTPS runs against the mock target. **Next:** th
 collaborative-review WebSocket, engine page journeys, the billing jobs through the fake gateway,
 then operations (§C), the customer journeys (§D), experience (§A), performance (§B), the ledger.
 
+**Progress (checkpoint 2, 2026-10-13):** items 3 (largely), 4 and 7 (bundle) done. All eight customer
+journeys are Playwright specs that pass against the production bundle with the worker running
+(`frontend/e2e/tests/60` to `67-journey-*.spec.ts`; journey 4, Enterprise, proves the domain over a
+real DNS lookup, a SAML sign-in, SCIM, egress lockdown and the audit export). Every host cron line
+runs as cron runs it (`backend/tests/operational/test_host_cron_lines.py`) and by hand against the
+stack; the encrypted backup restores in a timed drill (RUNBOOK §9.4). The whole migration chain is
+proven up, down to base and up. The first load is 191.9 KB gzipped (was 634 KB; Lighthouse
+performance 91 on sign-in). Public pricing, terms and privacy pages (N-073). COSTS.md and
+PRODUCT-NEXT.md written; the 17 integrations and every migration and job row closed in the ledger.
+Fixed and proven since checkpoint 1: F-338 to F-348. **Next:** the configuration contract (282
+rows, in progress), the Locust load run, the engine page journeys and the open endpoint, page and
+navigation rows, accessibility and widths (§A), the Windows scripts, then the certification,
+HANDOFF and the owner launch checklist.
+
 ## Previous phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
 `3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
