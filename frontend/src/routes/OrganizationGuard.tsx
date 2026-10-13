@@ -34,6 +34,12 @@ export const OrganizationGuard: React.FC = () => {
   const { state } = useTenant();
   const location = useLocation();
 
+  // §B.1 (session 4): the organization layout is a lazy chunk (App.tsx); fetch it while the
+  // tenant resolves rather than after. A failure is reported by the lazy import when it renders.
+  useEffect(() => {
+    import("@/layouts/OrganizationLayout").catch(() => undefined);
+  }, []);
+
   const organizations = useMemo<OrganizationMembershipSummary[]>(
     () =>
       state.status === "ready" || state.status === "no_workspace"

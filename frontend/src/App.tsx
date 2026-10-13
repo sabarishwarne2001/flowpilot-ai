@@ -18,8 +18,6 @@ import OrganizationPolicyNotice from "@/components/auth/OrganizationPolicyNotice
 import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
-import { DashboardLayout } from "@/layouts/DashboardLayout";
-import { OrganizationLayout } from "@/layouts/OrganizationLayout";
 
 // §B.1 (session 4): pages are lazy (only the small 404 page is not). A page imported statically
 // here is downloaded by every visitor before the first screen renders, with its libraries: the
@@ -86,6 +84,11 @@ const RevOpsConsole = lazy(() => import("@/pages/admin/RevOpsConsole"));
 const JobsConsole = lazy(() => import("@/pages/admin/JobsConsole"));
 const OrganizationEgress = lazy(() => import("@/pages/organization/OrganizationEgress"));
 const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
+// §B.1 (session 4): lazy like PlatformLayout. Their sidebars, menus and banners (with the
+// floating-ui positioning library) are ~50 KB gzipped that a signed-out visitor never sees.
+// Their guards start the download while the tenant resolves.
+const DashboardLayout = lazy(() => import("@/layouts/DashboardLayout"));
+const OrganizationLayout = lazy(() => import("@/layouts/OrganizationLayout"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );

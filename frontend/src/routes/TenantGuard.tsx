@@ -122,6 +122,13 @@ export const TenantGuard: React.FC = () => {
   const urlOrgSlug = params[ROUTE_PARAMS.orgSlug];
   const urlWorkspaceSlug = params[ROUTE_PARAMS.workspaceSlug];
 
+  // §B.1 (session 4): the workspace layout is a lazy chunk (App.tsx). Fetch it while the tenant
+  // resolves, not after; the page's own chunk would otherwise wait for both. A failure here is
+  // ignored: the layout's lazy import reports it when it renders.
+  useEffect(() => {
+    import("@/layouts/DashboardLayout").catch(() => undefined);
+  }, []);
+
   const reconciliation =
     state.status === "ready"
       ? reconcileTenantWithUrl(state, urlOrgSlug, urlWorkspaceSlug)
