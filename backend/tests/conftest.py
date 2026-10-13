@@ -82,6 +82,48 @@ def pytest_configure(config: pytest.Config) -> None:
     )
 
 
+def assign_shards(file_weights: dict[str, float], total: int) -> dict[str, int]:
+    """Campaign session 4 (F-030): split test files across `total` CI jobs, deterministically.
+
+    Whole files go to one shard (their fixtures and module state stay together); the heaviest
+    file goes to the lightest shard first. Every file lands in exactly one shard
+    (`tests/infra/test_ci_shards_cover_the_suite.py`).
+    """
+    loads = [0.0] * total
+    owner: dict[str, int] = {}
+    for path, weight in sorted(file_weights.items(), key=lambda kv: (-kv[1], kv[0])):
+        shard = min(range(total), key=lambda index: (loads[index], index))
+        owner[path] = shard
+        loads[shard] += weight
+    return owner
+
+
+#: A live engine test (uvicorn, the worker's handlers, real jobs) takes several times an API test.
+_LIVE_TEST_WEIGHT = 5.0
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """`PYTEST_SHARD=2/4` runs the second of four shards; unset, everything runs."""
+    shard = os.environ.get("PYTEST_SHARD", "").strip()
+    if not shard:
+        return
+    index_text, total_text = shard.split("/", 1)
+    index, total = int(index_text), int(total_text)
+    if not 1 <= index <= total:
+        raise pytest.UsageError(f"PYTEST_SHARD={shard!r}: expected k/n with 1 <= k <= n")
+
+    weights: dict[str, float] = {}
+    for item in items:
+        path = str(item.path)
+        weights[path] = weights.get(path, 0.0) + (_LIVE_TEST_WEIGHT if "/tests/engines/" in path else 1.0)
+    owner = assign_shards(weights, total)
+    kept = [item for item in items if owner[str(item.path)] == index - 1]
+    dropped = [item for item in items if owner[str(item.path)] != index - 1]
+    if dropped:
+        config.hook.pytest_deselected(items=dropped)
+    items[:] = kept
+
+
 @pytest.fixture(autouse=True)
 def _enforce_no_db(request: pytest.FixtureRequest) -> None:
     if request.node.get_closest_marker("no_db"):

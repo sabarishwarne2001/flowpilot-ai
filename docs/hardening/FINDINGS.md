@@ -42,7 +42,7 @@ How to read this file:
 | F-027 | P3 | **fixed** (Phase 5, `f6e4b36`) | Dev env | Dev compose makes the shell's `AWS_ACCESS_KEY_ID` the MinIO root user |
 | F-028 | P3 | **fixed** (Phase 5, `a8a05ec`) | Frontend | Dashboard fires 4 failing avatar requests for users without an avatar |
 | F-029 | P3 | **closed** (final release: gates archived with their scripts and the CI gates job retired, N-016; the two gate modules active tests import still pass) | Gates | 33 of 78 verification gates fail; several are stale |
-| F-030 | P3 | **partly fixed** (Phase 5: the order dependence was F-100, fixed; the suite still takes ~25 min on a RAM disk) | Tests | The test harness is slow and order-dependent |
+| F-030 | P3 | **fixed** (Phase 5: the order dependence was F-100; session 4: CI runs the suite once, in four parallel shards, instead of running the security and engine tests twice in one ~1 h 40 min job) | Tests | The test harness is slow and order-dependent |
 | F-031 | P3 | **fixed** (Phase 2) | Tenancy (IDOR) | Two document sub-routes answer 200 for another tenant's or an unknown document |
 | F-032 | P2 | **fixed** (Phase 2) | Auth | An unverified account for someone else's address can list that address's pending invitations |
 | F-033 | P3 | **closed** (Phase 5, `e80c900`: Dodo's envelope has no mode flag; the per-mode secret separates them) | Billing | Dodo's "test event reached a live deployment" guard compares the deployment's config with itself and cannot fire |

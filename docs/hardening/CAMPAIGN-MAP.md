@@ -209,10 +209,14 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       with the index work in the prompt's section B.
 - [ ] **Integrations (17 rows):** mark each `deep` with the test that exercises it, or `blocked` with
       the reason (live Stripe, Groq, Gemini: owner spot checks).
-- [ ] **CI health:** pytest takes ~1 h 40 min on GitHub, because the security and engine tests run
+- [x] **CI health:** pytest takes ~1 h 40 min on GitHub, because the security and engine tests run
       twice (in the "Phase 2" and "Phase 4" proof steps, then again in the full suite). Remove the
       duplication or shard the suite so a red run is known in minutes (F-030). Make the browser job a
       required check once it is stable.
+      _Done (session 4): the proof steps are gone and the suite runs once in four parallel shards
+      (`PYTEST_SHARD`, `tests/infra/test_ci_shards_cover_the_suite.py`); no `--maxfail`, so a red
+      shard names every failure; the browser job is in the aggregate `CI` check's `needs`; the
+      migrations job also runs the whole chain to base and back (F-330)._
 - [ ] **No container pulls in the sandbox** (F-006, F-040): if Docker cannot pull images, run
       RUNBOOK §3 by hand on a clean environment, validate the compose files statically, and put the
       compose-only steps on the owner's checklist with exact commands.
