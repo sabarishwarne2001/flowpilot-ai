@@ -189,7 +189,7 @@ def _plan_price_cents(db, plan: str) -> int:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description="The browser journeys' clock and gateway stand-ins.")
     parser.add_argument("command", choices=[
-        "subscribe", "seats", "change-plan", "cancel", "renewal-fails", "payment-fails-again", "mark-unpaid",
+        "subscribe", "seats", "change-plan", "cancel", "cancel-at-period-end", "renewal-fails", "payment-fails-again", "mark-unpaid",
         "card-fixed", "trial-ending", "trial-ends", "run-job"])
     parser.add_argument("--org", help="organization slug")
     parser.add_argument("--plan", default="developer")
@@ -198,13 +198,40 @@ def main(argv: Optional[list[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     if args.command == "run-job":
+        # Queue a job for the running worker, as its schedule would. With --org, the job is about
+        # that organization (its first workspace in the payload) and the command waits for the
+        # worker's outcome: the journeys use it to show what an archived tenant does not run.
+        import time
+
+        from app.models.job import Job
+        from app.models.workspace import Workspace
         from app.services import job_service
         from app.workers.handlers import register_all
 
         register_all()
+        payload: dict[str, Any] = {}
+        organization_id = None
+        if args.org:
+            with SessionLocal() as db:
+                organization = _organization(db, args.org)
+                organization_id = organization.id
+                workspace = db.execute(select(Workspace).where(Workspace.organization_id == organization.id)
+                                       .order_by(Workspace.created_at).limit(1)).scalar_one()
+                payload = {"workspace_id": str(workspace.id)}
         with SessionLocal() as db, db.begin():
-            job_id = str(job_service.enqueue(db, job_type=args.job, payload={}).id)
-        print(json.dumps({"queued": args.job, "job_id": job_id}))
+            job_id = job_service.enqueue(db, job_type=args.job, payload=payload, organization_id=organization_id).id
+        outcome: dict[str, Any] = {"queued": args.job, "job_id": str(job_id)}
+        if args.org:
+            deadline = time.monotonic() + 120
+            while time.monotonic() < deadline:
+                with SessionLocal() as db:
+                    job = db.get(Job, job_id)
+                    status = getattr(job.status, "value", job.status)
+                    if status in ("SUCCEEDED", "DEAD"):
+                        outcome.update(status=status, result=job.result)
+                        break
+                time.sleep(1)
+        print(json.dumps(outcome, default=str))
         return 0
 
     state = _load()
@@ -252,6 +279,12 @@ def main(argv: Optional[list[str]] = None) -> int:
                     elif args.command == "change-plan":
                         raw["metadata"]["quota_tier_key"] = args.plan
                         item["price"]["id"] = f"price_e2e_test_{args.plan}"
+                        _bump(raw)
+                        out.append(_apply(db, gateway, "customer.subscription.updated", sub_id, "subscription"))
+                    elif args.command == "cancel-at-period-end":
+                        # The owner cancels in the portal: the plan runs to the end of the period.
+                        raw["cancel_at_period_end"] = True
+                        raw["cancel_at"] = item["current_period_end"]  # Stripe dates it
                         _bump(raw)
                         out.append(_apply(db, gateway, "customer.subscription.updated", sub_id, "subscription"))
                     elif args.command == "cancel":
