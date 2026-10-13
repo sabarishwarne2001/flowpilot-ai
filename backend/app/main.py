@@ -144,8 +144,13 @@ async def lifespan(app: FastAPI):
     slo_recorder.install()
     logger.info("SLO stage recorder installed.")
 
+    # Campaign session 4 (F-328): measurements reach the database while the API runs.
+    from app.core.periodic_flush import flusher
+    flusher.start()
+
     yield
 
+    flusher.stop()
     try:
         from app.db.session import SessionLocal
 
