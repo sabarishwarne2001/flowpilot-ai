@@ -29,6 +29,19 @@ this branch and its open pull request, from the first unticked box in CAMPAIGN-M
 8. Ledger to `--check all` = 0, `PRODUCT-NEXT.md`, the launch certification, the owner launch
    checklist, HANDOFF, final suites, CI green, PR ready.
 
+**Progress (checkpoint 1, 2026-10-13):** items 1 and 2 done, item 5 partly. CI is green on every
+complete run, pytest now runs once in four shards, the browser tests are a required job and the
+whole migration chain goes down to base and up again (F-030, F-330). Fixed and proven, each with a
+failing test first (FINDINGS.md, session 4 section): F-324 (a released document ran its rules
+never, or twice), F-256 (late usage into an empty hour), F-327 (refunds recorded on the invoice,
+negative revenue, the organization told; N-069), F-328 (API measurements written while it runs),
+F-331/F-332 (the owner is emailed about dead jobs, unapplied payments, error bursts and a second
+live subscription; RUNBOOK §9.8 refund playbook; N-070), F-333 to F-337 (closed cases, clause checks
+and reviews, redaction previews, packet plans). Every one of the 30 engine item actions is now used
+for real, and ERP delivery over HTTPS runs against the mock target. **Next:** the live
+collaborative-review WebSocket, engine page journeys, the billing jobs through the fake gateway,
+then operations (§C), the customer journeys (§D), experience (§A), performance (§B), the ledger.
+
 ## Previous phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
 `3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
