@@ -170,8 +170,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       process proposals, three-way comparison, assistant canvas, notifications, legacy redirects).
 - [ ] **Refunds are not recorded:** a Stripe `charge.refunded` leaves the invoice "paid" and RevOps
       revenue unchanged. Decide (Tier-1: a credit note and negative revenue) and implement if small.
-- [ ] **F-256 (Low), if session 3 did not fix it in §3.1:** late usage recorded into an hour that had
+- [x] **F-256 (Low), if session 3 did not fix it in §3.1:** late usage recorded into an hour that had
       no earlier usage is not disclosed as late (the rollup window is never sealed).
+      _Done (session 4): every seal pass opens and seals the empty hours behind its cutoff
+      (`backend/tests/services/test_late_usage_into_an_empty_hour.py`, minute 59 failed before)._
 - [ ] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
       alert on it and write the refund playbook in RUNBOOK.md.
 - [ ] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live

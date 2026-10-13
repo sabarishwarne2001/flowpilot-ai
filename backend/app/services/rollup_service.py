@@ -886,6 +886,48 @@ def _unaggregated_before(db: Session, moment: datetime) -> int:
     )
 
 
+#: How far back a seal pass looks for hours with no window to close (F-256). Later passes only
+#: ever add the hours that have just passed the grace period.
+EMPTY_HOUR_LOOKBACK = timedelta(days=35)
+
+
+def _open_empty_hours(db: Session, *, cutoff: datetime, now: datetime) -> None:
+    """Give every past hour a window, so an hour with no usage is sealed like any other (F-256).
+
+    Late usage is recognised by its hour's window being SEALED. An hour in which nothing
+    happened had no window, so usage that arrived for it after the seal pass had gone past was
+    folded into a new open window as if it were on time, and never disclosed as late. Each pass
+    now opens an empty window for every hour between the first window it knows (at most
+    `EMPTY_HOUR_LOOKBACK` back) and the cutoff; the loop below then seals them through the same
+    backlog guard as the others, so an hour that still has unaggregated usage stays open and that
+    usage lands in its own hour, not as late.
+    """
+    last_hour = hour_bucket(cutoff) - timedelta(hours=1)
+    first_known = db.execute(
+        text("SELECT min(bucket_start) FROM rollup_windows WHERE granularity = 'HOUR'")
+    ).scalar_one_or_none()
+    if first_known is None:
+        return
+    first = max(first_known.astimezone(timezone.utc), hour_bucket(cutoff - EMPTY_HOUR_LOOKBACK))
+    if first > last_hour:
+        return
+    db.execute(
+        text(
+            """
+            INSERT INTO rollup_windows (
+                granularity, bucket_start, bucket_end, status,
+                first_rolled_at, last_rolled_at, event_count, late_event_count
+            )
+            SELECT 'HOUR', hour, hour + interval '1 hour', 'OPEN', :now, :now, 0, 0
+              FROM generate_series(CAST(:first AS timestamptz), CAST(:last AS timestamptz),
+                                   interval '1 hour') AS hour
+            ON CONFLICT (granularity, bucket_start) DO NOTHING
+            """
+        ),
+        {"first": first, "last": last_hour, "now": now},
+    )
+
+
 def seal_due(
     db: Session,
     *,
@@ -900,6 +942,8 @@ def seal_due(
     )
     cutoff = moment - timedelta(hours=grace)
     result = SealResult()
+
+    _open_empty_hours(db, cutoff=cutoff, now=moment)
 
     for granularity in (HOUR, DAY, MONTH):
         candidates = db.execute(
