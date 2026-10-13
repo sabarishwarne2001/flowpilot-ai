@@ -179,6 +179,22 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
     PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
 
+    # ---- Campaign session 4 (§C.4): alerts for whoever runs the deployment ----
+    #: Who is emailed (through the platform relay) about dead background jobs, gateway events
+    #: that will never be applied, bursts of server errors and duplicate gateway subscriptions.
+    #: Comma-separated addresses. Required in production (the start-up guard refuses an empty
+    #: value): an error nobody hears about is found by a customer first.
+    OPERATOR_ALERT_EMAILS: str = ""
+    #: Server errors (5xx answers, all API processes together) in five minutes that count as a
+    #: burst worth an alert.
+    OPERATOR_ALERT_5XX_THRESHOLD: int = 20
+    #: The same alert is emailed again at most this often while it keeps happening.
+    OPERATOR_ALERT_REPEAT_MINUTES: int = 60
+
+    @property
+    def operator_alert_recipients(self) -> list[str]:
+        return [part.strip() for part in (self.OPERATOR_ALERT_EMAILS or "").split(",") if part.strip()]
+
     FRONTEND_URL: str = "http://localhost:3000"
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
 

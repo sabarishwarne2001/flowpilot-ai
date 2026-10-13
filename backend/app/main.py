@@ -154,8 +154,11 @@ async def lifespan(app: FastAPI):
     try:
         from app.db.session import SessionLocal
 
+        from app.core import ops_signals
+
         with SessionLocal() as db:
             written = slo_recorder.flush(db)
+            ops_signals.flush(db)
             db.commit()
         if written:
             logger.info("SLO observations flushed on shutdown: %d series.", written)

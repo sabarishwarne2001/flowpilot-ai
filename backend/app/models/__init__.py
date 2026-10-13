@@ -764,3 +764,6 @@ from app.models.truthmesh import (  # noqa: E402,F401
     MeshState,
 )
 from app.models.notification_preference import UsageLimitAlert, UserNotificationPreference  # noqa: E402,F401
+
+# Campaign session 4 (§C.4): alerts for whoever runs the deployment.
+from app.models.operator_alert import OperatorAlert, ServerErrorMinute  # noqa: E402,F401

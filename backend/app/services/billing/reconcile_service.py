@@ -126,6 +126,10 @@ def reconcile_subscription(db: Session, event: StripeEvent) -> ReconcileOutcome:
     if snapshot.currency:
         account_service.assert_currency(db, currency=snapshot.currency)
 
+    duplicate = _duplicate_of_live_subscription(db, account=account, snapshot=snapshot)
+    if duplicate is not None:
+        return duplicate
+
     subscription, applied = subscription_service.upsert_from_stripe(
         db, account=account, snapshot=snapshot
     )
@@ -354,6 +358,55 @@ def reconcile_charge_refund(db: Session, event: StripeEvent) -> ReconcileOutcome
         invoice_number=invoice.number,
         amount_refunded_micros=int(invoice.amount_refunded_micros),
         change_micros=change,
+    )
+
+
+def _duplicate_of_live_subscription(
+    db: Session, *, account: Any, snapshot: Any
+) -> Optional[ReconcileOutcome]:
+    """A second live subscription for an organization that already has one (campaign session 4).
+
+    An organization holds one live subscription (`uq_subscriptions_live_account`). Checkout is
+    refused while one is live (F-253), but a checkout completed in a tab opened before the first
+    one still creates a second subscription at the gateway, which charges the customer. Writing
+    it violated the unique index on every attempt until the event dead-lettered, and nobody was
+    told. Now it is not written, the event is settled as ignored with that reason, and the
+    deployment's owner is alerted at once with the refund playbook (RUNBOOK §9.8).
+    """
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES
+
+    if subscription_service.get_by_stripe_id(db, stripe_subscription_id=snapshot.id) is not None:
+        return None
+    if subscription_service._coerce_status(snapshot.status) not in LIVE_SUBSCRIPTION_STATUSES:
+        return None
+    live = subscription_service.live_subscription_for_organization(db, organization_id=account.organization_id)
+    if live is None or live.stripe_subscription_id == snapshot.id:
+        return None
+
+    from app.services import operator_alert_service
+
+    operator_alert_service.duplicate_subscription(
+        db,
+        organization_id=account.organization_id,
+        gateway="STRIPE",
+        customer_id=snapshot.customer_id,
+        recorded_subscription_id=str(live.stripe_subscription_id or live.gateway_subscription_id),
+        duplicate_subscription_id=snapshot.id,
+        duplicate_status=str(snapshot.status),
+    )
+    logger.warning(
+        "billing.duplicate_live_subscription",
+        extra={
+            "organization_id": str(account.organization_id),
+            "recorded_subscription_id": str(live.stripe_subscription_id),
+            "duplicate_subscription_id": snapshot.id,
+        },
+    )
+    return ReconcileOutcome.ignored(
+        "duplicate_live_subscription",
+        organization_id=str(account.organization_id),
+        stripe_subscription_id=snapshot.id,
+        recorded_subscription_id=str(live.stripe_subscription_id),
     )
 
 

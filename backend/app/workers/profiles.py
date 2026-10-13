@@ -152,6 +152,8 @@ LIGHT = WorkerProfile(
             "trial.reminders",
             # Campaign session 3 (N-062): plan-limit alerts. Queries and the notification outbox.
             "usage.limit_alerts",
+            # Campaign session 4 (§C.4): alerts for the deployment's owner. Queries and SMTP only.
+            "ops.alerts",
             # ARCH42-S1:entity-light-profile. Entity resolution: string
             # similarity, indexed lookups and EM arithmetic. Nothing under
             # app/services/entities/ imports a model, OCR or a PDF engine.

@@ -621,6 +621,22 @@ tail -n 20 /srv/flowpilot/logs/sweep_compliance.log                      # a "SW
 After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 `compose_backup.log`, `compose_restore_drill.log`), or better, let the monitor tell you.
 
+**Know when something breaks (campaign session 4).** The app emails the addresses in
+`OPERATOR_ALERT_EMAILS` (in `.env.production`; required, the app refuses to start without it) through
+your mail relay when:
+
+- a background job fails every attempt (one email per job type, with the latest error; retry it in
+  Platform admin, Background jobs, once the cause is fixed);
+- a payment event (Stripe or Dodo) cannot be applied, so a plan or invoice may be out of step with the
+  payment dashboard;
+- the API answers `OPERATOR_ALERT_5XX_THRESHOLD` (default 20) requests with a server error within five
+  minutes (look for `Traceback` in `$COMPOSE logs --tail 200 web`);
+- a customer has two live subscriptions (section 9.8: they are being charged twice).
+
+The `ops.alerts` sweep runs every five minutes inside the stack (`worker-scheduler` and `worker-light`);
+the same alert repeats at most once an hour (`OPERATOR_ALERT_REPEAT_MINUTES`) while it keeps happening,
+with the count. Nothing to install on the host.
+
 **Know when the site is down (N-017).** `flowpilot-compose-backups` also runs
 `flowpilot-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
 through Caddy (the API, Postgres and Redis must all answer) and pings `HEARTBEAT_UUID_UPTIME`.
@@ -642,3 +658,35 @@ prints nothing and `0` when the site is up.
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
 | People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 20 per address per 5 minutes; decided N-018), then `$COMPOSE up -d web` |
 | A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |
+| An alert email says "could not be applied" for a payment event | open Platform admin, Background jobs; compare the organization's plan and seats with the payment dashboard; then section 9.8 if money is involved |
+
+### 9.8 Refunds, and a customer charged twice
+
+**Refunding a payment.** Refunds are made in the payment dashboard, never in FlowPilot (a refund is a
+money decision a person takes, usually after talking to the customer). In Stripe: Payments, open the
+payment, Refund, choose the amount (all or part) and a reason. Make sure the Stripe webhook includes
+`charge.refunded` and `charge.refund.updated` (section 9.2 step 9): FlowPilot then records the refund on
+the customer's invoice ("Refunded" or "Partially refunded"), tells the organization's owners and Billing
+members by email, and shows it in Platform admin, RevOps ("Refunded in the last 30 days"). Dodo Payments
+is the merchant of record and handles refunds in its own dashboard.
+
+**A customer charged twice (alert: "Customer charged twice").** FlowPilot refuses a new checkout while a
+paid subscription is live, but a checkout finished in a browser tab opened *before* the first purchase can
+still create a second subscription at the gateway. FlowPilot keeps the first one (named "recorded" in
+the alert), does not record the second, and emails you at once. The customer is paying for both until you
+act. Within the day:
+
+1. In the Stripe Dashboard open Customers and search for the customer id in the alert. You will see two
+   active subscriptions.
+2. **Keep the recorded one.** Open the *other* one (the id the alert says is not recorded): Actions,
+   Cancel subscription, **Immediately**.
+3. On that subscription's invoice, open the payment and **Refund** it in full (reason: duplicate).
+4. If the customer meant to change plan with that second purchase, change the plan of the *recorded*
+   subscription in the billing portal (N-050) instead. Never cancel the recorded one to keep the
+   duplicate: FlowPilot would then show the organization on Free until the duplicate's next event.
+5. Email the customer: "You were charged twice for your FlowPilot subscription because a second
+   checkout completed. We cancelled the duplicate and refunded {amount}; it reaches your card in 5 to
+   10 business days. Nothing changes in your account."
+6. In FlowPilot, Platform admin, RevOps shows the refund; the organization's Billing page still shows
+   one subscription.
+

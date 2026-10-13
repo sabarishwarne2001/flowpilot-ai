@@ -92,6 +92,8 @@ TRUTHMESH_JOB_TYPES: frozenset[str] = frozenset({"truthmesh.index_document", "tr
 TRIAL_JOB_TYPES: frozenset[str] = frozenset({"trial.reminders"})
 #: Campaign session 3 (N-062): owners are told at 80% and 100% of a monthly plan limit.
 USAGE_ALERT_JOB_TYPES: frozenset[str] = frozenset({"usage.limit_alerts"})
+#: Campaign session 4 (§C.4): the deployment's owner is emailed about dead jobs and error bursts.
+OPS_ALERT_JOB_TYPES: frozenset[str] = frozenset({"ops.alerts"})
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -133,6 +135,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | TRUTHMESH_JOB_TYPES
     | TRIAL_JOB_TYPES
     | USAGE_ALERT_JOB_TYPES
+    | OPS_ALERT_JOB_TYPES
 )
 
 
@@ -434,6 +437,11 @@ def _usage_limit_alerts(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_limit_alerts(payload)
 
 
+def _operator_alerts(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.operator_alerts import handle_operator_alerts
+    return handle_operator_alerts(payload)
+
+
 _HANDLERS = {
     "document.extract": _document_extract,
     "document.enrich": _document_enrich,
@@ -545,6 +553,8 @@ _HANDLERS = {
     # Campaign session 2 (N-052). On the LIGHT profile; hourly in DEFAULT_SCHEDULE.
     "trial.reminders": _trial_reminders,
     "usage.limit_alerts": _usage_limit_alerts,
+    # Campaign session 4 (§C.4). On the LIGHT profile; every five minutes in DEFAULT_SCHEDULE.
+    "ops.alerts": _operator_alerts,
 }
 
 

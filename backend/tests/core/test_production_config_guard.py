@@ -37,7 +37,7 @@ GUARDED = (
     "RERANKER_ENABLED", "RERANKER_INTERNAL_TOKEN", "STRIPE_SECRET_KEY",
     "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRETS", "STRIPE_LIVEMODE",
     "DODO_API_KEY", "DODO_WEBHOOK_SECRET", "DODO_LIVEMODE", "DODO_API_BASE",
-    "BILLING_GATEWAY", "ML_STUBS", "SERVICE_ROLE",
+    "BILLING_GATEWAY", "ML_STUBS", "SERVICE_ROLE", "OPERATOR_ALERT_EMAILS",
 )
 
 #: The values that used to be committed as defaults. They are public.
@@ -70,6 +70,7 @@ def good_production_env() -> dict[str, str]:
         "PLATFORM_SMTP_HOST": "smtp.postmarkapp.com",
         "RERANKER_ENABLED": "true",
         "RERANKER_INTERNAL_TOKEN": secrets.token_hex(32),
+        "OPERATOR_ALERT_EMAILS": "ops@example.com",
     }
 
 
@@ -274,6 +275,14 @@ def test_redis_may_not_point_at_localhost_in_production(env) -> None:
 
 def test_mail_must_be_configured_or_users_silently_never_get_links(env) -> None:
     assert "PLATFORM_SMTP_HOST" in refusal(env, PLATFORM_SMTP_HOST=None)
+
+
+def test_someone_must_be_told_when_things_break(env) -> None:
+    """Campaign session 4 (§C.4): dead jobs and error bursts email the owner; nobody named, no boot."""
+    assert "OPERATOR_ALERT_EMAILS" in refusal(env, OPERATOR_ALERT_EMAILS=None)
+    assert "not an email address" in refusal(env, OPERATOR_ALERT_EMAILS="ops@example.com, nobody")
+    env(good_production_env(), OPERATOR_ALERT_EMAILS="ops@example.com, founder@example.org")
+    assert build().operator_alert_recipients == ["ops@example.com", "founder@example.org"]
 
 
 def test_the_reranker_needs_its_token_when_enabled(env) -> None:

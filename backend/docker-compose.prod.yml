@@ -136,6 +136,12 @@ x-app-env: &app-env
   PLATFORM_SMTP_FROM_EMAIL: ${PLATFORM_SMTP_FROM_EMAIL:-}
   PLATFORM_SMTP_FROM_NAME: ${PLATFORM_SMTP_FROM_NAME:-FlowPilot AI}
 
+  # Required (campaign session 4): who is emailed about dead jobs, payment events that will
+  # never apply, bursts of server errors and duplicate subscriptions (RUNBOOK 9.6, 9.8).
+  OPERATOR_ALERT_EMAILS: ${OPERATOR_ALERT_EMAILS:?OPERATOR_ALERT_EMAILS must be set, e.g. you@yourcompany.com}
+  OPERATOR_ALERT_5XX_THRESHOLD: ${OPERATOR_ALERT_5XX_THRESHOLD:-20}
+  OPERATOR_ALERT_REPEAT_MINUTES: ${OPERATOR_ALERT_REPEAT_MINUTES:-60}
+
   CUSTOM_DOMAINS_ENABLED: ${CUSTOM_DOMAINS_ENABLED:-false}
   PLATFORM_RESERVED_HOSTS: ${PLATFORM_RESERVED_HOSTS:-[]}
   ACME_AGENT_URL: ${ACME_AGENT_URL:-}

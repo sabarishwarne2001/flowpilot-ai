@@ -176,8 +176,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       no earlier usage is not disclosed as late (the rollup window is never sealed).
       _Done (session 4): every seal pass opens and seals the empty hours behind its cutoff
       (`backend/tests/services/test_late_usage_into_an_empty_hour.py`, minute 59 failed before)._
-- [ ] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
+- [x] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
       alert on it and write the refund playbook in RUNBOOK.md.
+      _Done (session 4): F-331 (not written, settled as ignored, the owner emailed at once), N-070
+      operator alerts, RUNBOOK §9.8 refund playbook._
 - [ ] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
       gateway keys). Confirm every "change plan" screen leads there.
 - [ ] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway

@@ -179,6 +179,11 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Tell owners at 80% and at 100% of a monthly plan limit, once per period (N-062).",
     ),
     ScheduledJob(
+        job_type="ops.alerts",
+        interval_seconds=300,
+        description="Email the deployment's owner about dead jobs, dead payment events and error bursts (§C.4).",
+    ),
+    ScheduledJob(
         job_type="identity.sweep_replay_guard",
         interval_seconds=3_600,
         description="Prune expired SAML replay-guard entries (ARCH-16).",

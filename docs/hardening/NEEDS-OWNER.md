@@ -1180,3 +1180,15 @@ and the operator look is what was missing. Dodo Payments is the merchant of reco
 there, as before. **Owner action:** add `charge.refunded` and `charge.refund.updated` to the Stripe
 webhook's events (RUNBOOK §9.2 step 9).
 
+## N-070 — How the owner hears about errors after launch
+**DECIDED (campaign session 4): email, from inside the stack, to an address the deployment must name.**
+`OPERATOR_ALERT_EMAILS` (one or more addresses, required in production) is emailed through the same mail
+relay as everything else when background jobs of one type fail for good, payment events cannot be
+applied, the API returns 20 or more server errors in five minutes, or a customer has two live
+subscriptions. Each alert repeats at most once an hour while it keeps happening. The uptime heartbeat
+(N-017) still covers "the whole site is down", which an in-stack alert cannot report. **Why email and not
+a monitoring service (Sentry, Datadog):** it costs nothing, needs no account or extra container, and the
+four conditions are the ones a solo founder must act on; an error tracker is worth adding when there is
+a team to triage a stream of individual exceptions (PRODUCT-NEXT.md). **Owner action:** put your address
+in `OPERATOR_ALERT_EMAILS` before the first deploy (the app refuses to start without it).
+

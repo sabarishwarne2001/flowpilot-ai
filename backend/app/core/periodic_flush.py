@@ -21,11 +21,12 @@ logger = logging.getLogger("app.core.periodic_flush")
 
 
 def flush_api_measurements() -> None:
-    from app.core import slo_recorder
+    from app.core import ops_signals, slo_recorder
     from app.db.session import SessionLocal
 
     with SessionLocal() as db:
         slo_recorder.flush(db)
+        ops_signals.flush(db)
         db.commit()
 
 

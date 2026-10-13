@@ -365,6 +365,20 @@ def production_config_problems(settings: "Settings", environment: str) -> list[s
             problems.append("RERANKER_INTERNAL_TOKEN: is shorter than 32 characters.")
 
     problems += _billing_problems(settings, environment)
+
+    # Campaign session 4 (§C.4): someone must be told when jobs die or the API starts failing.
+    recipients = settings.operator_alert_recipients
+    if not recipients:
+        problems.append(
+            "OPERATOR_ALERT_EMAILS: is not set. Name the address (or comma-separated addresses) "
+            "that is emailed when background jobs fail for good, payments cannot be applied, "
+            "the API returns a burst of errors, or a customer is charged twice."
+        )
+    else:
+        for address in recipients:
+            local, _, domain = address.partition("@")
+            if not local or "." not in domain or " " in address:
+                problems.append(f"OPERATOR_ALERT_EMAILS: {address!r} is not an email address.")
     return problems
 
 
