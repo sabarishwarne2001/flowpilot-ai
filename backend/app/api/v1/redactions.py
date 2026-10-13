@@ -70,6 +70,7 @@ from app.schemas.redaction import (
     RegionToggleRequest,
 )
 from app.services.redaction import redaction_service
+from app.services.redaction.rasterize import RasterizeError
 from app.services.redaction.vocabulary import (
     CHECKSUM_DETECTORS,
     PROFILE_KEYS,
@@ -255,6 +256,12 @@ def preview_page(
     except redaction_service.InvalidJobState as exc:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
+    except RasterizeError as exc:
+        # Campaign session 4 (F-336): a page past the document's last one is "not found", not a 500.
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "NO_PAGE", "message": str(exc)},
         ) from exc
 
     return Response(
