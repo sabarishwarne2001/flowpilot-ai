@@ -16,6 +16,10 @@ const PURIFY_CONFIG: PurifyConfig = {
     "ul", "ol", "li",
     "table", "thead", "tbody", "tr", "th", "td",
     "a", "span",
+    // F-357. Text itself. DOMPurify adds "#text" to a custom list only when KEEP_CONTENT is on;
+    // with it off (a removed element takes its content with it) every answer rendered as empty
+    // paragraphs.
+    "#text",
   ],
   ALLOWED_ATTR: ["href", "title", "class", "data-claim-id", "data-citation-index"],
   ALLOWED_URI_REGEXP,
