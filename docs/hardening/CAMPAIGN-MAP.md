@@ -189,14 +189,21 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       gateway keys). Confirm every "change plan" screen leads there.
       _Done (session 4): `frontend/e2e/tests/50-plan-change-portal.spec.ts` (the plan card, a pick from the
       list, Free, and "View plans" from a locked feature); found and fixed F-340._
-- [ ] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway
+- [x] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway
       timeout, move it onto the existing `work_items.bulk` job.
-- [ ] **Dormant handlers** `batch.expand_archive` (zip intake is not offered) and `work_items.bulk`:
+      _Done (session 4): 6.0 s for 500 through the real API (PERFORMANCE.md); Caddy sets no timeout and a
+      CDN's is 60 to 100 s, so it stays inline._
+- [x] **Dormant handlers** `batch.expand_archive` (zip intake is not offered) and `work_items.bulk`:
       keep blocked with that reason, or remove the dead code.
-- [ ] **Blocked rows that a stand-in can unblock:** `billing.seat_sync`, `billing.assemble_invoice`,
+      _Done (session 4): both kept and `blocked` with their reasons in the ledger: zip intake is a
+      PRODUCT-NEXT item and its handler enforces the zip-bomb limits it will need; `work_items.bulk` is
+      the path if the 500-document bulk limit is ever raised._
+- [x] **Blocked rows that a stand-in can unblock:** `billing.seat_sync`, `billing.assemble_invoice`,
       `billing.reconcile`, `usage.reconcile` and the `worker-loop:stripe` loop (fake gateway, signed test
       events); `erp.deliver_posting` (`erp_mock_targets.py`). They were blocked as "session 1's slice";
       session 1 is finished.
+      _Done (session 4): `backend/tests/engines/test_billing_jobs_live.py` and
+      `test_erp_delivery_through_the_mock_target_live.py`; found and fixed F-339 (overage never charged)._
 - [ ] **The one-week trial journey** in the browser: sign up → trial → reminder → trial ends →
       subscribe → everything back (N-052; HANDOFF "Owner request").
 - [ ] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
