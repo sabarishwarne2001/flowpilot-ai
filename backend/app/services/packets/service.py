@@ -102,9 +102,21 @@ def detect(db: Session, *, work_item: WorkItem, actor_user_id: Optional[uuid.UUI
            force: bool = False) -> PacketSplit:
     organization_id = gate.organization_of(db, work_item)
     existing = live_split(db, work_item.id)
+    if existing is None and not force:
+        # Campaign session 4 (F-337): a rejected plan is not "live", so detection used to start a
+        # new one at once and the packet a person had rejected was back in the review hub.
+        latest = db.execute(select(PacketSplit).where(PacketSplit.work_item_id == work_item.id)
+                            .order_by(PacketSplit.proposed_at.desc()).limit(1)).scalar_one_or_none()
+        if latest is not None and latest.status == v.STATUS_REJECTED:
+            return latest
     if existing is not None:
         if existing.status in v.DECIDED_STATUSES:
             return existing  # a reviewer decided; detection never overrides a person
+        # Campaign session 4 (F-337): a plan a person rejected, or whose boundaries a person
+        # corrected, is theirs too. Only their own explicit "detect again" (force) replaces it;
+        # the automatic detection that runs after every (re)processing kept superseding it.
+        if not force and (existing.status == v.STATUS_REJECTED or existing.source != v.SOURCE_MODEL):
+            return existing
         if not force and existing.model_version == boundary_model.MODEL_VERSION and existing.source == v.SOURCE_MODEL:
             return existing  # idempotent: the same pages give the same plan
         existing.status = v.STATUS_SUPERSEDED
