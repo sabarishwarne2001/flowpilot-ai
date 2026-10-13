@@ -1230,3 +1230,25 @@ billing portal) restores everything at once. This is the standard Stripe setup f
 loss, a clear path back. **Owner action:** in the Stripe Dashboard, Billing → Revenue recovery →
 Retries, choose Smart Retries and set "If all retries for a payment fail" to **Mark the subscription as
 unpaid** (not cancel). Proven by journey 5 (`frontend/e2e/tests/64-journey-payment-fails.spec.ts`).
+
+## N-073 — What the public pricing page says
+**DECIDED (campaign session 4).** The public pages (`/pricing`, `/terms`, `/privacy`, CAMPAIGN-MAP
+§4.3) read the plans from the same published source as the in-app plan cards (`GET /api/v1/pricing`),
+so the page can never show a price or allowance the product does not sell.
+- **What it states as fact:** each plan's per-seat monthly price, the counts a customer plans by
+  (documents, OCR pages, assistant messages, storage, workspaces, seats), the one-week trial with no
+  payment details needed, one trial per account, and read-only after the trial until someone
+  subscribes (N-052, TENANCY-AND-PLANS §4.3). All of these are what the code enforces.
+- **Enterprise's "priority 99.9% SLO":** kept. It is the capability the plan sells
+  (`capability.priority_slo`, TENANCY-AND-PLANS §4.5) and the SLO console measures it. It is an
+  objective, not a contractual guarantee with service credits; the terms page must not promise
+  credits unless the owner's counsel adds them.
+- **Overage prices and add-ons** (for example warehouse sync) are not on the public page: Tier-1
+  pricing pages list what a plan includes and keep metered rates for the billing screens and the
+  contract. Customers see overage on their Billing page before it is invoiced (N-071).
+- **No "contact sales" button:** Enterprise is bought per seat in the app like the other plans. An
+  invoiced annual contract (N-051) is arranged by email.
+- **Terms and privacy are placeholders**, clearly marked as awaiting the owner's legal review, and
+  make no compliance, certification, sub-processor, retention or jurisdiction claims (N-029).
+- **Owner action (launch checklist):** have counsel replace the terms and privacy text; add a
+  support or sales email address to the pricing page footer once you have one.
