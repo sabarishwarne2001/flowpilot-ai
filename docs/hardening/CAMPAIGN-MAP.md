@@ -156,13 +156,16 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
 ## 4. Session 4: experience, performance, operations, certification
 
 ### 4.1 Carried over from sessions 1 and 2 (HANDOFF.md)
-- [ ] **Engine item actions with only refusal evidence** (30 endpoints): assertions (rule detail,
+- [x] **Engine item actions with only refusal evidence** (30 endpoints): assertions (rule detail,
       simulate, resolve, delete a clause check), case files (detail, remove a document, close, revoke a
       request, template update and retire), corroboration (refresh, review, page image, delete),
       extraction memory edits, packet splits (start, boundaries, reject), process proposals (detail,
       approve, reject, undo), redactions (page image, region), the ERP target credential, a failed
       posting's retry and accept, the autonomy resume, one notification's detail. Pattern:
       `backend/tests/engines/test_item_actions_*.py`.
+      _Done (session 4): `test_item_actions_assertions_cases_live.py`,
+      `test_item_actions_more_engines_live.py`, `test_erp_delivery_through_the_mock_target_live.py`;
+      found and fixed F-333 to F-337 on the way._
 - [ ] **Live collaborative review** (`WEBSOCKET …/review/collab/live`, never tested): presence, two
       reviewers editing one field, a reviewer losing access mid-session.
 - [ ] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
