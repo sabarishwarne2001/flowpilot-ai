@@ -76,6 +76,7 @@ class FakeStripeGateway(StripeGateway):
         self.invoices: dict[str, dict[str, Any]] = {}
         self.charges: dict[str, dict[str, Any]] = {}
         self.refunds: dict[str, dict[str, Any]] = {}
+        self.invoice_items: list[dict[str, Any]] = []
         self.fetch_calls: list[str] = []
         self.seat_calls: list[tuple[str, int, str]] = []
         self.fail_next_fetch: Optional[Exception] = None
@@ -120,11 +121,29 @@ class FakeStripeGateway(StripeGateway):
             subtotal_cents=int(raw.get("subtotal", 10000)),
             tax_cents=int(raw.get("tax", 0)),
             amount_paid_cents=int(raw.get("amount_paid", 10000)),
-            period_start=None,
-            period_end=None,
+            period_start=_moment(raw.get("period_start")),
+            period_end=_moment(raw.get("period_end")),
             paid=bool(raw.get("paid", True)),
             raw=raw,
         )
+
+    def add_invoice_items(self, *, customer_id, currency, items, invoice_id=None, subscription_id=None):
+        """Campaign session 4 (F-339): a draft takes lines; a finalized invoice refuses them, as Stripe does."""
+        if invoice_id is not None and self.invoices.get(invoice_id, {}).get("status", "paid") != "draft":
+            raise stripe_gateway.StripePermanentError(
+                "You can only add invoice items to draft invoices.")
+        ids = []
+        for item in items:
+            already = next((i for i in self.invoice_items if i["key"] == item.key
+                            and i["invoice"] == invoice_id), None)
+            if already is None:  # an idempotency key answers the first item again
+                already = {"id": f"ii_{len(self.invoice_items) + 1}", "key": item.key, "invoice": invoice_id,
+                           "subscription": None if invoice_id else subscription_id, "customer": customer_id,
+                           "currency": currency, "amount": item.amount_cents, "description": item.description,
+                           "metadata": dict(item.metadata)}
+                self.invoice_items.append(already)
+            ids.append(already["id"])
+        return ids
 
     def fetch_invoice_total_cents(self, invoice_id: str) -> int:
         return self.fetch_invoice(invoice_id).total_cents
@@ -157,6 +176,10 @@ class FakeStripeGateway(StripeGateway):
         raw = self.current[subscription_id]
         raw["items"]["data"][0]["quantity"] = int(seats)
         return self._snapshot_subscription(raw, state_version=self._tick())
+
+
+def _moment(epoch: Any) -> Optional[datetime]:
+    return datetime.fromtimestamp(int(epoch), tz=timezone.utc) if epoch else None
 
 
 def make_subscription(
@@ -666,9 +689,11 @@ class TestGate152Reconciliation:
     def test_unhandled_event_type_lands_ignored_not_processed(
         self, db, gateway, billing_org
     ):
+        # `invoice.upcoming` is a type we know and deliberately leave alone. (This used
+        # `invoice.created`, which since campaign session 4 closes a billing period, F-339.)
         row_id = self._ingest(
             db,
-            "invoice.created",
+            "invoice.upcoming",
             {"object": "invoice", "id": "in_1", "customer": "cus_gate15"},
         )
         drain(db, gateway)

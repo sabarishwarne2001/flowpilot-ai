@@ -481,13 +481,18 @@ def assemble(
     if unsealed:
         notes["unsealed_event_types"] = sorted(unsealed)
 
+    # Campaign session 4 (F-339). A paid plan's allowances are per seat, pooled across the
+    # organization (N-044): the tier's figure times the seats billed, exactly as
+    # `quota_service.seat_factor` scales them when usage is admitted. One seat's allowance here
+    # billed a 10-seat organization overage on nine tenths of what its plan includes.
+    seat_factor = Decimal(max(1, seats))
     for tier_entry in tier_entries:
         limit_key = tier_entry.limit_key
         if limit_key == "*":
             continue
 
         allowance = (
-            Decimal(str(tier_entry.max_quantity))
+            Decimal(str(tier_entry.max_quantity)) * seat_factor
             if tier_entry.max_quantity is not None
             else None
         )

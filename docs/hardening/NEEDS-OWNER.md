@@ -1192,3 +1192,26 @@ four conditions are the ones a solo founder must act on; an error tracker is wor
 a team to triage a stream of individual exceptions (PRODUCT-NEXT.md). **Owner action:** put your address
 in `OPERATOR_ALERT_EMAILS` before the first deploy (the app refuses to start without it).
 
+
+## N-071 — How overage reaches the customer's card, and what "Invoices" shows
+**DECIDED (campaign session 4): overage is billed in arrears on the next renewal, through Stripe.**
+The plans "bill overage" past their allowances (OCR pages, storage, tokens; N-045, N-048), and the
+margins in N-046 assume it is charged, but nothing ever charged it (F-339): no statement was written,
+no line reached Stripe. Now, when Stripe opens a subscription's renewal at the end of a billing period,
+FlowPilot writes its statement for the month that just ended (the seats, the allowances for that many
+seats, the overage priced from the subscription's pinned price book) and adds each overage line to that
+renewal before Stripe charges it, as one invoice line per meter ("Overage — ocr.page (1 Sep 2026 –
+1 Oct 2026)"). The customer pays it with the next month's seats; the statement shows in Billing,
+Invoices and is marked paid when the renewal is. This is how per-seat SaaS with metered extras bill on
+Stripe (seats in advance, usage in arrears). Also decided:
+- **A renewal that was already charged** (FlowPilot was down for over an hour): the overage goes on the
+  following invoice, and the statement says so. A period whose renewal never reached FlowPilot is closed
+  by an hourly backstop two hours after it ended.
+- **The last month of a subscription that ends** has no renewal, so its overage is not charged. The
+  amounts are small and bounded by the plan ceilings; charging it needs a one-off invoice at
+  cancellation, listed in PRODUCT-NEXT.md.
+- **Allowances on the statement are per seat, pooled** (N-044), as the usage checks already were.
+- **Usage recorded after the statement is written** (late events, F-256) is not billed.
+- **Dodo** cannot take usage lines yet (`supports_usage_billing` is false pending verification, N-026):
+  on Dodo, statements are written and overage is not billed. Stripe is the launch gateway.
+- **Owner action:** none in code. Keep `invoice.*` in the Stripe webhook's events (RUNBOOK §9.2 step 9).

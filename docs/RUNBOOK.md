@@ -419,7 +419,9 @@ password. (The compose file deliberately does not pass these two to the running 
 In Stripe (Developers, Webhooks) add the endpoint `https://app.example.com/api/v1/billing/webhooks/stripe`
 for the events `checkout.session.completed`, `customer.subscription.*`, `invoice.*`,
 `payment_intent.payment_failed`, `charge.refunded` and `charge.refund.updated` (the last two record
-refunds on the customer's invoice, N-069), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
+refunds on the customer's invoice, N-069; `invoice.*` includes `invoice.created`, which closes each
+billing period: FlowPilot adds the period's overage to the renewal before Stripe charges it, section
+9.9), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
 listed, separated by commas, while you rotate one). For Dodo the endpoint is
 `https://app.example.com/api/v1/billing/webhooks/dodo` and the secret goes in
 `DODO_WEBHOOK_SECRET`. Use the lowercase gateway name. After editing `.env.production`, run
@@ -689,4 +691,49 @@ act. Within the day:
    10 business days. Nothing changes in your account."
 6. In FlowPilot, Platform admin, RevOps shows the refund; the organization's Billing page still shows
    one subscription.
+
+### 9.9 Billing periods, overage and replaying a payment event
+
+**What happens at the end of each billing period (nothing to do).** Stripe charges seats in advance:
+at each period's end it opens the renewal invoice for the next month and charges it about an hour
+later. When FlowPilot receives that invoice (`invoice.created`), it writes the customer's statement for
+the month that just ended (Billing, Invoices: the seats, what the plan included for that many seats,
+and any overage priced from the price book) and adds each overage line to the renewal, so the customer
+pays it with the next month's seats. If that event arrives after Stripe has already charged the
+renewal, the overage goes on the following invoice instead; the statement says which. A subscription
+that ends (cancelled at period end) gets no renewal, so its last month's overage is not charged
+(N-071). Dodo cannot take usage lines yet: on Dodo, statements are written but overage is not billed.
+
+**If a statement is missing.** Every hour the worker closes any period whose renewal never reached
+FlowPilot (more than two hours after it ended); its overage goes on the next invoice and the worker log
+shows `billing.assemble_invoice_backstop`. To close the period of one Stripe invoice by hand (the
+invoice id starts with `in_`):
+
+```bash
+$COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
+with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing.assemble_invoice', payload={'stripe_invoice_id': 'in_...'})"
+```
+
+**Replaying one payment event.** The alert "... events could not be applied" names the event type.
+List those events with their ids and errors:
+
+```bash
+$COMPOSE exec -T db psql -U flowpilot -d flowpilot -c "SELECT id, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
+```
+
+Once the cause is fixed, re-apply one by its id; a replay never charges anything twice:
+
+```bash
+$COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
+with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing.reconcile', payload={'inbound_event_id': '...'})"
+```
+
+**Checking a supplier's bill (monthly).** The authoritative check is Platform admin, COGS: enter the
+supplier's invoice and reconcile it there. An older, optional check compares Groq's usage export for a
+month with what FlowPilot metered: export the month's CSV from the Groq console and queue
+`usage.reconcile` the same way, with `payload={'provider': 'groq', 'period_start':
+'2026-09-01T00:00:00+00:00', 'period_end': '2026-10-01T00:00:00+00:00', 'fetch_options': {'csv_text':
+open('groq-2026-09.csv').read(), 'source_key': 'groq:2026-09'}}` (at least two days after the month
+ends). The job's result in Platform admin, Jobs shows the drift; `alert_raised` is true when it is
+above `RECONCILE_ALERT_BPS` or something was generated but never metered.
 

@@ -145,6 +145,16 @@ class StripeInvoiceSnapshot:
 
 
 @dataclass(frozen=True)
+class StripeInvoiceItemDraft:
+    """One line FlowPilot adds to a customer's Stripe invoice (campaign session 4, F-339)."""
+
+    key: str
+    amount_cents: int
+    description: str
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class StripeChargeSnapshot:
     """A charge, in Stripe's units (cents): what was paid and how much of it was refunded.
 
@@ -723,6 +733,51 @@ class StripeGateway:
             ) from exc
 
         return self._snapshot_subscription(_as_mapping(obj), state_version=issued_at)
+
+    def add_invoice_items(
+        self,
+        *,
+        customer_id: str,
+        currency: str,
+        items: Sequence[StripeInvoiceItemDraft],
+        invoice_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+    ) -> list[str]:
+        """Add one-off lines (a closed period's overage) to what the customer is charged next.
+
+        Campaign session 4 (F-339, N-071). With `invoice_id`, onto that DRAFT invoice (the renewal
+        Stripe opens at the period boundary and finalizes about an hour later); without one, as
+        pending items the subscription's next invoice collects. Each item carries its own
+        idempotency key, so a retried reconcile never charges a line twice. Returns the item ids.
+        """
+        client = self._stripe_client()
+        created: list[str] = []
+        for item in items:
+            params: dict[str, Any] = {
+                "customer": customer_id,
+                "amount": int(item.amount_cents),
+                "currency": str(currency).lower(),
+                "description": item.description,
+                "metadata": dict(item.metadata),
+            }
+            if invoice_id:
+                params["invoice"] = invoice_id
+            elif subscription_id:
+                params["subscription"] = subscription_id
+            try:
+                obj = client.v1.invoice_items.create(
+                    params,
+                    {
+                        "idempotency_key": idempotency_key(
+                            "invoiceitem", item.key, invoice_id or "next"
+                        ),
+                        "timeout": int(self._timeout_seconds * 1000),
+                    },
+                )
+            except Exception as exc:
+                raise self._classify(exc, context=f"invoice item {item.key}") from exc
+            created.append(str(_as_mapping(obj).get("id") or ""))
+        return created
 
     def preview_seat_change(
         self,

@@ -169,7 +169,8 @@ def scan(db: Session, *, now: Optional[datetime] = None) -> int:
                 f"{count} {gateway_name} {event_type} {'event' if count == 1 else 'events'} failed every "
                 "attempt in the last 24 hours: a subscription, invoice or refund may be out of step with "
                 f"the payment dashboard. Latest error: {error or '(none recorded)'}. Compare the "
-                "organization's plan in FlowPilot with the dashboard, and see RUNBOOK section 9.7."
+                "organization's plan in FlowPilot with the dashboard (RUNBOOK section 9.7); once the "
+                "cause is fixed, replay them (section 9.9)."
             ),
         )
         refreshed += 1

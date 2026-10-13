@@ -213,6 +213,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Detect Stripe seat-count drift (ARCH-15).",
     ),
     ScheduledJob(
+        job_type="billing.assemble_invoice",
+        interval_seconds=3_600,
+        description=(
+            "Close billing periods whose renewal webhook was lost: the statement, and its "
+            "overage on the next invoice (campaign session 4, F-339)."
+        ),
+    ),
+    ScheduledJob(
         job_type="billing.dunning_sweep",
         interval_seconds=86_400,
         at_hour=6,

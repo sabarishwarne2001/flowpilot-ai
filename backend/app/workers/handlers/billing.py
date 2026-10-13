@@ -303,31 +303,55 @@ def handle_billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
 # ============================================================================
 
 
+#: A renewal moves a subscription's period forward within seconds of its end; one still showing
+#: an ended period after this long lost its renewal webhook, and the backstop closes it.
+ASSEMBLE_BACKSTOP_GRACE = timedelta(hours=2)
+
+
 def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
+    """Close billing periods: one Stripe renewal invoice's, or every period a lost webhook left open.
+
+    Campaign session 4 (F-339, N-071). Periods close on Stripe's `invoice.created` (the reconcile
+    path, `period_close_service`). This job is the operator's replay (`stripe_invoice_id`, RUNBOOK
+    §9.8) and, hourly, the backstop for a subscription whose period ended over two hours ago and
+    was never renewed here: its statement is assembled and its overage goes on the subscription's
+    next invoice. Before, nothing queued this job and it assembled without billing overage.
+    """
     from sqlalchemy import select
 
     from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
-    from app.services.billing import invoice_service
+    from app.services.billing import invoice_service, period_close_service
+
+    limit = _int(payload, "limit", 100)
+    stripe_invoice_id = str(payload.get("stripe_invoice_id") or "").strip()
+
+    if stripe_invoice_id:
+        with SessionLocal() as db:
+            with system_principal(job_name="jobs.billing.assemble_invoice"):
+                with db.begin():
+                    snapshot = stripe_gateway.get_gateway().fetch_invoice(stripe_invoice_id)
+                    closed = period_close_service.close_for_gateway_invoice(db, snapshot=snapshot)
+                    if closed is None:
+                        return {"stripe_invoice_id": stripe_invoice_id, "assembled": 0,
+                                "reason": "closes_no_period"}
+                    return {"stripe_invoice_id": stripe_invoice_id, "assembled": 1,
+                            "invoices": [_summary(closed)]}
 
     subscription_id = _uuid(payload, "subscription_id")
-    limit = _int(payload, "limit", 100)
-    finalize = bool(payload.get("finalize", True))
-
-    assembled: list[dict[str, Any]] = []
-    skipped = 0
-
     with SessionLocal() as db:
         with system_principal(job_name="jobs.billing.assemble_invoice"):
             if subscription_id is not None:
                 targets = [subscription_id]
             else:
-                cutoff = datetime.now(timezone.utc)
+                cutoff = datetime.now(timezone.utc) - ASSEMBLE_BACKSTOP_GRACE
                 targets = list(
                     db.execute(
                         select(Subscription.id)
                         .where(
                             Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
                             Subscription.current_period_end <= cutoff,
+                            # One set to end does not renew: its period closes with no invoice.
+                            Subscription.cancel_at_period_end.is_(False),
                         )
                         .order_by(Subscription.current_period_end.asc())
                         .limit(limit)
@@ -336,6 +360,8 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
                     .all()
                 )
 
+    assembled: list[dict[str, Any]] = []
+    skipped = 0
     for target in targets:
         with SessionLocal() as db:
             with system_principal(job_name="jobs.billing.assemble_invoice"):
@@ -345,19 +371,13 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
                         if subscription is None:
                             skipped += 1
                             continue
-                        result = invoice_service.assemble(
-                            db, subscription=subscription, finalize=finalize
-                        )
-                        assembled.append(
-                            {
-                                "number": result.invoice.number,
-                                "subscription_id": str(target),
-                                "total_micros": int(result.invoice.total_micros),
-                                "lines": len(result.lines),
-                                "notes": result.notes or None,
-                            }
-                        )
-                except invoice_service.InvoiceAssemblyError as exc:
+                        closed = period_close_service.close_period(
+                            db, subscription=subscription,
+                            period_start=subscription.current_period_start,
+                            period_end=subscription.current_period_end,
+                            gateway_invoice_id=None, gateway_invoice_is_draft=False)
+                        assembled.append(_summary(closed))
+                except (invoice_service.InvoiceAssemblyError, stripe_gateway.StripeGatewayError) as exc:
                     logger.error(
                         "billing.assembly_refused",
                         extra={"subscription_id": str(target), "error": str(exc)},
@@ -370,8 +390,21 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
         "skipped": skipped,
         "invoices": assembled[:50],
     }
-    logger.info("billing.assemble_invoice_complete", extra=outcome)
+    if assembled:
+        # A period closed here lost its renewal webhook: worth an operator's look.
+        logger.warning("billing.assemble_invoice_backstop", extra=outcome)
     return outcome
+
+
+def _summary(result: Any) -> dict[str, Any]:
+    invoice = result.invoice
+    return {
+        "number": invoice.number,
+        "subscription_id": str(invoice.subscription_id),
+        "total_micros": int(invoice.total_micros),
+        "lines": len(result.lines),
+        "overage_billing": (invoice.assembly_notes or {}).get("overage_billing"),
+    }
 
 
 # ============================================================================

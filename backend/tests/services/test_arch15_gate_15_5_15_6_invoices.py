@@ -140,7 +140,9 @@ class TestGate155Immutability:
             assert line.included_quantity is not None
 
     def test_overage_is_priced_from_the_pinned_book(self, db, gateway, priced_org):
-        add_usage(db, priced_org["organization"].id, quantity=1_500_000)
+        # Two seats include twice the tier's per-seat 1,000,000 (N-044, F-339): 2,500,000 used is
+        # 500,000 over. (Written when the statement used one seat's allowance: 1,500,000 used.)
+        add_usage(db, priced_org["organization"].id, quantity=2_500_000)
         result = assemble_for(db, priced_org, gateway, seats=2)
 
         overage = next(l for l in result.lines if l.kind is InvoiceLineKind.OVERAGE)
@@ -148,7 +150,7 @@ class TestGate155Immutability:
         assert overage.unit_price_micros == Decimal("2.000000")
         assert overage.amount_micros == 1_000_000
         assert overage.limit_key == "llm.input_token"
-        assert overage.included_quantity == Decimal("1000000.000000")
+        assert overage.included_quantity == Decimal("2000000.000000")
         assert overage.price_book_entry_id is not None
 
         assert result.invoice.subtotal_micros == 50_000_000 + 1_000_000

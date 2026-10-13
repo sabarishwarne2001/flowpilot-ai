@@ -270,11 +270,41 @@ def reconcile_invoice(db: Session, event: StripeEvent) -> ReconcileOutcome:
         db, stripe_invoice_id=stripe_invoice_id
     )
 
+    # Campaign session 4 (F-339, N-071). A renewal invoice closes the period behind it: its
+    # statement is assembled and its overage added to the renewal while Stripe still holds it as a
+    # draft (`invoice.created`). Should that event be lost, the renewal's later events close the
+    # period instead (the overage then goes on the next invoice). Before, nothing ever assembled a
+    # statement, so this answered "assembly_pending" forever and overage was never charged.
     if invoice is None:
+        from app.services.billing import period_close_service
+
+        closed = period_close_service.close_for_gateway_invoice(db, snapshot=snapshot)
+        if closed is not None:
+            invoice = closed.invoice
+
+    if event.type == "invoice.created":
+        if invoice is None:
+            return ReconcileOutcome.ignored(
+                "closes_no_period",
+                stripe_invoice_id=stripe_invoice_id,
+                billing_reason=str((snapshot.raw or {}).get("billing_reason") or ""),
+            )
         return ReconcileOutcome.processed(
             organization_id=account.organization_id,
             stripe_invoice_id=stripe_invoice_id,
-            action="assembly_pending",
+            action="period_closed",
+            invoice_number=invoice.number,
+            overage_billing=(invoice.assembly_notes or {}).get("overage_billing"),
+        )
+
+    if invoice is None:
+        # A first invoice or a seat change's proration closes no period: Stripe's invoice is the
+        # whole record of it (the customer reads it in the billing portal).
+        return ReconcileOutcome.processed(
+            organization_id=account.organization_id,
+            stripe_invoice_id=stripe_invoice_id,
+            action="no_statement",
+            billing_reason=str((snapshot.raw or {}).get("billing_reason") or ""),
             stripe_total_cents=snapshot.total_cents,
         )
 
@@ -426,6 +456,7 @@ RECONCILERS: dict[str, Reconciler] = {
     "customer.created": reconcile_customer,
     "customer.updated": reconcile_customer,
     "customer.deleted": reconcile_customer,
+    "invoice.created": reconcile_invoice,  # campaign session 4 (F-339): the period closes
     "invoice.finalized": reconcile_invoice,
     "invoice.paid": reconcile_invoice,
     "invoice.payment_succeeded": reconcile_invoice,
@@ -437,7 +468,6 @@ RECONCILERS: dict[str, Reconciler] = {
 }
 
 KNOWN_UNHANDLED: dict[str, str] = {
-    "invoice.created": "assembled_on_period_close",
     "invoice.upcoming": "informational_only",
     "invoice.updated": "superseded_by_finalized",
     "invoiceitem.created": "we_do_not_push_line_items",
