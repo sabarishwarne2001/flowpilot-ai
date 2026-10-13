@@ -145,3 +145,21 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.alter_column("audit_logs", "outcome", nullable=True)
+    # Campaign session 4 (F-330): undo step 5 of the upgrade too. Without it the legacy index
+    # stayed missing and the ARCH-07 downgrade below this one, which drops it, failed.
+    # (The DENIED backfill and the file-path remediation are data repairs and stay.)
+    with op.get_context().autocommit_block():
+        op.drop_index(
+            "ix_audit_logs_denied_organization_id_created_at",
+            table_name="audit_logs",
+            postgresql_concurrently=True,
+            if_exists=True,
+        )
+        op.create_index(
+            "ix_audit_logs_organization_id_created_at",
+            "audit_logs",
+            ["organization_id", sa.text("created_at DESC")],
+            unique=False,
+            postgresql_concurrently=True,
+            if_not_exists=True,
+        )

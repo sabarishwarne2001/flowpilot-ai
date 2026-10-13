@@ -108,15 +108,15 @@ def downgrade() -> None:
     op.drop_index("ix_outbox_events_causation", table_name="outbox_events")
     op.drop_index("ix_outbox_events_correlation", table_name="outbox_events")
     op.drop_constraint(
-        "ck_outbox_events_depth_implies_correlation", "outbox_events", type_="check"
+        "depth_implies_correlation", "outbox_events", type_="check"
     )
     op.drop_constraint(
-        "ck_outbox_events_causation_implies_correlation",
+        "causation_implies_correlation",
         "outbox_events",
         type_="check",
     )
     op.drop_constraint(
-        "ck_outbox_events_depth_bounded", "outbox_events", type_="check"
+        "depth_bounded", "outbox_events", type_="check"
     )
     op.drop_constraint(
         "fk_outbox_events_causation_id_outbox_events",

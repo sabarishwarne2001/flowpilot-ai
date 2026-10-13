@@ -112,10 +112,10 @@ def downgrade() -> None:
     op.drop_index("ix_outbox_events_public_claimable", table_name="outbox_events")
     op.drop_index("ix_outbox_events_internal_claimable", table_name="outbox_events")
     op.drop_constraint(
-        "ck_outbox_events_visibility_vocabulary", "outbox_events", type_="check"
+        "visibility_vocabulary", "outbox_events", type_="check"
     )
     op.drop_constraint(
-        "ck_outbox_events_visibility_known", "outbox_events", type_="check"
+        "visibility_known", "outbox_events", type_="check"
     )
 
     op.execute("DELETE FROM outbox_events WHERE visibility = 'INTERNAL'")

@@ -44,4 +44,7 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_email_settings_user_id'), table_name='email_settings')
     op.drop_index(op.f('ix_email_settings_is_enabled'), table_name='email_settings')
     op.drop_table('email_settings')
+    # Campaign session 4 (F-330): the type the upgrade created goes with its table, or a second
+    # upgrade from base fails on it.
+    op.execute('DROP TYPE IF EXISTS emailencryption')
     # ### end Alembic commands ###

@@ -289,11 +289,13 @@ def downgrade() -> None:
             "ix_workspace_invitations_organization_id",
             table_name="workspace_invitations",
         )
-        op.drop_constraint(
+        # Campaign session 4 (F-330): by the time this runs, the ARCH-04 downgrade has recreated
+        # the table with the conventional name for this key; accept either.
+        for name in (
             "fk_workspace_invitations_organization_id",
-            "workspace_invitations",
-            type_="foreignkey",
-        )
+            "fk_workspace_invitations_organization_id_organizations",
+        ):
+            op.execute(f"ALTER TABLE workspace_invitations DROP CONSTRAINT IF EXISTS {name}")
         op.drop_column("workspace_invitations", "role_v2")
         op.drop_column("workspace_invitations", "organization_id")
 

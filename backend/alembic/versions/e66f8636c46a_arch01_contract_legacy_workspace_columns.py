@@ -115,6 +115,11 @@ def downgrade() -> None:
     )
 
     op.execute("ALTER TYPE workspace_role RENAME TO workspace_role_v2")
+    # Campaign session 4 (F-330): the upgrade dropped the legacy enum; bring it back before the
+    # columns below use it (they say create_type=False, so nothing else creates it).
+    op.execute(
+        "CREATE TYPE workspace_role_legacy AS ENUM ('OWNER', 'MANAGER', 'CONTRIBUTOR', 'VIEWER')"
+    )
 
     op.alter_column("workspace_members", "role", new_column_name="role_v2")
     if "workspace_invitations" in tables:

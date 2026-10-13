@@ -131,3 +131,19 @@ def downgrade() -> None:
         existing_type=sa.dialects.postgresql.UUID(as_uuid=True),
         nullable=False,
     )
+
+    # Campaign session 4 (F-330): the staging table is made outside the migrations (ARCH-07's
+    # adoption script) and step 12's downgrade recreates it EMPTY for this step. Below this step
+    # nothing reads it: an empty one is dropped, so a downgrade to base leaves a clean schema.
+    # One that holds rows (a real adoption in progress) is left for the operator.
+    op.execute(
+        """
+        DO $$
+        BEGIN
+            IF to_regclass('public.arch07_logo_adoption_staging') IS NOT NULL
+               AND NOT EXISTS (SELECT 1 FROM arch07_logo_adoption_staging) THEN
+                DROP TABLE arch07_logo_adoption_staging;
+            END IF;
+        END $$;
+        """
+    )

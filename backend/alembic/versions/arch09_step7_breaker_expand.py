@@ -83,17 +83,17 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index("ix_webhook_endpoints_auto_disabled", table_name="webhook_endpoints")
     op.drop_constraint(
-        "ck_webhook_endpoints_auto_disabled_implies_disabled",
+        "auto_disabled_implies_disabled",
         "webhook_endpoints",
         type_="check",
     )
     op.drop_constraint(
-        "ck_webhook_endpoints_failure_streak_consistent",
+        "failure_streak_consistent",
         "webhook_endpoints",
         type_="check",
     )
     op.drop_constraint(
-        "ck_webhook_endpoints_consecutive_failures_non_negative",
+        "consecutive_failures_non_negative",
         "webhook_endpoints",
         type_="check",
     )
