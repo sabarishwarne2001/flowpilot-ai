@@ -264,6 +264,13 @@ def _storage_problems(settings: "Settings", environment: str) -> list[str]:
             "disk and vanish on the next deploy. Use s3, r2 or minio with a persistent volume."
         )
     if backend in {"s3", "r2", "minio"}:
+        if not _text_raw(settings.S3_BUCKET):
+            # Campaign session 4 (§C.5): the storage driver is built at the first upload, so
+            # a missing bucket used to boot and then fail every upload.
+            problems.append(
+                f"S3_BUCKET: is not set although STORAGE_BACKEND is {backend!r}. Name the bucket "
+                "that holds the uploaded documents, or every upload fails."
+            )
         access = _text_raw(settings.S3_ACCESS_KEY_ID)
         secret = _text(settings.S3_SECRET_ACCESS_KEY)
         if access.lower() == "minioadmin" or secret.lower() == "minioadmin":
@@ -311,6 +318,26 @@ def _billing_problems(settings: "Settings", environment: str) -> list[str]:
             "Use test keys and set both to false."
         )
     return problems
+
+
+def _platform_model_problems(settings: "Settings") -> list[str]:
+    """Campaign session 4 (§C.5). The hosted service reads every document (classification,
+    extraction, summaries) and answers Ask AI on the platform's own Groq key: the models it
+    serves are Groq's (N-054), and Free and Developer organizations cannot bring a key of their
+    own. Without the key the app started and every document then failed to be read. Only a
+    deployment whose own model serves everything (LOCAL_LLM_MODE=exclusive) can do without it."""
+    local_model_serves_everything = (
+        _text_raw(settings.LOCAL_LLM_MODE).lower() == "exclusive"
+        and bool(_text_raw(settings.LOCAL_LLM_BASE_URL))
+        and bool(_text_raw(settings.LOCAL_LLM_MODEL))
+    )
+    if local_model_serves_everything or _text(settings.GROQ_API_KEY):
+        return []
+    return [
+        "GROQ_API_KEY: is not set. The platform reads every document and answers Ask AI with its "
+        "own Groq key; without it all of that fails. Create one at https://console.groq.com/keys "
+        "(or serve everything from your own model with LOCAL_LLM_MODE=exclusive)."
+    ]
 
 
 def production_config_problems(settings: "Settings", environment: str) -> list[str]:
@@ -365,6 +392,7 @@ def production_config_problems(settings: "Settings", environment: str) -> list[s
             problems.append("RERANKER_INTERNAL_TOKEN: is shorter than 32 characters.")
 
     problems += _billing_problems(settings, environment)
+    problems += _platform_model_problems(settings)
 
     # Campaign session 4 (§C.4): someone must be told when jobs die or the API starts failing.
     recipients = settings.operator_alert_recipients

@@ -278,7 +278,7 @@ export COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.produc
 | File storage | AWS S3, Cloudflare R2 or Backblaze B2 (recommended), or the optional MinIO service | one server disk is not durable storage for customers' documents |
 | Outgoing email | an SMTP provider (Postmark, SES, ...) | the app **refuses to start** without one: invitations, verification and password-reset emails depend on it |
 | Payments | Stripe **test** keys and/or Dodo **test** keys | stay in test mode until you decide to go live; never put live keys on a server you are still testing |
-| An AI key | `GROQ_API_KEY` (or `GEMINI_API_KEY`) | without one, every AI feature errors for customers who have not brought their own key |
+| An AI key | `GROQ_API_KEY` from https://console.groq.com/keys | the app **refuses to start** without it: documents are read and Ask AI answers on this key (the platform serves Groq's GPT-OSS models, N-054) |
 
 Only ports 80, 443/tcp and 443/udp are published (by Caddy). Postgres, Redis, MinIO and the
 API are not reachable from outside. Do not add `ports:` to them.
@@ -667,7 +667,7 @@ prints nothing and `0` when the site is up.
 | The site does not load | `$COMPOSE ps`, then `$COMPOSE logs --tail 100 caddy web` |
 | `web` restarts in a loop | `$COMPOSE logs web`: a configuration refusal lists every setting to fix |
 | Emails never arrive | `PLATFORM_SMTP_*` in `.env.production`; then `$COMPOSE logs worker-delivery` |
-| AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is missing or wrong |
+| AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is wrong or out of credit (a missing one stops the app from starting) |
 | Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |

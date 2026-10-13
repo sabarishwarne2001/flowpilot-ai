@@ -38,6 +38,7 @@ GUARDED = (
     "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRETS", "STRIPE_LIVEMODE",
     "DODO_API_KEY", "DODO_WEBHOOK_SECRET", "DODO_LIVEMODE", "DODO_API_BASE",
     "BILLING_GATEWAY", "ML_STUBS", "SERVICE_ROLE", "OPERATOR_ALERT_EMAILS",
+    "GROQ_API_KEY", "LOCAL_LLM_MODE", "LOCAL_LLM_BASE_URL", "LOCAL_LLM_MODEL",
 )
 
 #: The values that used to be committed as defaults. They are public.
@@ -71,6 +72,7 @@ def good_production_env() -> dict[str, str]:
         "RERANKER_ENABLED": "true",
         "RERANKER_INTERNAL_TOKEN": secrets.token_hex(32),
         "OPERATOR_ALERT_EMAILS": "ops@example.com",
+        "GROQ_API_KEY": "gsk_" + secrets.token_hex(24),
     }
 
 
@@ -263,6 +265,35 @@ def test_local_disk_storage_is_allowed_in_staging(env) -> None:
 def test_the_minio_dev_credentials_are_refused(env) -> None:
     text = refusal(env, S3_ACCESS_KEY_ID="minioadmin", S3_SECRET_ACCESS_KEY="minioadmin")
     assert "S3_" in text and "minioadmin" in text
+
+
+@pytest.mark.parametrize("backend", ["s3", "r2", "minio"])
+def test_object_storage_needs_its_bucket_named(env, backend) -> None:
+    """Campaign session 4 (§C.5): the storage driver is built at the first upload, so a
+    deployment with no bucket used to start and then fail every upload."""
+    text = refusal(env, STORAGE_BACKEND=backend, S3_BUCKET=None, S3_ENDPOINT_URL="https://store.example.com")
+    assert "S3_BUCKET" in text
+
+
+def test_the_platform_groq_key_is_required(env) -> None:
+    """Campaign session 4 (§C.5): every document is read on the platform's Groq key (N-054);
+    without it the app started and then failed to read every document."""
+    assert "GROQ_API_KEY" in refusal(env, GROQ_API_KEY=None)
+    assert "GROQ_API_KEY" in refusal(env, GROQ_API_KEY="")
+    # A local model in fallback mode is used only when Groq fails: the key is still needed.
+    text = refusal(
+        env, GROQ_API_KEY=None, LOCAL_LLM_MODE="fallback",
+        LOCAL_LLM_BASE_URL="http://llm.internal:8080/v1", LOCAL_LLM_MODEL="local-model",
+    )
+    assert "GROQ_API_KEY" in text
+
+
+def test_a_local_model_serving_everything_needs_no_groq_key(env) -> None:
+    env(
+        good_production_env(), GROQ_API_KEY=None, LOCAL_LLM_MODE="exclusive",
+        LOCAL_LLM_BASE_URL="http://llm.internal:8080/v1", LOCAL_LLM_MODEL="local-model",
+    )
+    assert build().GROQ_API_KEY is None
 
 
 def test_redis_must_be_set_explicitly(env) -> None:
