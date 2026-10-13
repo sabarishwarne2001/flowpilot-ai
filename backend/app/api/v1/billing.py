@@ -58,6 +58,7 @@ from app.services.billing.portal_service import (
     ReauthenticationRequiredError,
 )
 from app.services.billing.payment_gateway import GatewayNotConfiguredError
+from app.services.billing.stripe_gateway import StripePermanentError
 
 logger = logging.getLogger("app.api.v1.billing")
 
@@ -642,7 +643,21 @@ def create_portal_session(
             organization_id=context.organization_id,
             return_url=(payload.return_url if payload else None),
             authorization_header=authorization,
+            # Campaign session 4 (F-344): a subscriber's pick opens the portal on that change.
+            plan_pick=(
+                portal_service.PlanPick(
+                    quota_tier_key=payload.quota_tier_key, seats=payload.seats,
+                    interval=payload.interval, currency=payload.currency,
+                )
+                if payload is not None and payload.quota_tier_key
+                else None
+            ),
         )
+    except CheckoutConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except StripePermanentError as exc:
+        # F-344: a subscription Stripe cannot move to the picked plan (no licensed item).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ReauthenticationRequiredError as exc:
         audit_service.record(
             db,

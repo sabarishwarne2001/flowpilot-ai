@@ -10,7 +10,7 @@ import { REVOPS_MESSAGES, money, type PromoQuote, type RevOpsCode } from "@/type
 import { ApiError } from "@/services/api/client";
 import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
-import type { PlanOption, PlanPriceOption } from "@/types/billing";
+import type { PlanOption, PlanPriceOption, PortalSessionRequest } from "@/types/billing";
 import { describeEntitlement, entitlementRank } from "@/types/planEntitlements";
 import {
   CORE_FEATURES,
@@ -111,8 +111,11 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
   // Campaign session 1 (F-253): a subscriber changes plans on the live subscription, in
   // the portal; a second checkout would create (and charge) a second subscription.
+  // Campaign session 4 (F-344): a picked plan and seat count travel with the request, and the
+  // portal opens on the confirmation of that change; without a pick it opens on its home page.
   const portal = useMutation({
-    mutationFn: () => createPortalSession(organizationId, { return_url: window.location.href }),
+    mutationFn: (pick?: PortalSessionRequest) =>
+      createPortalSession(organizationId, { return_url: window.location.href, ...pick }),
     onSuccess: (session) => {
       window.location.assign(session.url);
     },
@@ -121,6 +124,12 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
         error instanceof ApiError ? error.message : "Couldn't open the billing portal. Try again in a moment.",
       );
     },
+  });
+
+  const pickOf = (plan: PlanOption, seatCount: number): PortalSessionRequest => ({
+    quota_tier_key: plan.key,
+    seats: seatCount,
+    ...(hasPriceBooks && priceFor(plan) !== null ? { interval, currency } : {}),
   });
 
   const checkout = useMutation({
@@ -390,7 +399,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       onClick={(event) => {
                         event.preventDefault();
                         if (hasSubscription) {
-                          portal.mutate();
+                          portal.mutate(pickOf(plan, Math.max(currentSeats, floor)));
                           return;
                         }
                         if (plan.key !== selectedKey) {
@@ -418,7 +427,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
 
       {selected && !(selected.is_current || selected.key === currentKey) && (
         <div className="space-y-3 border-t border-border bg-muted/10 p-4">
-          {!selectedIsFree && !hasSubscription && (
+          {!selectedIsFree && (
             <div className="flex flex-wrap items-center gap-3">
               <label htmlFor="seat-count" className="text-sm font-medium text-foreground">
                 Seats:
@@ -438,7 +447,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               />
               <span className="text-xs text-muted-foreground">
                 {floor > 1 ? `At least ${floor}: everyone in the organization and pending invitations hold a seat. ` : ""}
-                You&apos;ll see the total at checkout, before you pay.
+                {hasSubscription
+                  ? "The billing portal shows the prorated total before you confirm."
+                  : "You'll see the total at checkout, before you pay."}
               </span>
             </div>
           )}
@@ -466,14 +477,14 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                   </>
                 ) : (
                   <>
-                    The billing portal moves your subscription to <strong>{selected.display_name}</strong> and
-                    prorates the difference.
+                    The billing portal moves your subscription to <strong>{selected.display_name}</strong> with{" "}
+                    {seats} {seats === 1 ? "seat" : "seats"} and prorates the difference.
                   </>
                 )}
               </span>
               <button
                 type="button"
-                onClick={() => portal.mutate()}
+                onClick={() => portal.mutate(selectedIsFree ? undefined : pickOf(selected, seats))}
                 disabled={!canManageBilling || portal.isPending}
                 className="fp-btn-primary inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
               >

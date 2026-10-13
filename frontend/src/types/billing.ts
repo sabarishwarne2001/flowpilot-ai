@@ -233,6 +233,11 @@ export interface CheckoutSessionRequest {
 
 export interface PortalSessionRequest {
   readonly return_url?: string;
+  /** Campaign session 4 (F-344): a subscriber's pick; the portal opens on the confirmation of it. */
+  readonly quota_tier_key?: string;
+  readonly seats?: number;
+  readonly interval?: "month" | "year";
+  readonly currency?: "USD" | "INR";
 }
 
 export interface SeatSyncRequest {

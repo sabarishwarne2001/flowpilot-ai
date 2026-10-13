@@ -155,6 +155,15 @@ class StripeInvoiceItemDraft:
 
 
 @dataclass(frozen=True)
+class SubscriptionUpdate:
+    """A subscriber's picked plan and seats, confirmed in the billing portal (campaign session 4, F-344)."""
+
+    subscription_id: str
+    price_id: str
+    quantity: int
+
+
+@dataclass(frozen=True)
 class StripeChargeSnapshot:
     """A charge, in Stripe's units (cents): what was paid and how much of it was refunded.
 
@@ -943,13 +952,41 @@ class StripeGateway:
     # -- sessions (Tranche 4) -------------------------------------------
 
     def create_portal_session(
-        self, *, customer_id: str, return_url: Optional[str] = None
+        self,
+        *,
+        customer_id: str,
+        return_url: Optional[str] = None,
+        subscription_update: Optional[SubscriptionUpdate] = None,
     ) -> Any:
         from app.services.billing.portal_service import EphemeralSession
 
         params: dict[str, Any] = {"customer": customer_id}
         if return_url:
             params["return_url"] = return_url
+        if subscription_update is not None:
+            # Campaign session 4 (F-344). The portal opens on the confirmation of the plan and seats
+            # the customer picked in FlowPilot, prorated, instead of on its home page where the pick
+            # was lost. Stripe changes one item of the subscription: its licensed (seat) item.
+            item_id = self._primary_item_id(subscription_update.subscription_id)
+            if item_id is None:
+                raise StripePermanentError(
+                    f"Subscription {subscription_update.subscription_id} has no licensed item "
+                    "to move to another plan."
+                )
+            flow: dict[str, Any] = {
+                "type": "subscription_update_confirm",
+                "subscription_update_confirm": {
+                    "subscription": subscription_update.subscription_id,
+                    "items": [{
+                        "id": item_id,
+                        "price": subscription_update.price_id,
+                        "quantity": int(subscription_update.quantity),
+                    }],
+                },
+            }
+            if return_url:
+                flow["after_completion"] = {"type": "redirect", "redirect": {"return_url": return_url}}
+            params["flow_data"] = flow
 
         client = self._stripe_client()
         try:
@@ -1145,6 +1182,7 @@ __all__ = [
     "StripeSubscriptionSnapshot",
     "StripeSeatChangePreview",
     "StripeTransientError",
+    "SubscriptionUpdate",
     "configured_secrets",
     "get_gateway",
     "idempotency_key",
