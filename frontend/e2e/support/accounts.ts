@@ -5,7 +5,7 @@
  */
 import { expect, type Browser, type BrowserContext, type Page } from "@playwright/test";
 
-import { apiLogin, type ApiSession } from "./api";
+import { apiLogin, fetchOnce, type ApiSession } from "./api";
 import { API_BASE, BROWSER_API_ORIGIN, PASSWORD } from "./env";
 import { linkFrom, waitForMail } from "./mail";
 
@@ -16,7 +16,7 @@ export function tokenOf(link: string): string | null {
 
 export async function signUpVerified(email: string): Promise<ApiSession> {
   const since = Date.now() - 1_000;
-  const registered = await fetch(`${API_BASE}/auth/register`, {
+  const registered = await fetchOnce(`${API_BASE}/auth/register`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ email, password: PASSWORD }),
@@ -24,7 +24,7 @@ export async function signUpVerified(email: string): Promise<ApiSession> {
   expect(registered.status, await registered.text()).toBeLessThan(300);
   const mail = await waitForMail(email, /verify-email/, since);
   const token = tokenOf(linkFrom(mail, /\/verify-email/));
-  const verified = await fetch(`${API_BASE}/auth/verify-email`, {
+  const verified = await fetchOnce(`${API_BASE}/auth/verify-email`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ token }),

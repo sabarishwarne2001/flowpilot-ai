@@ -243,15 +243,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Campaign session 4: the short name, as the upgrade created it. The metadata's naming
+    # convention prefixes it; the full name was prefixed twice and never matched (F-330).
     op.drop_constraint(
-        "ck_reconciliation_runs_cost_basis_method_known",
+        "cost_basis_method_known",
         "reconciliation_runs",
         type_="check",
     )
     op.drop_column("reconciliation_runs", "cost_basis_method")
 
     op.drop_constraint(
-        "ck_supplier_reconciliations_cost_basis_method_known",
+        "cost_basis_method_known",
         "supplier_reconciliations",
         type_="check",
     )
@@ -259,17 +261,17 @@ def downgrade() -> None:
 
     op.drop_index("ix_usage_rollups_unknown_cost_basis", table_name="usage_rollups")
     op.drop_constraint(
-        "ck_usage_rollups_unknown_cost_basis_within_events",
+        "unknown_cost_basis_within_events",
         "usage_rollups",
         type_="check",
     )
     op.drop_constraint(
-        "ck_usage_rollups_unknown_cost_basis_count_non_negative",
+        "unknown_cost_basis_count_non_negative",
         "usage_rollups",
         type_="check",
     )
     op.drop_constraint(
-        "ck_usage_rollups_cost_basis_non_negative", "usage_rollups", type_="check"
+        "cost_basis_non_negative", "usage_rollups", type_="check"
     )
     op.drop_column("usage_rollups", "cost_basis_source_mix")
     op.drop_column("usage_rollups", "unknown_cost_basis_event_count")

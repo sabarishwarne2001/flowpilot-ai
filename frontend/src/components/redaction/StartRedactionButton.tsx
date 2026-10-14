@@ -23,7 +23,7 @@ import { startRedaction } from "@/services/api/redaction";
 export const REDACTION_PROFILE_LABELS: Readonly<Record<string, { label: string; hint: string }>> = {
   all_identifiers: {
     label: "All identifiers",
-    hint: "Every detector the engine has",
+    hint: "Every kind of identifier the engine detects",
   },
   financial: {
     label: "Financial",

@@ -70,6 +70,34 @@ def _now() -> datetime:
     return datetime.now(timezone.utc)
 
 
+# --------------------------------------------------------------------------- one writer at a time
+
+#: How long a person's decision waits for a build of the same workspace before it is refused.
+DECISION_LOCK_WAIT_SECONDS = 15.0
+
+
+def lock_workspace(db: Session, workspace_id: uuid.UUID, *, wait_seconds: Optional[float] = None) -> None:
+    """Take the workspace's mesh lock for the rest of the transaction.
+
+    Every writer of a workspace's mesh (a full build, one document's index, a person's decision on
+    a conflict or a link) holds it, so two of them never interleave: two builds would both insert
+    the same node or conflict (a unique violation, the job failing and the mesh shown FAILED), and
+    a build that read a conflict before a person dismissed it would write "auto-resolved" over the
+    dismissal. Jobs wait for it; a person's request waits `wait_seconds`, then is told to retry.
+    """
+    from sqlalchemy import text
+
+    key = {"k": f"truthmesh:{workspace_id}"}
+    if wait_seconds is None:
+        db.execute(text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), key)
+        return
+    deadline = time.monotonic() + wait_seconds
+    while not db.execute(text("SELECT pg_try_advisory_xact_lock(hashtextextended(:k, 0))"), key).scalar_one():
+        if time.monotonic() >= deadline:
+            raise MeshError("MESH_BUSY", "The mesh is being rebuilt right now. Try again in a moment.", 409)
+        time.sleep(0.1)
+
+
 # --------------------------------------------------------------------------- nodes
 
 def _node_values(twin: F.Twin) -> dict[str, Any]:
@@ -249,6 +277,7 @@ def _status_map(rows: Iterable[MeshLink]) -> dict[tuple[uuid.UUID, uuid.UUID], s
 
 def build_workspace(db: Session, *, workspace_id: uuid.UUID, organization_id: uuid.UUID) -> BuildResult:
     """Read every eligible document, link them all, recompute every conflict. Caller commits."""
+    lock_workspace(db, workspace_id)
     started = time.monotonic()
     ids = loader.eligible_ids(db, workspace_id)
     twins = [F.read(source) for source in loader.sources(db, workspace_id, ids)]
@@ -275,6 +304,7 @@ def build_workspace(db: Session, *, workspace_id: uuid.UUID, organization_id: uu
 def index_document(db: Session, *, workspace_id: uuid.UUID, organization_id: uuid.UUID,
                    work_item_id: uuid.UUID) -> BuildResult:
     """One document in, its links and its neighbourhood's conflicts recomputed. Caller commits."""
+    lock_workspace(db, workspace_id)
     started = time.monotonic()
     found = loader.sources(db, workspace_id, [work_item_id])
     if not found:
@@ -332,6 +362,7 @@ def decide_conflict(db: Session, *, conflict: MeshConflict, status: str, note: O
                     actor_id: Optional[uuid.UUID]) -> MeshConflict:
     if status not in ("OPEN", "ACKNOWLEDGED", "RESOLVED", "DISMISSED"):
         raise MeshError("INVALID_STATUS", "Status must be OPEN, ACKNOWLEDGED, RESOLVED or DISMISSED.")
+    lock_workspace(db, conflict.workspace_id)
     text = (note or "").strip()
     if status in ("RESOLVED", "DISMISSED") and len(text) < 3:
         raise MeshError("REASON_REQUIRED", "Say how it was resolved, or why it is not a conflict (a few words).")
@@ -353,6 +384,7 @@ def decide_conflict(db: Session, *, conflict: MeshConflict, status: str, note: O
 def decide_link(db: Session, *, link: MeshLink, decision: str, actor_id: Optional[uuid.UUID]) -> MeshLink:
     if decision not in ("CONFIRMED", "REJECTED", "AUTO"):
         raise MeshError("INVALID_DECISION", "Decision must be CONFIRMED, REJECTED or AUTO.")
+    lock_workspace(db, link.workspace_id)
     link.status = decision
     link.decided_by_user_id = actor_id if decision != "AUTO" else None
     link.decided_at = _now() if decision != "AUTO" else None
@@ -675,5 +707,5 @@ def export_csv(db: Session, workspace_id: uuid.UUID) -> str:
 
 
 __all__ = ["BuildResult", "MeshError", "build_workspace", "conflict_out", "decide_conflict", "decide_link",
-           "document", "export_csv", "graph", "index_document", "mark_building", "matrix", "overview", "simulate",
-           "state"]
+           "document", "export_csv", "graph", "index_document", "lock_workspace", "mark_building", "matrix",
+           "overview", "simulate", "state"]

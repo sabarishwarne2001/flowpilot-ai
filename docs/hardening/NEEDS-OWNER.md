@@ -107,6 +107,13 @@ community rebuild `pgsty/minio` (which includes `mc`).** Nothing to change.
 The recommendation to use a managed object store in production stays open as
 an option, but is not required.
 
+**DECIDED (campaign session 4):** production uses a managed object store (AWS S3, Cloudflare R2 or
+Backblaze B2), as `.env.production.template` recommends; the app refuses to start in production
+without `S3_BUCKET` (F-351). The pinned `pgsty/minio` image stays for development and for the optional
+`self-hosted-storage` profile. Reason: a single server's disk is a single point of loss for customer
+documents, and a managed store's signed download links reach the customer's browser directly (MinIO's
+internal address does not; F-356 streams files where links are not available).
+
 ## N-009 — When should production run the lossy ARCH-40 "contract" migration? (DECIDED)
 The newest migration, `arch40_step3_contract_ai_settings`, drops three unused
 `ai_settings` columns. It refuses to run unless `ARCH40_CONTRACT=1` is set,
@@ -303,6 +310,12 @@ exactly the allowance that was in effect. Your choice is now one line in `.env.p
 `RATE_LIMIT_LOGIN_IP_PER_5MIN=10` (option a, current) or `=20` (option b). Option (c), counting only
 failed sign-ins per address, is still a code change and still needs your go-ahead.
 
+**DECIDED (campaign session 4):** 20 sign-in attempts per address per 5 minutes (the value in force
+since the final release), with the per-account back-off unchanged. Counting only *failed* attempts
+per address (option c) is the better rule for large offices; it changes the rate limiter's core, so it
+is a later-session item (HANDOFF), not a launch blocker: sessions last days, so an office rarely signs
+in twenty times in five minutes.
+
 ## N-019 — What may Viewers and Members do? (Phase 3, F-053, F-065)
 The browser tests found two places where the code and the Phase 3 brief disagree:
 - **Viewers and workflows / review queue.** A workspace VIEWER sees Workflows, Run history and
@@ -318,6 +331,12 @@ The browser tests found two places where the code and the Phase 3 brief disagree
 "Access restricted - ask a workspace administrator" screen for a VIEWER instead of firing requests
 the server refuses (F-053, `cc48275`). **Still open:** whether viewers should get read-only access to
 those three pages (then the server must allow GET), or have them hidden from the sidebar.
+
+**DECIDED (campaign session 4, recording what is built):** viewers do not see Workflows, Run history or
+the Review queue in the sidebar (`minimumRole: "CONTRIBUTOR"` in `navigation.ts`), and opening one by
+its address shows "Access restricted". Viewers are read-only readers of documents and answers; review
+and automation are work, which starts at Contributor. ERP posting requires a workspace admin or the
+owner (F-065).
 
 ## N-020 — Which missing capabilities do you want before launch? (Phase 3, F-061)
 The brief asked the tests to exercise these, and the product does not have them:
@@ -337,6 +356,13 @@ The brief asked the tests to exercise these, and the product does not have them:
   **still open**; the current rule stands (viewers are refused, the sidebar still shows them).
 - N-020: items **1, 4 and 6 were requested** by the Phase 4 brief and are built (F-091, F-080,
   F-092). Items 2, 3, 5 and 7 are **still open**.
+
+**DECIDED (campaign session 4):** items 1, 4 and 6 were built in Phase 4; item 2 (notification category
+filters and mark as unread) was built in session 3 (`10-workspace-documents.spec.ts` proves it);
+item 3 (a promotion code at checkout) is built as `promo_code` on checkout (ARCH-50, RevOps promo
+codes); item 5 (invite from Organization > Members) is built (`InviteMembersPanel`). Item 7
+(correcting an extracted field directly in the document viewer) is dropped for launch: corrections go
+through the review queue, which records who changed what; it is in PRODUCT-NEXT.md.
 
 ## N-021 — Is BYOK (bring your own AI key) an Enterprise-only feature? (Phase 4, F-095)
 The console calls it "Enterprise BYOK & models", but the server lets every plan, Free included,
@@ -1154,3 +1180,155 @@ The server now refuses anything it cannot honour (an unknown zone, a currency th
 a date format the product does not render), where before it stored any text and quietly fell back.
 Nothing about prices or billing currency changes: this is the workspace's operating currency for
 reading documents, not what FlowPilot charges in.
+
+
+# Pre-launch campaign, session 4 (2026-10-13): experience, operations, certification
+
+The owner delegated founder authority for the campaign. Each item below is **DECIDED (campaign
+session 4)**, built and tested on branch `claude/kind-hamilton-5lpp19` (PR #23).
+
+## N-069 — Refunds
+**DECIDED (campaign session 4): record every gateway refund on the invoice it pays back, tell the
+organization, and show refunds as their own cash figure.** A refund is made by the owner in the
+Stripe Dashboard (there is no refund button in FlowPilot: a refund is a money decision a person
+takes, usually after a support conversation; see the refund playbook in RUNBOOK §9.8). When Stripe
+reports it (`charge.refunded`, and `charge.refund.updated` if the bank later returns it), FlowPilot
+re-reads the charge and records on the invoice how much of the payment was refunded and when; the
+invoice keeps "paid" as its status, because the payment did happen, and the list says "Refunded" or
+"Partially refunded · $X refunded", as Stripe's own invoice page does. Owners and Billing members get
+a billing notice (always emailed, N-062). The RevOps console shows money refunded per currency in the
+last 30 days next to receivables. **Why not a credit-note document and negative revenue lines:**
+FlowPilot's recurring revenue (MRR) is what subscriptions are worth each month, and a refund does not
+change that (a cancellation does, and is already counted as churn); a credit-note PDF is a document
+customers in some countries need for their tax records, and Stripe issues one when the owner refunds
+through "Credit note" rather than "Refund" in the Dashboard. Recording the refund where the customer
+and the operator look is what was missing. Dodo Payments is the merchant of record and owns refunds
+there, as before. **Owner action:** add `charge.refunded` and `charge.refund.updated` to the Stripe
+webhook's events (RUNBOOK §9.2 step 9).
+
+## N-070 — How the owner hears about errors after launch
+**DECIDED (campaign session 4): email, from inside the stack, to an address the deployment must name.**
+`OPERATOR_ALERT_EMAILS` (one or more addresses, required in production) is emailed through the same mail
+relay as everything else when background jobs of one type fail for good, payment events cannot be
+applied, the API returns 20 or more server errors in five minutes, or a customer has two live
+subscriptions. Each alert repeats at most once an hour while it keeps happening. The uptime heartbeat
+(N-017) still covers "the whole site is down", which an in-stack alert cannot report. **Why email and not
+a monitoring service (Sentry, Datadog):** it costs nothing, needs no account or extra container, and the
+four conditions are the ones a solo founder must act on; an error tracker is worth adding when there is
+a team to triage a stream of individual exceptions (PRODUCT-NEXT.md). **Owner action:** put your address
+in `OPERATOR_ALERT_EMAILS` before the first deploy (the app refuses to start without it).
+
+
+## N-071 — How overage reaches the customer's card, and what "Invoices" shows
+**DECIDED (campaign session 4): overage is billed in arrears on the next renewal, through Stripe.**
+The plans "bill overage" past their allowances (OCR pages, storage, tokens; N-045, N-048), and the
+margins in N-046 assume it is charged, but nothing ever charged it (F-339): no statement was written,
+no line reached Stripe. Now, when Stripe opens a subscription's renewal at the end of a billing period,
+FlowPilot writes its statement for the month that just ended (the seats, the allowances for that many
+seats, the overage priced from the subscription's pinned price book) and adds each overage line to that
+renewal before Stripe charges it, as one invoice line per meter ("Overage — ocr.page (1 Sep 2026 –
+1 Oct 2026)"). The customer pays it with the next month's seats; the statement shows in Billing,
+Invoices and is marked paid when the renewal is. This is how per-seat SaaS with metered extras bill on
+Stripe (seats in advance, usage in arrears). Also decided:
+- **A renewal that was already charged** (FlowPilot was down for over an hour): the overage goes on the
+  following invoice, and the statement says so. A period whose renewal never reached FlowPilot is closed
+  by an hourly backstop two hours after it ended.
+- **The last month of a subscription that ends** has no renewal, so its overage is not charged. The
+  amounts are small and bounded by the plan ceilings; charging it needs a one-off invoice at
+  cancellation, listed in PRODUCT-NEXT.md.
+- **Allowances on the statement are per seat, pooled** (N-044), as the usage checks already were.
+- **Usage recorded after the statement is written** (late events, F-256) is not billed.
+- **Dodo** cannot take usage lines yet (`supports_usage_billing` is false pending verification, N-026):
+  on Dodo, statements are written and overage is not billed. Stripe is the launch gateway.
+- **Owner action:** none in code. Keep `invoice.*` in the Stripe webhook's events (RUNBOOK §9.2 step 9).
+
+## N-072 — What happens when a card is declined (Stripe)
+**DECIDED (campaign session 4): Stripe retries, FlowPilot tells, and the account becomes read-only only
+when Stripe gives up.** When a renewal is declined, Stripe's Smart Retries try the card again over about
+two weeks. Each failed attempt emails the organization's owners and Billing members (FlowPilot's three
+notices: "Payment could not be processed", "Payment still outstanding", "Final notice before access
+changes"), and the app shows "Payment failed" with an "Update payment method" button from the first
+one (F-341). FlowPilot's own dunning stops at those notices (`BILLING_DUNNING_MAX_STEP=NOTIFY_3`, so
+two systems never race to restrict). When the retries run out, Stripe marks the subscription **unpaid**
+and FlowPilot makes the organization read-only: everything can still be read, searched and exported,
+nothing is deleted, and writes are refused with the reason. Paying the open invoice (a new card in the
+billing portal) restores everything at once. This is the standard Stripe setup for B2B SaaS: no data
+loss, a clear path back. **Owner action:** in the Stripe Dashboard, Billing → Revenue recovery →
+Retries, choose Smart Retries and set "If all retries for a payment fail" to **Mark the subscription as
+unpaid** (not cancel). Proven by journey 5 (`frontend/e2e/tests/64-journey-payment-fails.spec.ts`).
+
+## N-073 — What the public pricing page says
+**DECIDED (campaign session 4).** The public pages (`/pricing`, `/terms`, `/privacy`, CAMPAIGN-MAP
+§4.3) read the plans from the same published source as the in-app plan cards (`GET /api/v1/pricing`),
+so the page can never show a price or allowance the product does not sell.
+- **What it states as fact:** each plan's per-seat monthly price, the counts a customer plans by
+  (documents, OCR pages, assistant messages, storage, workspaces, seats), the one-week trial with no
+  payment details needed, one trial per account, and read-only after the trial until someone
+  subscribes (N-052, TENANCY-AND-PLANS §4.3). All of these are what the code enforces.
+- **Enterprise's "priority 99.9% SLO":** kept. It is the capability the plan sells
+  (`capability.priority_slo`, TENANCY-AND-PLANS §4.5) and the SLO console measures it. It is an
+  objective, not a contractual guarantee with service credits; the terms page must not promise
+  credits unless the owner's counsel adds them.
+- **Overage prices and add-ons** (for example warehouse sync) are not on the public page: Tier-1
+  pricing pages list what a plan includes and keep metered rates for the billing screens and the
+  contract. Customers see overage on their Billing page before it is invoiced (N-071).
+- **No "contact sales" button:** Enterprise is bought per seat in the app like the other plans. An
+  invoiced annual contract (N-051) is arranged by email.
+- **Terms and privacy are placeholders**, clearly marked as awaiting the owner's legal review, and
+  make no compliance, certification, sub-processor, retention or jurisdiction claims (N-029).
+- **Owner action (launch checklist):** have counsel replace the terms and privacy text; add a
+  support or sales email address to the pricing page footer once you have one.
+
+## N-074 — Decisions taken in campaign session 4 (recorded, nothing to do)
+
+All **DECIDED (campaign session 4)** under the founder authority given for this session:
+
+- **Tailwind 4 waits.** The seven development-only npm advisories (Tailwind CSS 3's file watcher and
+  selector parser; nothing ships to the browser, `npm audit --omit=dev` is 0) are accepted for launch.
+  Tailwind 4 rewrites the CSS configuration and needs a page-by-page visual comparison: a later
+  session (HANDOFF).
+- **One database user at launch.** The app connects as the database owner (the compose file's
+  `POSTGRES_USER`). The audit-log trigger therefore guards against mistakes, not against someone with
+  the database password; the nightly audit sweep names itself to the trigger for its own deletes only
+  (F-355). Separate least-privilege roles (an app role that cannot alter tables, a sweeper role) are a
+  later-session security item (HANDOFF), with migrations run by the owner role.
+- **F-017's 283 undeclared index and constraint lines stay** (PERFORMANCE.md "Indexes"): they are real
+  database objects created by migrations; the drift gate's baseline can only shrink.
+- **Accessibility target:** WCAG 2.1 AA, no serious or critical axe finding on any page in either theme,
+  enforced by `72-accessibility.spec.ts` in CI (F-362). The brand blue and red were darkened slightly
+  for it.
+- **First run:** every new workspace shows "Get started with FlowPilot" with a built-in sample invoice
+  (§A.4); it hides itself when done or when the person hides it.
+
+
+## N-075 — What a Document pack does today (DECIDED, campaign session 4)
+
+**DECIDED (campaign session 4):** the Document packs card tells the truth now (F-408): enabling a pack
+makes new documents that mention at least two of its phrases be read with its field list. Its
+suggested checks and redaction profile are shown as **recommendations**: nothing creates the checks
+and redaction never uses the profile. Wiring them in (enable a pack → its checks are proposed in
+Clause assertions; a redaction of that document type pre-selects the pack's profile) is a product
+item in `docs/PRODUCT-NEXT.md`, not a launch blocker. Nothing for you to do.
+
+## N-076 — Extra files in an export package (DECIDED, campaign session 4; build in a later session)
+
+A package with an extra file outside its folder, or two copies under one name, still verifies.
+**DECIDED:** any extra file is "Tampered", except the two things macOS adds when someone re-zips a
+folder (`__MACOSX/…` and `.DS_Store`), which are ignored. To build next session (the batch audit
+reproduced it; no committed test yet).
+
+## N-077 — Small product rules settled in campaign session 4 (build in a later session)
+
+All **DECIDED (campaign session 4)**; each is listed in `NEXT-SESSION-PROMPT.md`:
+- **Conversation retention counts from the last message,** not from when the conversation started
+  (today a conversation still in use can be deleted by the nightly purge).
+- **Safe Harbor wording:** the notice names what the HIPAA profile actually removes (names, dates
+  of birth, SSN, card numbers, email, phone) and says the other Safe Harbor identifiers (for example
+  medical record numbers and admission dates) need a manual pass; it still never says "HIPAA
+  compliant".
+- **Dispatch tags are history:** switching tagging off keeps the tags already written; the batch
+  page says so next to the switch.
+- **`/no-access` goes away:** it redirects to the workspace picker, which already explains archived
+  and suspended organizations more accurately (only support can lift a suspension).
+- **The PAN card pack** gets a second recognising phrase ("income tax department") so a real PAN card
+  is matched.

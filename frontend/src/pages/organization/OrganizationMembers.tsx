@@ -247,7 +247,7 @@ export const OrganizationMembers: React.FC = () => {
                 <li
                   key={member.id}
                   className={`flex flex-wrap items-center gap-3 p-4 ${
-                    isRemoved ? "opacity-60" : ""
+                    isRemoved ? "fp-inactive" : ""
                   }`}
                 >
                   <Avatar

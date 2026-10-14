@@ -110,9 +110,9 @@ class RerankRequest(BaseModel):
     @field_validator("passages")
     @classmethod
     def _cap_passages(cls, value: list[RerankPair]) -> list[RerankPair]:
-        if len(value) > MAX_PAIRS:
-            return value[:MAX_PAIRS]
-        return value
+        # One past the cap is kept so the answer can say whether anything was dropped (campaign
+        # session 4, F-349: exactly MAX_PAIRS passages used to be reported as truncated).
+        return value[: MAX_PAIRS + 1]
 
 
 class RerankScore(BaseModel):
@@ -169,7 +169,9 @@ def rerank(request: RerankRequest) -> RerankResponse:
             detail=f"model unavailable: {exc}",
         ) from exc
 
-    pairs = [(request.query, passage.text) for passage in request.passages]
+    truncated = len(request.passages) > MAX_PAIRS
+    passages = request.passages[:MAX_PAIRS]
+    pairs = [(request.query, passage.text) for passage in passages]
     try:
         raw = model.predict(pairs)
     except Exception as exc:  # noqa: BLE001
@@ -188,8 +190,8 @@ def rerank(request: RerankRequest) -> RerankResponse:
         model=MODEL_NAME,
         scores=[
             RerankScore(id=passage.id, score=float(score))
-            for passage, score in zip(request.passages, raw)
+            for passage, score in zip(passages, raw)
         ],
         elapsed_ms=elapsed_ms,
-        truncated=len(request.passages) >= MAX_PAIRS,
+        truncated=truncated,
     )

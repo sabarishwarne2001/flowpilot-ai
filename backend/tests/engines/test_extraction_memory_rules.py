@@ -157,3 +157,63 @@ def test_an_active_layout_fills_the_field_the_model_left_empty(engines) -> None:
     shadow = engines.process("inv-59.pdf", [_text(59).splitlines()], marker="INV-00059", classification="Invoice",
                              entities=model_reading)
     assert "invoice_number" not in engines.item(shadow).extracted_entities
+
+
+def test_with_memory_off_nothing_is_applied_or_learned(engines) -> None:
+    """Campaign session 4 (SETTINGS-LEDGER): the OFF mode was read but never proven.
+
+    The same layout as above, learned to ACTIVE under AUTO; then an admin switches memory OFF through
+    the settings endpoint the page calls. The next document of the layout is neither filled nor matched
+    to the layout (the model gets no memory hint), a reviewer's correction is not harvested, and the
+    sweep learns nothing.
+    """
+    from app.models.extraction_memory import ExtractionExemplar, ExtractionTemplate
+
+    db, tenant = engines.db, engines.tenant
+    assert engines.put("/extraction-memory/settings", {"mode": "AUTO"}).status_code == 200
+    for n in range(1, 56):
+        _review(db, tenant, _item(db, tenant, n), n)
+    db.commit()
+    sweep.run(db, workspace_ids=[tenant.workspace.id])
+    for template in db.execute(select(ExtractionTemplate).where(
+            ExtractionTemplate.workspace_id == tenant.workspace.id)).scalars():
+        template.state = "ACTIVE"
+        template.activated_at = datetime.now(timezone.utc)
+    db.commit()
+
+    model_reading = {"vendor_name": "Acme Supplies Ltd", "total_amount": "257.00", "currency": "INR"}
+    filled = engines.process("inv-57.pdf", [_text(57).splitlines()], marker="INV-00057", classification="Invoice",
+                             entities=model_reading)
+    assert engines.item(filled).extracted_entities["invoice_number"] == "INV-00057", "AUTO must fill it first"
+    assert engines.llm.memory_contexts[-1], "under AUTO the model is given the layout's memory"
+
+    off = engines.put("/extraction-memory/settings", {"mode": "OFF"})
+    assert off.status_code == 200 and off.json()["mode"] == "OFF", off.text
+    engines.refresh()
+    rules_before = sorted((str(r.id), r.state, r.support) for r in db.execute(select(ExtractionAnchorRule).where(
+        ExtractionAnchorRule.workspace_id == tenant.workspace.id)).scalars())
+    exemplars_before = engines.get("/extraction-memory/summary").json()["exemplar_documents"]
+
+    # Applied: nothing. The field the model left empty stays empty, and the layout is not even looked up.
+    unfilled = engines.process("inv-60.pdf", [_text(60).splitlines()], marker="INV-00060", classification="Invoice",
+                               entities=model_reading)
+    item = engines.item(unfilled)
+    assert "invoice_number" not in item.extracted_entities, item.extracted_entities
+    assert not item.extraction_metadata.get("extraction_memory_filled")
+    assert engines.llm.memory_contexts[-1] is None, "with memory off the model still got a memory hint"
+    assert db.get(ExtractionMemoryApplication, unfilled) is None
+    assert engines.get(f"/work-items/{unfilled}/extraction-memory").json()["applied"] is False
+
+    # Learned: nothing. A reviewer's correction is not harvested, and the sweep does not touch the rules.
+    corrected = _item(db, tenant, 61)
+    _review(db, tenant, corrected, 61)
+    db.commit()
+    assert engines.get("/extraction-memory/summary").json()["exemplar_documents"] == exemplars_before
+    assert db.execute(select(ExtractionExemplar).where(ExtractionExemplar.work_item_id == corrected.id)).first() is None
+    report = sweep.run(db, workspace_ids=[tenant.workspace.id])
+    db.commit()
+    assert report["workspaces"] == [{"workspace_id": str(tenant.workspace.id), "mode": "OFF"}], report
+    engines.refresh()
+    rules_after = sorted((str(r.id), r.state, r.support) for r in db.execute(select(ExtractionAnchorRule).where(
+        ExtractionAnchorRule.workspace_id == tenant.workspace.id)).scalars())
+    assert rules_after == rules_before

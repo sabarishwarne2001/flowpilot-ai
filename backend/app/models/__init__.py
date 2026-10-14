@@ -47,7 +47,7 @@ from app.models.assistant import (
     StreamState,
     FinishReason,
 )
-from app.models.email_settings import EmailSettings, EmailEncryption
+from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.organization_invitation import (
     OrganizationInvitation,
@@ -366,7 +366,6 @@ __all__ = [
     "ConversationMessage",
     "StreamState",
     "FinishReason",
-    "EmailSettings",
     "EmailEncryption",
     "Workspace",
     "WorkspaceMember",
@@ -764,3 +763,6 @@ from app.models.truthmesh import (  # noqa: E402,F401
     MeshState,
 )
 from app.models.notification_preference import UsageLimitAlert, UserNotificationPreference  # noqa: E402,F401
+
+# Campaign session 4 (§C.4): alerts for whoever runs the deployment.
+from app.models.operator_alert import OperatorAlert, ServerErrorMinute  # noqa: E402,F401

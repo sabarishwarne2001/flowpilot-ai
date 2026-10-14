@@ -90,6 +90,7 @@ const RevenueTab: React.FC = () => {
                 <p className="text-sm tabular-nums">{money(c.arr_micros, currency)} ARR · {COUNT.format(c.customers)} customer{c.customers === 1 ? "" : "s"} ({COUNT.format(c.contract_customers)} on contract) · ARPA {money(c.arpa_micros, currency)}</p>
                 <p className={HINT}>Last {m.compare_days} days: new {money(c.movements.new, currency)} · expansion {money(c.movements.expansion, currency)} · contraction {money(c.movements.contraction, currency)} · churned {money(c.movements.churned, currency)}</p>
                 <p className={HINT}>Receivables: {money(m.receivables[currency]?.outstanding_micros ?? 0, currency)} outstanding, {money(m.receivables[currency]?.overdue_micros ?? 0, currency)} overdue ({COUNT.format(m.receivables[currency]?.overdue_invoices ?? 0)} invoices)</p>
+                <p className={HINT}>Refunded in the last {m.compare_days} days: {money(m.refunds?.[currency]?.refunded_micros ?? 0, currency)} on {COUNT.format(m.refunds?.[currency]?.invoices ?? 0)} {(m.refunds?.[currency]?.invoices ?? 0) === 1 ? "invoice" : "invoices"}</p>
               </div>
             ))}
           </section>

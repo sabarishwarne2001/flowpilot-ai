@@ -20,7 +20,6 @@ if TYPE_CHECKING:
     from app.models.ai_settings import AISettings
     from app.models.assistant import Conversation
     from app.models.automation import AutomationRule
-    from app.models.email_settings import EmailSettings
     from app.models.notification import Notification
     from app.models.organization import OrganizationMember
     from app.models.work_item import WorkItem

@@ -18,11 +18,14 @@ import OrganizationPolicyNotice from "@/components/auth/OrganizationPolicyNotice
 import StepUpReauthModal from "@/components/auth/StepUpReauthModal";
 
 import { AuthLayout } from "@/layouts/AuthLayout";
-import { DashboardLayout } from "@/layouts/DashboardLayout";
-import { OrganizationLayout } from "@/layouts/OrganizationLayout";
 
-import { Assistant } from "@/pages/Assistant/Assistant";
-import AssistantCanvas from "@/pages/Assistant/AssistantCanvas";
+// §B.1 (session 4): pages are lazy (only the small 404 page is not). A page imported statically
+// here is downloaded by every visitor before the first screen renders, with its libraries: the
+// assistant canvas alone put pdf.js (~125 KB gzipped) on the login screen.
+const Assistant = lazy(() =>
+  import("@/pages/Assistant/Assistant").then((m) => ({ default: m.Assistant })),
+);
+const AssistantCanvas = lazy(() => import("@/pages/Assistant/AssistantCanvas"));
 
 const OrganizationMembers = lazy(
   () => import("@/pages/organization/OrganizationMembers"),
@@ -81,6 +84,11 @@ const RevOpsConsole = lazy(() => import("@/pages/admin/RevOpsConsole"));
 const JobsConsole = lazy(() => import("@/pages/admin/JobsConsole"));
 const OrganizationEgress = lazy(() => import("@/pages/organization/OrganizationEgress"));
 const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
+// §B.1 (session 4): lazy like PlatformLayout. Their sidebars, menus and banners (with the
+// floating-ui positioning library) are ~50 KB gzipped that a signed-out visitor never sees.
+// Their guards start the download while the tenant resolves.
+const DashboardLayout = lazy(() => import("@/layouts/DashboardLayout"));
+const OrganizationLayout = lazy(() => import("@/layouts/OrganizationLayout"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
@@ -103,6 +111,10 @@ const CaseDetailPage = lazy(() => import("@/pages/cases/CaseDetail"));
 const PacketSplits = lazy(() => import("@/pages/packets/PacketSplits"));
 const SplitReview = lazy(() => import("@/pages/packets/SplitReview"));
 const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestUpload"));
+// Campaign session 4: the public pricing and legal pages.
+const Pricing = lazy(() => import("@/pages/public/Pricing"));
+const Terms = lazy(() => import("@/pages/public/Terms"));
+const Privacy = lazy(() => import("@/pages/public/Privacy"));
 // ARCH44-S2:lazy-pages
 const Tables = lazy(() => import("@/pages/tables/Tables"));
 const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
@@ -142,25 +154,26 @@ const TolerancePolicyEditor = lazy(
   () => import("@/pages/procurement/TolerancePolicyEditor"),
 );
 
-import { Login } from "@/pages/Auth/Login";
-import { SsoComplete } from "@/pages/Auth/SsoComplete";
-import { Register } from "@/pages/Auth/Register";
-import VerifyEmail from "@/pages/Auth/VerifyEmail";
-import ForgotPassword from "@/pages/Auth/ForgotPassword";
-import ResetPassword from "@/pages/Auth/ResetPassword";
-import InvitationAcceptPage from "@/pages/Auth/InvitationAcceptPage";
-import ConfirmEmailChange from "@/pages/Auth/ConfirmEmailChange";
-import { Automation } from "@/pages/Automation/Automation";
-import { Dashboard } from "@/pages/Dashboard/Dashboard";
+const Login = lazy(() => import("@/pages/Auth/Login"));
+const SsoComplete = lazy(() => import("@/pages/Auth/SsoComplete"));
+const Register = lazy(() => import("@/pages/Auth/Register"));
+const VerifyEmail = lazy(() => import("@/pages/Auth/VerifyEmail"));
+const ForgotPassword = lazy(() => import("@/pages/Auth/ForgotPassword"));
+const ResetPassword = lazy(() => import("@/pages/Auth/ResetPassword"));
+const InvitationAcceptPage = lazy(() => import("@/pages/Auth/InvitationAcceptPage"));
+const ConfirmEmailChange = lazy(() => import("@/pages/Auth/ConfirmEmailChange"));
+const Automation = lazy(() => import("@/pages/Automation/Automation"));
+const Dashboard = lazy(() => import("@/pages/Dashboard/Dashboard"));
+const Notifications = lazy(() => import("@/pages/Notifications/Notifications"));
+const WorkItemDetails = lazy(() => import("@/pages/WorkItems/WorkItemDetails"));
+const WorkItems = lazy(() => import("@/pages/WorkItems/WorkItems"));
+const Settings = lazy(() => import("@/pages/Settings/Settings"));
+const CreateOrganizationPage = lazy(() => import("@/pages/Tenant/CreateOrganizationPage"));
+const NoAccess = lazy(() => import("@/pages/Tenant/NoAccess"));
+const WorkspacePicker = lazy(() => import("@/pages/Tenant/WorkspacePicker"));
+const CreateWorkspacePage = lazy(() => import("@/pages/Tenant/CreateWorkspacePage"));
+
 import { NotFound } from "@/pages/NotFound";
-import { Notifications } from "@/pages/Notifications/Notifications";
-import { WorkItemDetails } from "@/pages/WorkItems/WorkItemDetails";
-import { WorkItems } from "@/pages/WorkItems/WorkItems";
-import Settings from "@/pages/Settings/Settings";
-import CreateOrganizationPage from "@/pages/Tenant/CreateOrganizationPage";
-import NoAccess from "@/pages/Tenant/NoAccess";
-import WorkspacePicker from "@/pages/Tenant/WorkspacePicker";
-import CreateWorkspacePage from "@/pages/Tenant/CreateWorkspacePage";
 
 import LegacyRouteRedirect from "@/routes/LegacyRouteRedirect";
 import { PrivateRoute } from "@/routes/PrivateRoute";
@@ -175,6 +188,9 @@ import TenantGuard from "@/routes/TenantGuard";
 
 import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
 import { ROUTES } from "@/constants/routes";
+
+/** The flat addresses from before ARCH-01, forwarded into the person's workspace. */
+const LEGACY_PREFIXES = ["work-items", "assistant", "automation", "notifications", "settings", "profile", "account"] as const;
 
 const AssistantCanvasRoute = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
@@ -207,6 +223,11 @@ function AppRoutes() {
           <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
           {/* ARCH43-S2:public-request-route. No account: the single-use token is the credential. */}
           <Route path="/request/:token" element={<DocumentRequestUpload />} />
+          {/* Campaign session 4 (CAMPAIGN-MAP 4.3). Outside PublicRoute and PrivateRoute:
+              readable signed out and signed in. */}
+          <Route path={ROUTES.PRICING} element={<Pricing />} />
+          <Route path={ROUTES.TERMS} element={<Terms />} />
+          <Route path={ROUTES.PRIVACY} element={<Privacy />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={<ForgotPassword />}
@@ -423,18 +444,16 @@ function AppRoutes() {
               element={<PartnerPortal />}
             />
 
-            {/* Legacy redirects */}
+            {/* Legacy redirects. Campaign session 4 (F-364): each prefix also has an explicit
+                two-segment route. "/work-items/*" and the workspace shell's dashboard
+                ("/:orgSlug/:workspaceSlug", index) rank equal for "/work-items/<id>", and the
+                shell won: the old address was read as organization "work-items" and sent to the
+                workspace picker. A named second segment outranks both. */}
             <Route path="/" element={<LegacyRouteRedirect />} />
-            <Route path="/work-items/*" element={<LegacyRouteRedirect />} />
-            <Route path="/assistant/*" element={<LegacyRouteRedirect />} />
-            <Route path="/automation/*" element={<LegacyRouteRedirect />} />
-            <Route
-              path="/notifications/*"
-              element={<LegacyRouteRedirect />}
-            />
-            <Route path="/settings/*" element={<LegacyRouteRedirect />} />
-            <Route path="/profile/*" element={<LegacyRouteRedirect />} />
-            <Route path="/account/*" element={<LegacyRouteRedirect />} />
+            {LEGACY_PREFIXES.flatMap((prefix) => [
+              <Route key={`${prefix}/*`} path={`/${prefix}/*`} element={<LegacyRouteRedirect />} />,
+              <Route key={`${prefix}/:legacySub`} path={`/${prefix}/:legacySub`} element={<LegacyRouteRedirect />} />,
+            ])}
 
             {/* Workspace-scoped shell */}
             <Route

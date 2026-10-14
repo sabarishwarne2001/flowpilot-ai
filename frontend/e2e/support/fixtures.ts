@@ -32,7 +32,7 @@ import fs from "node:fs";
 
 import { test as base, expect, type Page, type TestInfo } from "@playwright/test";
 
-import { api, loginAs, type ApiResult, type ApiSession } from "./api";
+import { SHARED_PERSONA_SIGN_OUT, api, loginAs, type ApiResult, type ApiSession } from "./api";
 import { BROWSER_API_ORIGIN, TENANTS, type UserKey } from "./env";
 
 export interface Problem {
@@ -290,7 +290,17 @@ export const test = base.extend<Fixtures>({
         await use(null);
         return;
       }
+      // Campaign session 4 (browser-suite isolation): a seeded person is shared with tests running
+      // in parallel; "sign out everywhere" from this page would sign it out of all of them.
+      let signedOutEverywhere = false;
+      await page.route(/\/api\/v1\/auth\/logout-all/, async (route) => {
+        signedOutEverywhere = true;
+        await route.fulfill({ status: 409, json: { detail: SHARED_PERSONA_SIGN_OUT } });
+      });
       await use(await signInContext(page, user));
+      if (signedOutEverywhere) {
+        throw new Error(SHARED_PERSONA_SIGN_OUT);
+      }
     },
     { auto: true },
   ],

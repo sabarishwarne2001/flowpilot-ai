@@ -205,6 +205,12 @@ def decide_conflict(
 ) -> Any:
     _ws(context, workspace_id)
     _gate(db, context, "truthmesh.conflicts.decide")
+    try:
+        # Read the conflict only once no build of this workspace is writing it.
+        service.lock_workspace(db, workspace_id, wait_seconds=service.DECISION_LOCK_WAIT_SECONDS)
+    except MeshError as exc:
+        db.rollback()
+        raise _error(exc) from exc
     conflict = db.execute(select(MeshConflict).where(MeshConflict.id == conflict_id,
                                                      MeshConflict.workspace_id == workspace_id)).scalar_one_or_none()
     if conflict is None:
@@ -232,6 +238,11 @@ def decide_link(
 ) -> Any:
     _ws(context, workspace_id)
     _gate(db, context, "truthmesh.links.decide")
+    try:
+        service.lock_workspace(db, workspace_id, wait_seconds=service.DECISION_LOCK_WAIT_SECONDS)
+    except MeshError as exc:
+        db.rollback()
+        raise _error(exc) from exc
     link = db.execute(select(MeshLink).where(MeshLink.id == link_id, MeshLink.workspace_id == workspace_id)
                       ).scalar_one_or_none()
     if link is None:

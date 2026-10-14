@@ -731,7 +731,7 @@ const OrganizationBranding: React.FC = () => {
           <p className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground" role="status">
             Custom domains are not switched on for this FlowPilot deployment, so a hostname
             cannot be claimed here yet. Ask your platform administrator to enable custom
-            domains (CUSTOM_DOMAINS_ENABLED).
+            domains.
           </p>
         ) : null}
 

@@ -156,8 +156,18 @@ def set_active(db: Session, *, workspace_id: uuid.UUID, rule_id: uuid.UUID, is_a
 
 
 def delete(db: Session, *, workspace_id: uuid.UUID, rule_id: uuid.UUID) -> None:
+    """Campaign session 4 (F-335): a soft delete, as for every workflow rule (F-150).
+
+    A check that has run has executions, and they keep pointing at its rule (run history, spend),
+    so the hard delete failed on the foreign key once a single contract had been checked: the
+    console's Delete always answered "changed by another request". The rule is now marked
+    deleted and switched off; it disappears from the console and stops running.
+    """
+    from datetime import datetime, timezone
+
     check = get(db, workspace_id=workspace_id, rule_id=rule_id)
-    db.delete(check.rule)
+    check.rule.deleted_at = datetime.now(timezone.utc)
+    check.rule.is_active = False
     db.flush()
 
 

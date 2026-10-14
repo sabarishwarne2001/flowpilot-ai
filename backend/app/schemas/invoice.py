@@ -69,6 +69,8 @@ class InvoiceSummary(BaseModel):
     tax_micros: int
     total_micros: int
     amount_paid_micros: int
+    amount_refunded_micros: int = 0
+    refunded_at: Optional[datetime] = None
     seats_billed: int
     finalized_at: Optional[datetime] = None
     stripe_invoice_id: Optional[str] = None
@@ -211,6 +213,8 @@ class TrialStatusResponse(BaseModel):
     state: Literal["NONE", "ACTIVE", "ENDED"] = "NONE"
     ends_at: Optional[datetime] = None
     days_left: Optional[int] = None
+    #: Campaign session 4 (F-342): ended because a paid subscription ended, not a first trial.
+    lapsed: bool = False
 
 
 class BillingAccessResponse(BaseModel):
@@ -286,6 +290,13 @@ class CheckoutSessionRequest(BaseModel):
 
 class PortalSessionRequest(BaseModel):
     return_url: Optional[str] = None
+    #: Campaign session 4 (F-344). A subscriber's pick in the plan picker: the portal opens on the
+    #: confirmation of this plan with these seats. All optional: without them the portal opens on its
+    #: home page (the card, the invoices, cancelling).
+    quota_tier_key: Optional[str] = Field(default=None, min_length=1, max_length=64)
+    seats: Optional[int] = Field(default=None, ge=1, le=10_000)
+    interval: Optional[Literal["month", "year"]] = None
+    currency: Optional[Literal["USD", "INR"]] = None
 
 
 class SeatSyncRequest(BaseModel):

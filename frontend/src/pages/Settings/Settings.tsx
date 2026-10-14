@@ -200,7 +200,7 @@ const Settings: React.FC = () => {
                           <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
                           <span className="min-w-0">
                             <span className="block whitespace-nowrap text-sm font-semibold">{section.label}</span>
-                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary/70 dark:text-[hsl(var(--primary-on-dark)/0.7)]" : "text-muted-foreground/80"}`}>
+                            <span className={`hidden text-[11px] lg:block ${selected ? "text-primary dark:text-[hsl(var(--primary-on-dark))]" : "text-muted-foreground"}`}>
                               {section.hint}
                             </span>
                           </span>
@@ -232,7 +232,7 @@ const Settings: React.FC = () => {
                           <span className="flex items-center gap-1 text-sm font-semibold">
                             {link.label} <ExternalLink className="h-3 w-3" aria-hidden="true" />
                           </span>
-                          <span className="hidden text-[11px] text-muted-foreground/80 lg:block">{link.hint}</span>
+                          <span className="hidden text-[11px] text-muted-foreground lg:block">{link.hint}</span>
                         </span>
                       </Link>
                     </li>

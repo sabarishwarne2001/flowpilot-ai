@@ -180,7 +180,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
               {organization.organization_name}
             </span>
           </span>
-          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 group-hover:text-muted-foreground" aria-hidden="true" />
+          <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground" aria-hidden="true" />
         </button>
       )}
 
@@ -218,7 +218,7 @@ export const OrgWorkspaceSwitcher: React.FC<OrgWorkspaceSwitcherProps> = ({
                     <p className="fp-eyebrow truncate px-2 pb-1 pt-1.5 text-[10px]">{org.organization_name}</p>
 
                     {org.workspaces.length === 0 ? (
-                      <p className="px-2 pb-1.5 text-xs text-muted-foreground/70">No workspaces you can access</p>
+                      <p className="px-2 pb-1.5 text-xs text-muted-foreground">No workspaces you can access</p>
                     ) : (
                       org.workspaces.map((ws) => {
                         const isCurrent =

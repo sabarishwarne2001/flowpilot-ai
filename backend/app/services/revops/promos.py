@@ -211,6 +211,22 @@ def list_codes(db: Session) -> list[dict[str, Any]]:
     return [get_code(db, i) for i in ids]
 
 
+def list_redemptions(db: Session, promo_id: uuid.UUID, *, limit: int = 500) -> list[dict[str, Any]]:
+    """Each use of a code, newest first: who, in what state, at what price and discount, through which
+    contract (campaign session 4; the console had only counts)."""
+    if not db.execute(text("SELECT 1 FROM promo_codes WHERE id = :id"), {"id": promo_id}).first():
+        raise RevOpsError("no such promo code", "NOT_FOUND", 404)
+    rows = db.execute(text(
+        "SELECT r.id, r.organization_id, o.name AS organization_name, o.slug AS organization_slug, r.status, "
+        "r.tier_key, r.billing_interval, r.currency, r.list_amount_micros, r.discount_micros, r.contract_id, "
+        "c.contract_number, r.reserved_at, r.expires_at, r.redeemed_at, r.released_at "
+        "FROM promo_redemptions r JOIN organizations o ON o.id = r.organization_id "
+        "LEFT JOIN enterprise_contracts c ON c.id = r.contract_id "
+        "WHERE r.promo_code_id = :id ORDER BY r.reserved_at DESC, r.id LIMIT :limit"),
+        {"id": promo_id, "limit": limit}).mappings().all()
+    return [dict(row) for row in rows]
+
+
 def set_active(db: Session, *, promo_id: uuid.UUID, active: bool) -> dict[str, Any]:
     if not db.execute(text("UPDATE promo_codes SET is_active = :a WHERE id = :id RETURNING id"),
                       {"a": bool(active), "id": promo_id}).first():
@@ -220,4 +236,4 @@ def set_active(db: Session, *, promo_id: uuid.UUID, active: bool) -> dict[str, A
 
 
 __all__ = ["check", "confirm_from_subscriptions", "create_code", "discount_for", "expire_reservations", "get_code",
-           "list_codes", "normalize_code", "quote", "redeem", "release", "reserve", "set_active"]
+           "list_codes", "list_redemptions", "normalize_code", "quote", "redeem", "release", "reserve", "set_active"]

@@ -151,10 +151,20 @@ def compute(db: Session, *, at: Optional[datetime] = None, compare_days: int = 3
             {"t": moment, "c": currency}).one()
         receivables[currency] = {"outstanding_micros": int(row[0]), "overdue_micros": int(row[1]),
                                  "overdue_invoices": int(row[2])}
+    # Campaign session 4 (N-069): money given back at the gateway inside the comparison window,
+    # per currency. Recurring revenue (MRR) is unchanged by a refund; this is the cash figure.
+    refunds: dict[str, Any] = {}
+    for currency in v.CURRENCIES:
+        row = db.execute(text(
+            "SELECT COALESCE(sum(amount_refunded_micros), 0), count(*) FROM invoices "
+            "WHERE amount_refunded_micros > 0 AND currency = :c AND refunded_at > :since AND refunded_at <= :t"),
+            {"c": currency, "since": moment - timedelta(days=compare_days), "t": moment}).one()
+        refunds[currency] = {"refunded_micros": int(row[0]), "invoices": int(row[1])}
     promo_rows = db.execute(text("SELECT status, count(*), COALESCE(sum(discount_micros), 0) FROM promo_redemptions "
                                  "GROUP BY status")).all()
     return {
         "as_of": moment, "compare_days": compare_days, "currencies": currencies, "receivables": receivables,
+        "refunds": refunds,
         "unpriced_subscriptions": unpriced,
         "promo_redemptions": {r[0]: {"count": int(r[1]), "discount_micros": int(r[2])} for r in promo_rows},
         "snapshots": [dict(r) for r in db.execute(text(

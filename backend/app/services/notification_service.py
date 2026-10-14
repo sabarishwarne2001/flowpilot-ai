@@ -24,7 +24,6 @@ from app.schemas.notification import NotificationCreate
 from app.services.notification.dispatcher import notification_dispatcher
 
 if TYPE_CHECKING:
-    from app.models.email_settings import EmailSettings
     from app.models.workspace_invitation import WorkspaceInvitation
     from app.core.smtp import SMTPConfig
 
@@ -51,7 +50,7 @@ class NotificationService:
         priority: NotificationPriority = NotificationPriority.INFO,
         delivery_channel: NotificationChannel = NotificationChannel.IN_APP,
         work_item: WorkItem | None = None,
-        settings: EmailSettings | SMTPConfig | None = None,
+        settings: SMTPConfig | None = None,
         html_body: str | None = None,
     ) -> Notification:
 

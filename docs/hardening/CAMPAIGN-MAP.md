@@ -156,80 +156,119 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
 ## 4. Session 4: experience, performance, operations, certification
 
 ### 4.1 Carried over from sessions 1 and 2 (HANDOFF.md)
-- [ ] **Engine item actions with only refusal evidence** (30 endpoints): assertions (rule detail,
+- [x] **Engine item actions with only refusal evidence** (30 endpoints): assertions (rule detail,
       simulate, resolve, delete a clause check), case files (detail, remove a document, close, revoke a
       request, template update and retire), corroboration (refresh, review, page image, delete),
       extraction memory edits, packet splits (start, boundaries, reject), process proposals (detail,
       approve, reject, undo), redactions (page image, region), the ERP target credential, a failed
       posting's retry and accept, the autonomy resume, one notification's detail. Pattern:
       `backend/tests/engines/test_item_actions_*.py`.
-- [ ] **Live collaborative review** (`WEBSOCKET …/review/collab/live`, never tested): presence, two
+      _Done (session 4): `test_item_actions_assertions_cases_live.py`,
+      `test_item_actions_more_engines_live.py`, `test_erp_delivery_through_the_mock_target_live.py`;
+      found and fixed F-333 to F-337 on the way._
+- [x] **Live collaborative review** (`WEBSOCKET …/review/collab/live`, never tested): presence, two
       reviewers editing one field, a reviewer losing access mid-session.
-- [ ] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
+      _Done (session 4): `backend/tests/engines/test_live_collaborative_review_live.py`; found and fixed
+      F-338 (a removed reviewer's lock outlived their access by up to ninety seconds)._
+- [x] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
       (Entities, Entity 360, packet splits, corroboration runs, obligations, ERP postings and targets,
       process proposals, three-way comparison, assistant canvas, notifications, legacy redirects).
-- [ ] **Refunds are not recorded:** a Stripe `charge.refunded` leaves the invoice "paid" and RevOps
+      _Done (session 4): `frontend/e2e/tests/71-engine-pages.spec.ts` (canvas, notifications link, palette, legacy and not-found addresses, redaction apply and downloads, F-145 failure messages, a proposal approved on its page, review hub take and assign, clause review, an ERP posting's decision); with 11, 12, 22, 24, 34 and the journeys, every page and nav row is `deep`. Found and fixed F-356, F-357, F-358, F-359, F-360, F-364._
+- [x] **Refunds are not recorded:** a Stripe `charge.refunded` leaves the invoice "paid" and RevOps
       revenue unchanged. Decide (Tier-1: a credit note and negative revenue) and implement if small.
-- [ ] **F-256 (Low), if session 3 did not fix it in §3.1:** late usage recorded into an hour that had
+      _Done (session 4): N-069, F-327; migration `s4a1_invoice_refunds`;
+      `backend/tests/services/test_refunds_are_recorded.py`._
+- [x] **F-256 (Low), if session 3 did not fix it in §3.1:** late usage recorded into an hour that had
       no earlier usage is not disclosed as late (the rollup window is never sealed).
-- [ ] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
+      _Done (session 4): every seal pass opens and seals the empty hours behind its cutoff
+      (`backend/tests/services/test_late_usage_into_an_empty_hour.py`, minute 59 failed before)._
+- [x] **A second subscription from an old checkout tab** still dead-letters and is not refunded:
       alert on it and write the refund playbook in RUNBOOK.md.
-- [ ] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
+      _Done (session 4): F-331 (not written, settled as ignored, the owner emailed at once), N-070
+      operator alerts, RUNBOOK §9.8 refund playbook._
+- [x] **In-app plan change:** stays in the billing portal (N-050; it cannot be verified without live
       gateway keys). Confirm every "change plan" screen leads there.
-- [ ] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway
+      _Done (session 4): `frontend/e2e/tests/50-plan-change-portal.spec.ts` (the plan card, a pick from the
+      list, Free, and "View plans" from a locked feature); found and fixed F-340._
+- [x] **Bulk delete of 500 documents** behind the production proxy: time it; if it nears the gateway
       timeout, move it onto the existing `work_items.bulk` job.
-- [ ] **Dormant handlers** `batch.expand_archive` (zip intake is not offered) and `work_items.bulk`:
+      _Done (session 4): 6.0 s for 500 through the real API (PERFORMANCE.md); Caddy sets no timeout and a
+      CDN's is 60 to 100 s, so it stays inline._
+- [x] **Dormant handlers** `batch.expand_archive` (zip intake is not offered) and `work_items.bulk`:
       keep blocked with that reason, or remove the dead code.
-- [ ] **Blocked rows that a stand-in can unblock:** `billing.seat_sync`, `billing.assemble_invoice`,
+      _Done (session 4): both kept and `blocked` with their reasons in the ledger: zip intake is a
+      PRODUCT-NEXT item and its handler enforces the zip-bomb limits it will need; `work_items.bulk` is
+      the path if the 500-document bulk limit is ever raised._
+- [x] **Blocked rows that a stand-in can unblock:** `billing.seat_sync`, `billing.assemble_invoice`,
       `billing.reconcile`, `usage.reconcile` and the `worker-loop:stripe` loop (fake gateway, signed test
       events); `erp.deliver_posting` (`erp_mock_targets.py`). They were blocked as "session 1's slice";
       session 1 is finished.
-- [ ] **The one-week trial journey** in the browser: sign up → trial → reminder → trial ends →
+      _Done (session 4): `backend/tests/engines/test_billing_jobs_live.py` and
+      `test_erp_delivery_through_the_mock_target_live.py`; found and fixed F-339 (overage never charged)._
+- [x] **The one-week trial journey** in the browser: sign up → trial → reminder → trial ends →
       subscribe → everything back (N-052; HANDOFF "Owner request").
-- [ ] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
+      _Done (session 4): `frontend/e2e/tests/61-journey-trial-ends.spec.ts` (journey 2 of §D), with the
+      clock and gateway stand-in `backend/scripts/e2e_stand_in.py`._
+- [x] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
+      _Done (session 4): `frontend/e2e/tests/00-suite-isolation.spec.ts`; a seeded persona cannot sign out everywhere (the session fixture refuses `/auth/logout-all` and `api()` throws for it)._
 
 ### 4.2 Operations gaps found in the 2026-10-12 review
-- [ ] **Host cron sweeps never ran against the compose stack.** 17 lines in `backend/deploy/cron.d/`
+- [x] **Host cron sweeps never ran against the compose stack.** 17 lines in `backend/deploy/cron.d/`
       (and the compose backup lines) run only from the host's cron (RUNBOOK §9.6), and the ledger's
       `cron:*` rows say "not run by docker-compose". Session 2 proved the 23 schedules inside the
       worker, not these. Run each line by hand against the compose stack (or the stack the runbook
       builds) and prove it succeeds; that includes the retention purge, ERP posting retries,
       obligations, invitations and every backup and drill.
-- [ ] **Configuration (282 rows):** one contract test that every `Settings` field is read by code
+      _Done (session 4): `backend/tests/operational/test_host_cron_lines.py` runs every host cron line through its wrapper against a freshly migrated database (13 sweeps, the watchdog, compose backup and timed restore drill, checksum tamper, heartbeat, monitor pings); found and fixed F-346 and F-355. A real compose run on the server is owner checklist B8-B10 (no image pulls here)._
+- [x] **Configuration (282 rows):** one contract test that every `Settings` field is read by code
       (otherwise remove it), documented in `docs/CONFIGURATION.md`, present in `.env.example` and
       `.env.production.template` where a deployment needs it, and refused at boot when a required
       secret is missing. Closes F-011's long tail.
-- [ ] **Migrations (163 rows):** one whole-chain proof on a fresh database: upgrade to head,
+      _Done (session 4): `backend/tests/infra/test_configuration_contract.py` covers all 293 settings (read by code, documented, in the templates where needed, refused at boot when required); 31 dead settings removed; F-351, F-352, F-353._
+- [x] **Migrations (163 rows):** one whole-chain proof on a fresh database: upgrade to head,
       downgrade to base, upgrade again. Add rows for `p9a1_truthmesh_engine` and
       `s2a1_free_trial_clock`. Review F-017's 283 undeclared index and constraint lines together
       with the index work in the prompt's section B.
-- [ ] **Integrations (17 rows):** mark each `deep` with the test that exercises it, or `blocked` with
+      _Done (session 4): the CI migrations job runs the whole chain up, down to base and up again (F-330); rows added for `p9a1`, `s2a1`, `s4a1`-`s4a3`; F-017's 283 lines DECIDED to stay (PERFORMANCE.md "Indexes", N-074)._
+- [x] **Integrations (17 rows):** mark each `deep` with the test that exercises it, or `blocked` with
       the reason (live Stripe, Groq, Gemini: owner spot checks).
-- [ ] **CI health:** pytest takes ~1 h 40 min on GitHub, because the security and engine tests run
+      _Done (session 4): each row `deep` with its test or `blocked` with the reason (live Stripe, Dodo, Groq, Gemini, PaddleOCR on scans, ERP SFTP: owner spot checks, launch checklist C13)._
+- [x] **CI health:** pytest takes ~1 h 40 min on GitHub, because the security and engine tests run
       twice (in the "Phase 2" and "Phase 4" proof steps, then again in the full suite). Remove the
       duplication or shard the suite so a red run is known in minutes (F-030). Make the browser job a
       required check once it is stable.
-- [ ] **No container pulls in the sandbox** (F-006, F-040): if Docker cannot pull images, run
+      _Done (session 4): the proof steps are gone and the suite runs once in four parallel shards
+      (`PYTEST_SHARD`, `tests/infra/test_ci_shards_cover_the_suite.py`); no `--maxfail`, so a red
+      shard names every failure; the browser job is in the aggregate `CI` check's `needs`; the
+      migrations job also runs the whole chain to base and back (F-330)._
+- [x] **No container pulls in the sandbox** (F-006, F-040): if Docker cannot pull images, run
       RUNBOOK §3 by hand on a clean environment, validate the compose files statically, and put the
       compose-only steps on the owner's checklist with exact commands.
-- [ ] **Load test:** use Locust (installs from PyPI); k6 needs a download that may be blocked.
-- [ ] **Bundle size:** measure before splitting. The "~412 KB gzipped" figure is from an older pass;
+      _Done (session 4): the compose files are validated statically (`tests/infra/test_production_compose_commands.py`, `test_production_env_template.py`, the configuration contract); RUNBOOK §3 and §9 steps were run by hand where they need no images; the compose-only steps are owner checklist B6-B11 with exact commands._
+- [x] **Load test:** use Locust (installs from PyPI); k6 needs a download that may be blocked. _Done: 50 people, 15 min, 27,102 requests, p95 670 ms, 0 5xx after F-363 (PERFORMANCE.md "Load test")._
+- [x] **Bundle size:** measure before splitting. The "~412 KB gzipped" figure is from an older pass;
       the build warns that the main chunk is over 1,000 kB; 54 routes are already lazy-loaded, so the
       weight is elsewhere (shared vendor code, `manualChunks` in `vite.config.ts`).
-- [ ] **Older findings still open:** F-006 (a real compose run on a server), F-045 (CPU-only torch
+      _Done (session 4): first load 634.2 KB to 191.9 KB gzipped, 193.0 KB after the later changes (PERFORMANCE.md); Lighthouse /login 68 to 91._
+- [x] **Older findings still open:** F-006 (a real compose run on a server), F-045 (CPU-only torch
       image), F-050 (its "re-run pending" note is stale: close it), F-030 (suite speed).
-- [ ] **Tailwind 4:** five high `npm audit` advisories (build-time file watching in Tailwind CSS 3,
+      _Done (session 4): F-050 closed (the suite has passed on every run since); F-030 fixed (four shards); F-006 and F-045 updated, their remaining steps are owner checklist B8-B11._
+- [x] **Tailwind 4:** five high `npm audit` advisories (build-time file watching in Tailwind CSS 3,
       nothing shipped) are accepted until the Tailwind 4 move (FINDINGS "Dependencies"). It rewrites
       the CSS configuration; do it only once everything above is green, with before/after screenshots
       of every page, or record it as accepted for launch.
+      _Done (session 4): recorded as accepted for launch (N-074, FINDINGS F-039 re-audit: `npm audit --omit=dev` 0; the seven development-only advisories are Tailwind 3's build tooling)._
 
 ### 4.3 Public face
-- [ ] There is no public pricing page, and no terms or privacy page. Build them as the session 4
+- [x] There is no public pricing page, and no terms or privacy page. Build them as the session 4
       prompt says (pricing from the plan source of truth; legal pages marked for the owner's review).
+      _Done (session 4): `/pricing` from `GET /api/v1/pricing` (the published tiers), `/terms` and `/privacy` marked for counsel's review (N-073); `frontend/e2e/tests/70-public-pages.spec.ts`, `backend/tests/api/test_public_plans.py`._
 
 ### 4.4 Certification
-- [ ] `python docs/hardening/tools/campaign_slices.py --check all` exits 0 before a GO verdict.
-- [ ] The owner launch checklist (seed below) is complete, with exact steps.
+- [x] `python docs/hardening/tools/campaign_slices.py --check all` exits 0 before a GO verdict.
+      _Done (session 4): exits 0 (2026-10-14); the last 100 rows were mapped to their tests and the 7 without one got a test (F-364 found on the way)._
+- [x] The owner launch checklist (seed below) is complete, with exact steps.
+      _Done (session 4): HANDOFF.md "Owner launch checklist", with exact steps and where each is described._
 
 ## 5. Owner launch checklist (seed; session 4 completes it)
 Only the owner can do these. Each comes from an earlier decision or finding:

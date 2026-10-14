@@ -10,8 +10,9 @@ Campaign session 2 (N-054). Two lists:
   must cost about the same per token: GPT-OSS 20B and 120B do ($0.075-$0.60 per million on
   Groq). The others cost up to 33 times more (Gemini 2.5 Pro $1.25 / $10.00, Qwen 3.8 27B
   $0.80 / $4.00) and run on the organization's own provider key (BYOK). A call that would
-  put any other model on the platform's key is served by PLATFORM_DEFAULT_MODEL instead
-  (`platform_safe`), which also covers a model the provider has retired.
+  put any other model on the platform's key is served by the platform default instead
+  (`platform_safe`; GROQ_MODEL_NAME, PLATFORM_DEFAULT_MODEL unless set), which also covers a
+  model the provider has retired.
 """
 
 from typing import Any
@@ -34,15 +35,26 @@ AI_MODELS = {
     ],
 }
 
-#: What the platform's own keys serve, by provider (lower-case provider names).
-PLATFORM_SERVED_MODELS: dict[str, tuple[str, ...]] = {
-    "groq": ("openai/gpt-oss-20b", "openai/gpt-oss-120b"),
-}
+#: What the platform's own keys serve, by provider (lower-case provider names). Defined in
+#: app/core/platform_models.py, which the settings check GROQ_MODEL_NAME against.
+from app.core.platform_models import PLATFORM_SERVED_MODELS  # noqa: E402
 
 #: What a call is served by when the selected model needs the organization's own key: the
 #: primary default (the first Groq entry; quality first for extraction, commit 233a3c0).
+#: A deployment may pick the other served model with GROQ_MODEL_NAME (platform_default_model).
 PLATFORM_DEFAULT_PROVIDER = AIProvider.GROQ
 PLATFORM_DEFAULT_MODEL = AI_MODELS[AIProvider.GROQ][0]
+
+
+def platform_default_model() -> str:
+    """F-353. The model the platform's own Groq key serves by default: GROQ_MODEL_NAME.
+
+    Start-up refuses a GROQ_MODEL_NAME the platform does not serve (Settings), so the code
+    default is only a guard against a settings object built some other way."""
+    from app.core.config import settings
+
+    configured = str(getattr(settings, "GROQ_MODEL_NAME", "") or "").strip()
+    return configured if platform_serves(PLATFORM_DEFAULT_PROVIDER, configured) else PLATFORM_DEFAULT_MODEL
 
 
 def _provider_name(provider: Any) -> str:
@@ -64,7 +76,7 @@ class _PlatformSafeSettings:
     def __init__(self, base: Any) -> None:
         self._base = base
         self.provider = PLATFORM_DEFAULT_PROVIDER
-        self.model = PLATFORM_DEFAULT_MODEL
+        self.model = platform_default_model()
         self.substituted_from = f"{_provider_name(getattr(base, 'provider', ''))}/{getattr(base, 'model', '')}"
 
     def __getattr__(self, name: str) -> Any:

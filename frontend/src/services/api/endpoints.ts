@@ -200,6 +200,8 @@ export const SETTINGS_ENDPOINTS = {
 export const WORK_ITEM_ENDPOINTS = {
   list: (workspaceId: string): string => `${scoped(workspaceId)}/work-items`,
   upload: (workspaceId: string): string => `${scoped(workspaceId)}/work-items`,
+  /** Campaign session 4 (§A.4): the built-in sample invoice, added as an ordinary upload. */
+  sample: (workspaceId: string): string => `${scoped(workspaceId)}/work-items/sample`,
   details: (workspaceId: string, workItemId: string): string =>
     `${scoped(workspaceId)}/work-items/${seg(workItemId)}`,
   reprocess: (workspaceId: string, workItemId: string): string =>

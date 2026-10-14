@@ -419,6 +419,33 @@ def notify_plan_changed(
     )
 
 
+def notify_refund_recorded(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    invoice_number: str,
+    amount_micros: int,
+    currency: str,
+    fully_refunded: bool,
+) -> int:
+    """Campaign session 4 (N-069): money given back on an invoice, as the gateway recorded it."""
+    from app.core.display_format import format_amount_micros
+
+    amount = format_amount_micros(amount_micros, currency)
+    return emit_billing(
+        db,
+        organization_id=organization_id,
+        title=f"Refund of {amount} on invoice {invoice_number}",
+        message=(
+            f"{amount} was refunded on invoice {invoice_number}"
+            + (", the whole payment. " if fully_refunded else ". ")
+            + "It goes back to the card or account that paid, usually within 5 to 10 business "
+            "days. The invoice shows the refund under Billing."
+        ),
+        priority=NotificationPriority.INFO,
+    )
+
+
 def notify_addon_grace_started(
     db: Session,
     *,

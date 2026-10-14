@@ -49,7 +49,13 @@ def _organizations_on_trial(db: Any, user_id: Any, *, want: str, now: datetime) 
         )
         .order_by(Organization.created_at)
     ).scalars().all()
-    return [org for org in owned if trial_service.status(db, organization_id=org.id, now=now).state == want]
+    on_trial = []
+    for org in owned:
+        trial = trial_service.status(db, organization_id=org.id, now=now)
+        # Campaign session 4 (F-342): an organization whose paid plan lapsed is not told its trial ended.
+        if trial.state == want and not trial.lapsed:
+            on_trial.append(org)
+    return on_trial
 
 
 def _send(*, kind: str, recipient: str, organizations: list[Any], ends_at: datetime) -> bool:

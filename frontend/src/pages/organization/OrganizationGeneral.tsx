@@ -56,7 +56,7 @@
  * on a dialog the actor has dismissed a hundred times before.
  */
 
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -83,7 +83,7 @@ import {
   canDeleteOrganization,
   canManageOrganizationSettings,
 } from "@/permissions/organizationPermissions";
-import type { OrganizationRole } from "@/types/tenancy";
+import type { MeContext, OrganizationRole } from "@/types/tenancy";
 
 /* ==========================================================================
  * Status pill
@@ -166,6 +166,16 @@ export const OrganizationGeneral: React.FC = () => {
 
   /* --- Archive ---------------------------------------------------------- */
 
+  const archivedRef = useRef(false);
+  useEffect(
+    () => () => {
+      if (archivedRef.current) {
+        queryClient.clear();
+      }
+    },
+    [queryClient],
+  );
+
   const { mutate: archive, isPending: isArchiving } = useMutation({
     mutationFn: () => archiveOrganization(organizationId, typedSlug.trim()),
     onSuccess: () => {
@@ -174,7 +184,23 @@ export const OrganizationGeneral: React.FC = () => {
       // actor can no longer operate in. Clearing rather than invalidating: an
       // invalidate would refetch org-scoped queries that are about to 403 on
       // the way out, producing a burst of error toasts behind the redirect.
-      queryClient.clear();
+      // Campaign session 4 (F-343): the cache is cleared as this page unmounts,
+      // once the navigation has committed. Cleared here, while the organization's
+      // pages were still mounted (a navigation is a transition: the old screen
+      // stays until the next one is ready), they fetched again at once and met
+      // 403s (TENANT_SUSPENDED) on the way out.
+      // Campaign session 4 (F-345): the organization picker draws first from the cached
+      // /me/context, which still said ACTIVE, and asked for this organization's workspaces
+      // (403). The cached context is told now; the picker lists it with the archived ones.
+      queryClient.setQueriesData<MeContext>({ queryKey: ["me", "context"] }, (context) =>
+        context && {
+          ...context,
+          organizations: context.organizations.map((entry) =>
+            entry.organization_id === organizationId ? { ...entry, organization_status: "ARCHIVED" } : entry,
+          ),
+        },
+      );
+      archivedRef.current = true;
       navigate(ROUTES.WORKSPACES, { replace: true });
     },
     onError: (error: unknown) => {

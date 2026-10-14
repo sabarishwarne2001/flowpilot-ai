@@ -121,22 +121,22 @@ export const SeatManager: React.FC<SeatManagerProps> = ({
         <div>
           <dt className="text-xs text-muted-foreground">In use</dt>
           <dd className="mt-0.5 text-2xl font-semibold tabular-nums">{used}</dd>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <dd className="mt-0.5 text-xs text-muted-foreground">
             {members} {members === 1 ? "member" : "members"}
             {pending > 0 && `, ${pending} pending ${pending === 1 ? "invitation" : "invitations"}`}
-          </p>
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">{paid ? "Paid for" : "Included"}</dt>
           <dd className="mt-0.5 text-2xl font-semibold tabular-nums">{capacity ?? "No limit"}</dd>
-          <p className="mt-0.5 text-xs text-muted-foreground">
+          <dd className="mt-0.5 text-xs text-muted-foreground">
             {paid ? "On your subscription" : `On the ${planName(state.plan_key)} plan`}
-          </p>
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Available</dt>
           <dd className="mt-0.5 text-2xl font-semibold tabular-nums">{state.seats_available ?? "—"}</dd>
-          <p className="mt-0.5 text-xs text-muted-foreground">For new members and invitations</p>
+          <dd className="mt-0.5 text-xs text-muted-foreground">For new members and invitations</dd>
         </div>
       </dl>
 

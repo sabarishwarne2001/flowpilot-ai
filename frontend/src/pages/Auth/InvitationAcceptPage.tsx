@@ -476,7 +476,7 @@ export const InvitationAcceptPage: React.FC = () => {
                     className={`${AUTH_INPUT} cursor-not-allowed bg-muted/50 pl-9 pr-9 text-muted-foreground`}
                   />
                   <Lock
-                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/80"
+                    className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground"
                     aria-hidden="true"
                   />
                 </div>

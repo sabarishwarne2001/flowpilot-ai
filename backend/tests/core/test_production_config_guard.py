@@ -37,7 +37,8 @@ GUARDED = (
     "RERANKER_ENABLED", "RERANKER_INTERNAL_TOKEN", "STRIPE_SECRET_KEY",
     "STRIPE_PUBLISHABLE_KEY", "STRIPE_WEBHOOK_SECRETS", "STRIPE_LIVEMODE",
     "DODO_API_KEY", "DODO_WEBHOOK_SECRET", "DODO_LIVEMODE", "DODO_API_BASE",
-    "BILLING_GATEWAY", "ML_STUBS", "SERVICE_ROLE",
+    "BILLING_GATEWAY", "ML_STUBS", "SERVICE_ROLE", "OPERATOR_ALERT_EMAILS",
+    "GROQ_API_KEY", "LOCAL_LLM_MODE", "LOCAL_LLM_BASE_URL", "LOCAL_LLM_MODEL",
 )
 
 #: The values that used to be committed as defaults. They are public.
@@ -70,6 +71,8 @@ def good_production_env() -> dict[str, str]:
         "PLATFORM_SMTP_HOST": "smtp.postmarkapp.com",
         "RERANKER_ENABLED": "true",
         "RERANKER_INTERNAL_TOKEN": secrets.token_hex(32),
+        "OPERATOR_ALERT_EMAILS": "ops@example.com",
+        "GROQ_API_KEY": "gsk_" + secrets.token_hex(24),
     }
 
 
@@ -264,6 +267,35 @@ def test_the_minio_dev_credentials_are_refused(env) -> None:
     assert "S3_" in text and "minioadmin" in text
 
 
+@pytest.mark.parametrize("backend", ["s3", "r2", "minio"])
+def test_object_storage_needs_its_bucket_named(env, backend) -> None:
+    """Campaign session 4 (§C.5): the storage driver is built at the first upload, so a
+    deployment with no bucket used to start and then fail every upload."""
+    text = refusal(env, STORAGE_BACKEND=backend, S3_BUCKET=None, S3_ENDPOINT_URL="https://store.example.com")
+    assert "S3_BUCKET" in text
+
+
+def test_the_platform_groq_key_is_required(env) -> None:
+    """Campaign session 4 (§C.5): every document is read on the platform's Groq key (N-054);
+    without it the app started and then failed to read every document."""
+    assert "GROQ_API_KEY" in refusal(env, GROQ_API_KEY=None)
+    assert "GROQ_API_KEY" in refusal(env, GROQ_API_KEY="")
+    # A local model in fallback mode is used only when Groq fails: the key is still needed.
+    text = refusal(
+        env, GROQ_API_KEY=None, LOCAL_LLM_MODE="fallback",
+        LOCAL_LLM_BASE_URL="http://llm.internal:8080/v1", LOCAL_LLM_MODEL="local-model",
+    )
+    assert "GROQ_API_KEY" in text
+
+
+def test_a_local_model_serving_everything_needs_no_groq_key(env) -> None:
+    env(
+        good_production_env(), GROQ_API_KEY=None, LOCAL_LLM_MODE="exclusive",
+        LOCAL_LLM_BASE_URL="http://llm.internal:8080/v1", LOCAL_LLM_MODEL="local-model",
+    )
+    assert build().GROQ_API_KEY is None
+
+
 def test_redis_must_be_set_explicitly(env) -> None:
     assert "REDIS_URL" in refusal(env, REDIS_URL=None)
 
@@ -274,6 +306,14 @@ def test_redis_may_not_point_at_localhost_in_production(env) -> None:
 
 def test_mail_must_be_configured_or_users_silently_never_get_links(env) -> None:
     assert "PLATFORM_SMTP_HOST" in refusal(env, PLATFORM_SMTP_HOST=None)
+
+
+def test_someone_must_be_told_when_things_break(env) -> None:
+    """Campaign session 4 (§C.4): dead jobs and error bursts email the owner; nobody named, no boot."""
+    assert "OPERATOR_ALERT_EMAILS" in refusal(env, OPERATOR_ALERT_EMAILS=None)
+    assert "not an email address" in refusal(env, OPERATOR_ALERT_EMAILS="ops@example.com, nobody")
+    env(good_production_env(), OPERATOR_ALERT_EMAILS="ops@example.com, founder@example.org")
+    assert build().operator_alert_recipients == ["ops@example.com", "founder@example.org"]
 
 
 def test_the_reranker_needs_its_token_when_enabled(env) -> None:
@@ -363,6 +403,31 @@ def test_the_refusal_never_prints_a_secret_value_or_the_input_dictionary(env) ->
     assert jwt_secret[:20] not in text
     assert pepper[:20] not in text
     assert "input_value" not in text
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"JWT_SECRET_KEY": None},  # pydantic's own "Field required"
+        {"JWT_SECRET_KEY": "short-secret-9f3c"},  # a field check
+        {"STRIPE_SECRET_KEY": "sk_live_" + "a1B2c3D4" * 4, "STRIPE_WEBHOOK_SECRETS": "whsec_" + "e5F6g7H8" * 4},
+        {"ML_STUBS": "true"},  # a check across settings
+    ],
+    ids=["jwt-missing", "jwt-weak", "stripe-mode-mismatch", "ml-stubs"],
+)
+def test_no_refusal_prints_a_configured_value(env, changes) -> None:
+    """F-352. The refusals pydantic raises itself (a missing JWT secret, a check on one
+    setting, a check across settings) appended `input_value=`: the rejected value in full, or
+    the dictionary of every setting cut to its first and last characters, which end in
+    whichever secret came last. A boot log is not a place for secrets."""
+    values = {**good_production_env(), **changes}
+    text = refusal(env, **changes)
+    assert "input_value" not in text
+    for name, value in values.items():
+        if value and len(value) >= 16:
+            assert value[-12:] not in text, f"the refusal prints the end of {name}"
+    if changes.get("JWT_SECRET_KEY"):
+        assert changes["JWT_SECRET_KEY"] not in text
 
 
 # ---------------------------------------------------------------------------

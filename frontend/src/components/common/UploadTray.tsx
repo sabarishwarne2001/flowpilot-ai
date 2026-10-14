@@ -296,7 +296,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
         <div className={`select-none ${compact ? "min-w-0 space-y-0.5" : "space-y-1"}`}>
           <p className="text-sm font-medium tracking-tight text-foreground">
             {trialEnded
-              ? "Uploads are paused: the free trial has ended"
+              ? `Uploads are paused: the ${allowance.data?.trial?.lapsed ? "subscription" : "free trial"} has ended`
               : "Click to upload or drag & drop files"}
           </p>
           <p className="text-xs text-muted-foreground" data-testid="upload-limits">
@@ -332,7 +332,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
                     ) : entry.error ? (
                       <AlertCircle className="h-5 w-5 flex-shrink-0 text-destructive" aria-hidden />
                     ) : (
-                      <FileText className="h-5 w-5 flex-shrink-0 text-primary/80" aria-hidden />
+                      <FileText className="h-5 w-5 flex-shrink-0 text-primary" aria-hidden />
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{entry.file.name}</p>

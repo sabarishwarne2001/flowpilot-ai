@@ -35,6 +35,22 @@ def _normalise(record) -> str:
     return text
 
 
+def resolver_address(entry: str) -> tuple[str, int]:
+    """One DNS_RESOLVERS entry as (address, port): `1.1.1.1`, `127.0.0.1:5354`, `[::1]:5354` or `::1`.
+
+    Campaign session 4. Port 53 was assumed, so a resolver on another port (a local caching
+    resolver, a sidecar, the browser journeys' DNS stand-in) could not be named at all.
+    """
+    text = entry.strip()
+    if text.startswith("["):
+        host, _, rest = text[1:].partition("]")
+        return host, int(rest[1:]) if rest.startswith(":") else 53
+    if text.count(":") == 1:
+        host, port = text.split(":")
+        return host, int(port)
+    return text, 53
+
+
 def lookup_txt(domain: str, *, subdomain: str | None = None) -> TxtLookupResult:
     settings = get_settings()
     fqdn = f"{subdomain}.{domain}" if subdomain else domain
@@ -48,15 +64,18 @@ def lookup_txt(domain: str, *, subdomain: str | None = None) -> TxtLookupResult:
         logger.error("ARCH-16: dnspython missing; domain verification cannot run")
         return result
 
+    import dns.nameserver
+
     resolver = dns.resolver.Resolver(configure=False)
     configured = getattr(settings, "DNS_RESOLVERS", "1.1.1.1,8.8.8.8")
-    resolver.nameservers = [s.strip() for s in str(configured).split(",") if s.strip()]
+    addresses = [resolver_address(entry) for entry in str(configured).split(",") if entry.strip()]
+    resolver.nameservers = [dns.nameserver.Do53Nameserver(host, port) for host, port in addresses]
     # ARCH50-S1:egress-dns. Every resolver is asked about through the egress gate first.
     from app.core import egress
 
     try:
-        for nameserver in resolver.nameservers:
-            egress.guard(egress.DNS, nameserver, 53)
+        for host, port in addresses:
+            egress.guard(egress.DNS, host, port)
     except egress.EgressDenied as exc:
         result.error = f"refused by the egress gate: {exc}"
         return result

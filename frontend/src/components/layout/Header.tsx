@@ -102,7 +102,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
             <li className="hidden min-w-0 truncate text-muted-foreground md:block">
               {organization.organization_name}
             </li>
-            <li aria-hidden="true" className="hidden text-muted-foreground/50 md:block">
+            <li aria-hidden="true" className="hidden text-muted-foreground md:block">
               <ChevronRight className="h-3.5 w-3.5" />
             </li>
             <li className="min-w-0 truncate">
@@ -118,7 +118,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
             </li>
             {pageLabel && pageLabel !== "Overview" && (
               <>
-                <li aria-hidden="true" className="text-muted-foreground/50">
+                <li aria-hidden="true" className="text-muted-foreground">
                   <ChevronRight className="h-3.5 w-3.5" />
                 </li>
                 <li className="min-w-0 truncate font-medium text-foreground" aria-current="page">

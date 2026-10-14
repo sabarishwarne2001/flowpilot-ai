@@ -86,7 +86,6 @@ KNOWN_USER_INTENT: frozenset[str] = frozenset({
     "app/crud/ownership_transfer.py::create_transfer",
     "app/crud/ai_settings.py::create_ai_settings",
     "app/crud/document_settings.py::create_document_settings",
-    "app/crud/email_settings.py::create_email_settings",
     "app/crud/work_item.py::create_work_item",
     "app/services/auth_token_service.py::issue_token",
     "app/services/session_service.py::create_session",

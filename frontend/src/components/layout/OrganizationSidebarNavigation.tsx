@@ -163,7 +163,7 @@ const OrganizationSidebarNavigation: React.FC<
       <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain px-2.5 py-3">
         {sections.map((section) => (
           <div key={section.name} className="mb-4 last:mb-0">
-            <p className="fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground/75">
+            <p className="fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground">
               {section.name}
             </p>
             <div className="space-y-0.5">
@@ -180,7 +180,7 @@ const OrganizationSidebarNavigation: React.FC<
                     {lockKey !== undefined ? (
                       <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
                         {locked ? (
-                          <Lock className="h-3 w-3 text-muted-foreground/70" aria-hidden data-testid="nav-lock" />
+                          <Lock className="h-3 w-3 text-muted-foreground" aria-hidden data-testid="nav-lock" />
                         ) : null}
                       </span>
                     ) : null}

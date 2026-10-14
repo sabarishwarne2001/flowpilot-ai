@@ -18,6 +18,10 @@ export const ROUTES = {
   WORKSPACES: "/workspaces",
   NO_ACCESS: "/no-access",
   INVITATION_ACCEPT: "/invitations/accept",
+  // Campaign session 4: public pages, readable signed out and signed in.
+  PRICING: "/pricing",
+  TERMS: "/terms",
+  PRIVACY: "/privacy",
 
   DASHBOARD: "/",
   WORK_ITEMS: "/work-items",
@@ -33,3 +37,10 @@ export const ROUTES = {
 } as const;
 
 export type RouteValue = (typeof ROUTES)[keyof typeof ROUTES];
+
+/** Campaign session 4. The public pages, as the footers of the public and sign-in pages link them. */
+export const PUBLIC_PAGE_LINKS: ReadonlyArray<{ readonly to: RouteValue; readonly label: string }> = [
+  { to: ROUTES.PRICING, label: "Pricing" },
+  { to: ROUTES.TERMS, label: "Terms of service" },
+  { to: ROUTES.PRIVACY, label: "Privacy policy" },
+];

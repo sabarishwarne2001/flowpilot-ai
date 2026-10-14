@@ -196,6 +196,10 @@ test.describe("Obligations", () => {
     const status = page.getByRole("button", { name: /mark (as )?(done|complete|met)|complete|close/i }).first();
     await status.click();
     await settle(page);
+    // Campaign session 4: the obligation's history says it was done, and the server agrees.
+    await expect(page.locator("main")).toContainText("Marked done", { timeout: 15_000 });
+    await page.reload();
+    await expect(page.locator("main")).toContainText("Marked done", { timeout: 15_000 });
     await expectHealthyPage(page);
   });
 

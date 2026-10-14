@@ -42,6 +42,7 @@ stop_all() {
   stop_one worker
   stop_one smtp
   stop_one llm
+  stop_one dns
 }
 
 if [[ "${1:-}" == "stop" ]]; then
@@ -81,6 +82,15 @@ if [[ "${E2E_LLM:-}" == "1" ]]; then
   export LOCAL_LLM_MODEL="${E2E_LLM_MODEL:-flowpilot-e2e-local}"
   export LOCAL_LLM_TIMEOUT_SECONDS=30
 fi
+
+# Campaign session 4: a DNS server for domain verification (backend/scripts/e2e_dns.py), answering
+# TXT queries from records the journeys publish; the API asks it instead of public resolvers.
+DNS_PORT="${E2E_DNS_PORT:-5354}"
+export E2E_DNS_RECORDS="${E2E_DNS_RECORDS:-$LOG_DIR/dns-records.json}"
+[[ -f "$E2E_DNS_RECORDS" ]] || echo '{}' >"$E2E_DNS_RECORDS"
+nohup "$PY" -m scripts.e2e_dns serve --port "$DNS_PORT" --records "$E2E_DNS_RECORDS" >"$LOG_DIR/dns.log" 2>&1 &
+echo $! >"$RUN_DIR/dns.pid"
+export DNS_RESOLVERS="127.0.0.1:$DNS_PORT"
 
 nohup "$PY" -m uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$LOG_DIR/api.log" 2>&1 &
 echo $! >"$RUN_DIR/api.pid"

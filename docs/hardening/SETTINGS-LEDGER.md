@@ -161,9 +161,21 @@ dropping it is a cleanup for a later session (HANDOFF).
 | Rotate secret | Both secrets sign during the overlap | `tests/engines/test_webhooks_live.py` | Proven |
 | Redeliver | One more attempt, now | `tests/engines/test_webhooks_live.py`, `e2e/tests/20-organization.spec.ts` | Fixed (F-302) |
 
+## Proven in campaign session 4 (formerly "still unproven")
+
+Each setting below now has a test of its effect (backend/tests/…):
+
+| Setting | Proven by | Result |
+|---|---|---|
+| Assistant temperature | `engines/test_assistant_temperature_reaches_the_model_live.py` | Reaches the model, streamed and plain |
+| Dispatch tagging off | `engines/test_batch_engine_live.py` | Lanes recorded, nothing tagged; tags return when on (old tags stay: N-077) |
+| Extraction memory off | `engines/test_extraction_memory_rules.py` | Nothing applied, hinted, learned or swept |
+| Procurement amount, quantity, pair-cost and window tolerances | `engines/test_procurement_tolerances_take_effect_live.py` | Each moves the match exactly at its boundary |
+| Conversation retention | `engines/test_conversation_retention_purge_live.py` | Purges only older conversations, only when on (counts from the start: N-077) |
+| SLA at-risk probability and alerts | `engines/test_sla_risk_threshold_and_alerts_live.py` | Threshold decides "at risk"; the switch raises exactly one alert |
+| Every agent policy field | `engines/test_process_agent_policy_takes_effect_live.py` | Planning, auto-apply, allowed kinds and undo hold each change what the agent does |
+| Legal name after the payment customer exists | `api/test_legal_name_reaches_the_payment_customer.py` | **Was broken — fixed (F-365)** |
+
 ## Still unproven (for a later session)
 
-The assistant's use of the temperature; dispatch tagging off; extraction memory off; SLA
-at-risk probability and alerts; every agent policy field; procurement amount, quantity, pair-cost
-and candidate-window tolerances; conversation retention; legal name after the payment customer
-exists. Each has a reader; none has a test of its effect.
+None.

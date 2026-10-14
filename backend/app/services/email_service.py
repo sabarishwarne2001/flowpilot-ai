@@ -12,9 +12,8 @@ import ssl
 from email.message import EmailMessage
 
 from app.core.config import settings as app_settings
-from app.core.encryption import decrypt_password
 from app.core.smtp import SMTPConfig
-from app.models.email_settings import EmailEncryption, EmailSettings
+from app.models.email_settings import EmailEncryption
 
 
 class SMTPHostRefused(ValueError):
@@ -117,16 +116,9 @@ class _PinnedSMTP_SSL(smtplib.SMTP_SSL):
 class EmailService:
     logger = logging.getLogger(__name__)
 
-    def _resolve_config(self, settings: EmailSettings | SMTPConfig) -> SMTPConfig:
-        if isinstance(settings, EmailSettings):
-            return SMTPConfig(
-                smtp_host=settings.smtp_host,
-                smtp_port=settings.smtp_port,
-                smtp_username=settings.smtp_username,
-                smtp_password=decrypt_password(settings.encrypted_password),
-                sender_name=settings.sender_name,
-                encryption=settings.encryption,
-            )
+    def _resolve_config(self, settings: SMTPConfig) -> SMTPConfig:
+        # Every sender resolves its relay through email_resolution, which returns an SMTPConfig
+        # (the workspace `email_settings` row this once also accepted was dropped, session 4).
         return settings
 
     def _create_client(
@@ -208,7 +200,7 @@ class EmailService:
 
     def test_connection(
         self,
-        settings: EmailSettings | SMTPConfig,
+        settings: SMTPConfig,
     ) -> tuple[bool, str]:
         client = None
         try:
@@ -227,7 +219,7 @@ class EmailService:
     def send_email(
         self,
         *,
-        settings: EmailSettings | SMTPConfig,
+        settings: SMTPConfig,
         recipient: str,
         subject: str,
         body: str,
@@ -246,7 +238,7 @@ class EmailService:
     def send_html_email(
         self,
         *,
-        settings: EmailSettings | SMTPConfig,
+        settings: SMTPConfig,
         recipient: str,
         subject: str,
         html_body: str,

@@ -12,9 +12,11 @@ import inspect
 # PHASE 4: "job" removed - app/crud/job.py no longer exists (jobs are created
 # by app.services.job_queue, which takes the work item's workspace), and the
 # import error made this audit fail before it checked anything.
+# Campaign session 4: "email_settings" removed with its dead table (workspace mail is
+# `workspace_email_overrides`, written by app/api/v1/email_settings.py, not a CRUD module).
 TENANT_MODULES = (
     "work_item", "assistant", "automation", "notification",
-    "ai_settings", "email_settings", "document_settings",
+    "ai_settings", "document_settings",
 )
 
 # Explicit allowlist of pre-secured workspace scopes and organization-scoped queries.

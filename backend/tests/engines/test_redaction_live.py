@@ -101,3 +101,42 @@ def test_the_default_searchable_output_also_seals_without_leaking(engines: Engin
     text = "\n".join(page.extract_text() or "" for page in pypdf.PdfReader(io.BytesIO(data)).pages)
     for secret in ("123-45-6789", "ABCPE1234F", "GB82 WEST 1234 5698 7654 32"):
         assert secret not in text and secret not in data.decode("latin-1"), secret
+
+
+def test_the_redacted_files_download_where_storage_cannot_presign(engines: Engines) -> None:
+    """Campaign session 4 (F-356). On local-disk storage the bundle has no links; the files stream.
+
+    The studio's "Download redacted PDF" and "Download manifest" read the bundle's signed links and
+    showed "Something went wrong" when there were none, so a sealed redaction could not be taken away.
+    Like the compliance archive (F-138), the API now streams the same sealed files to anyone who may
+    read the workspace, and only once the leak check has passed.
+    """
+    import hashlib
+    import json
+
+    work_item_id = engines.process("record.pdf", [LINES], marker="RED-LIVE-1", classification="Other", entities={})
+    started = engines.post(f"/work-items/{work_item_id}/redactions", {"profile_key": "financial"})
+    assert started.status_code in (200, 201, 202), started.text
+    job_id = started.json()["id"]
+    drain()
+    assert engines.get(f"/redactions/{job_id}/files/document").status_code == 409, "not sealed yet: nothing to take"
+    assert engines.post(f"/redactions/{job_id}/apply", {}).status_code in (200, 202)
+    drain()
+    engines.refresh()
+    row = engines.db.get(RedactionJob, job_id)
+    assert row.status == "COMPLETED", (row.status, row.failure_reason)
+
+    bundle = engines.get(f"/redactions/{job_id}/bundle").json()
+    assert bundle["document_url"] is None, "this storage presigns: the test proves nothing here"
+
+    document = engines.get(f"/redactions/{job_id}/files/document", as_user=engines.tenant.viewer)
+    assert document.status_code == 200, document.text
+    assert document.headers["content-type"] == "application/pdf"
+    assert "attachment" in document.headers["content-disposition"]
+    assert hashlib.sha256(document.content).hexdigest() == row.output_sha256
+
+    manifest = engines.get(f"/redactions/{job_id}/files/manifest")
+    assert manifest.status_code == 200, manifest.text
+    assert manifest.headers["content-type"].startswith("application/json")
+    assert json.loads(manifest.content)
+    assert engines.get(f"/redactions/{job_id}/files/elsewhere").status_code == 422

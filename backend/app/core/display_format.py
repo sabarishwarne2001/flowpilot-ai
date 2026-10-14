@@ -67,3 +67,14 @@ __all__ = [
     "format_calendar_date",
     "is_iso_date",
 ]
+
+
+def format_amount_micros(amount_micros: int, currency: Optional[str]) -> str:
+    """An amount held in micros, for text one message sends to several people (emails, notices).
+
+    Its own currency as an ISO code, two decimals and thousands separators ("USD 1,234.50"):
+    readable in every locale, never a guessed symbol (F-172). No currency, no code.
+    """
+    value = int(amount_micros) / 1_000_000
+    text = f"{value:,.2f}"
+    return f"{currency.upper()} {text}" if currency else text

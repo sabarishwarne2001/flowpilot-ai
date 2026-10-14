@@ -321,6 +321,7 @@ export const WorkItems: React.FC = () => {
         <div className="relative sm:col-span-4">
           <select
             {...register("status")}
+            aria-label="Filter by status"
             className="fp-input h-9 cursor-pointer appearance-none pr-9"
           >
             <option value="ALL">All Statuses</option>

@@ -32,8 +32,11 @@ import { Loader2 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { toTenantPath } from "@/routes/tenantPaths";
+import { toTenantPath, workspaceSettingsPath } from "@/routes/tenantPaths";
 import { useLoginRedirect } from "@/routes/useLoginRedirect";
+
+/** Flat addresses of the personal profile, before it became Settings → Profile. */
+const PERSONAL_PAGES = ["/profile", "/account"] as const;
 
 /**
  * Forwards the current flat path to its tenant-scoped equivalent.
@@ -80,6 +83,18 @@ export const LegacyRouteRedirect: React.FC = () => {
       // toTenantPath, not rebaseTenantPath: a legacy path carries no tenant
       // prefix to strip, so rebaseTenantPath's fallback discards the sub-page
       // and every sidebar link lands on the workspace root.
+      // Campaign session 4 (F-358). The old personal pages are now a section of the
+      // workspace's settings; forwarded as they were, they landed on "Page not found".
+      const personal = PERSONAL_PAGES.find((page) => location.pathname === page || location.pathname.startsWith(`${page}/`));
+      if (personal) {
+        return (
+          <Navigate
+            to={`${workspaceSettingsPath(state.organization.organization_slug, state.workspace.slug)}?section=profile`}
+            replace
+          />
+        );
+      }
+
       const target = toTenantPath(
         location.pathname,
         state.organization.organization_slug,

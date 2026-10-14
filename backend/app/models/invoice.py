@@ -107,6 +107,8 @@ MUTABLE_AFTER_FINALIZE: frozenset[str] = frozenset(
     {
         "status",
         "amount_paid_micros",
+        "amount_refunded_micros",
+        "refunded_at",
         "stripe_invoice_id",
         "paid_at",
         "issued_at",
@@ -134,6 +136,10 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
         CheckConstraint(
             "amount_paid_micros >= 0 AND amount_paid_micros <= total_micros",
             name="ck_invoices_paid_within_total",
+        ),
+        CheckConstraint(
+            "amount_refunded_micros >= 0 AND amount_refunded_micros <= amount_paid_micros",
+            name="ck_invoices_refund_within_payment",
         ),
         CheckConstraint("seats_billed >= 0", name="ck_invoices_seats_non_negative"),
         CheckConstraint(
@@ -256,6 +262,14 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
     )
     amount_paid_micros: Mapped[int] = mapped_column(
         BigInteger, nullable=False, server_default=text("0")
+    )
+    # Campaign session 4 (N-069): what the gateway has refunded of that payment. The invoice
+    # keeps its status (the payment happened); the refund is recorded beside it.
+    amount_refunded_micros: Mapped[int] = mapped_column(
+        BigInteger, nullable=False, server_default=text("0")
+    )
+    refunded_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True), nullable=True
     )
 
     # ---- A9: the provenance triple, frozen ------------------------------

@@ -112,6 +112,9 @@ export interface InvoiceSummary {
   readonly tax_micros: number;
   readonly total_micros: number;
   readonly amount_paid_micros: number;
+  /** Campaign session 4 (N-069): how much of the payment the gateway has refunded. */
+  readonly amount_refunded_micros?: number;
+  readonly refunded_at?: string | null;
   readonly seats_billed: number;
   readonly finalized_at: string | null;
   readonly stripe_invoice_id: string | null;
@@ -230,6 +233,11 @@ export interface CheckoutSessionRequest {
 
 export interface PortalSessionRequest {
   readonly return_url?: string;
+  /** Campaign session 4 (F-344): a subscriber's pick; the portal opens on the confirmation of it. */
+  readonly quota_tier_key?: string;
+  readonly seats?: number;
+  readonly interval?: "month" | "year";
+  readonly currency?: "USD" | "INR";
 }
 
 export interface SeatSyncRequest {
@@ -388,5 +396,28 @@ export interface PlanAllowanceResponse {
     readonly state: "NONE" | "ACTIVE" | "ENDED";
     readonly ends_at: string | null;
     readonly days_left: number | null;
+    /** Campaign session 4 (F-342): ENDED because a paid subscription ended, not a first trial. */
+    readonly lapsed?: boolean;
   };
 }
+
+const INVOICE_STATUS_LABELS: Readonly<Record<string, string>> = {
+  DRAFT: "Draft",
+  OPEN: "Open",
+  PAID: "Paid",
+  VOID: "Void",
+  UNCOLLECTIBLE: "Uncollectible",
+};
+
+/**
+ * What an invoice's status line says (campaign session 4). The list showed the raw status code
+ * ("PAID"); a refunded payment now says so, as the gateway's own invoice page does.
+ */
+export function invoiceStatusLabel(invoice: Pick<InvoiceSummary, "status" | "amount_paid_micros" | "amount_refunded_micros">): string {
+  const refunded = invoice.amount_refunded_micros ?? 0;
+  if (refunded > 0) {
+    return refunded >= invoice.amount_paid_micros ? "Refunded" : "Partially refunded";
+  }
+  return INVOICE_STATUS_LABELS[invoice.status] ?? invoice.status.charAt(0) + invoice.status.slice(1).toLowerCase();
+}
+

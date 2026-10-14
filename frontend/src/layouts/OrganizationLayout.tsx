@@ -124,7 +124,7 @@ export const OrganizationLayout: React.FC = () => {
                 {consolePage ? (
                   <>
                     <li aria-hidden="true">
-                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+                      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                     </li>
                     <li className="min-w-0 truncate font-medium text-foreground" aria-current="page">
                       {consolePage}

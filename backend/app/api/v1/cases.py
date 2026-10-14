@@ -216,12 +216,26 @@ def get_case(workspace_id: uuid.UUID, case_id: uuid.UUID, db: Session = Depends(
     return _detail(db, _case(db, workspace_id, case_id))
 
 
+def _refuse_if_closed(case) -> None:
+    """Campaign session 4 (F-333): a closed case is a record of what was decided.
+
+    Its rule results are not evaluated again once it is closed, so changing its documents left
+    results that described another set of documents. Document requests were already refused.
+    """
+    if case.status == v.CASE_CLOSED:
+        raise HTTPException(status_code=409, detail={
+            "code": "CASE_CLOSED",
+            "message": "This case is closed, so its documents can no longer change. Open a new case instead.",
+        })
+
+
 @router.post("/workspaces/{workspace_id}/cases/{case_id}/documents", response_model=CaseDetail)
 def add_case_document(workspace_id: uuid.UUID, case_id: uuid.UUID, body: CaseDocumentAdd, db: Session = Depends(get_db),
                       context: TenantContext = Depends(RequireContributor)) -> CaseDetail:
     _ws(context, workspace_id)
     _gate(db, context, "cases.documents.add")
     case = _case(db, workspace_id, case_id)
+    _refuse_if_closed(case)
     item = db.execute(select(WorkItem).where(WorkItem.id == body.work_item_id, WorkItem.workspace_id == workspace_id)).scalar_one_or_none()
     if item is None:
         raise HTTPException(status_code=404, detail="Document not found.")
@@ -241,6 +255,7 @@ def remove_case_document(workspace_id: uuid.UUID, case_id: uuid.UUID, work_item_
     _ws(context, workspace_id)
     _gate(db, context, "cases.documents.remove")
     case = _case(db, workspace_id, case_id)
+    _refuse_if_closed(case)
     db.execute(CaseDocument.__table__.delete().where(CaseDocument.case_id == case.id, CaseDocument.work_item_id == work_item_id))
     assembly.evaluate(db, case=case)
     db.commit()

@@ -134,7 +134,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           </button>
         </header>
 
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar" tabIndex={0}>
           <div className="space-y-2 select-none">
             <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Active Target Rule
@@ -200,7 +200,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                 </div>
               ) : workItems.length === 0 ? (
                 <div className="p-6 text-center border border-dashed border-border rounded-xl bg-muted/10 select-none">
-                  <HelpCircle className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1.5" />
+                  <HelpCircle className="h-6 w-6 text-muted-foreground mx-auto mb-1.5" />
                   <p className="text-xs font-semibold text-muted-foreground">
                     No Work Items found
                   </p>

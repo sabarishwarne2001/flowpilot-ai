@@ -155,6 +155,7 @@ def read_calibration(db: Session, trace: Trace, *, organization_id: uuid.UUID, d
 def read_verification(db: Session, trace: Trace, *, item: Any) -> Optional[dict[str, Any]]:
     from app.models.verification import DocumentVerification, DocumentVerificationField
     from app.services.assertions.vocabulary import FIELD_PATH_PREFIX
+    from app.services.document_verification_service import is_document_fragment
 
     verification = db.execute(select(DocumentVerification).where(
         DocumentVerification.id == item.item_id, DocumentVerification.workspace_id == item.workspace_id)).scalar_one_or_none()
@@ -167,7 +168,9 @@ def read_verification(db: Session, trace: Trace, *, item: Any) -> Optional[dict[
         "review_all_fields")) or bool((details.get("extraction_memory") or {}).get("review_all_fields"))
     fields = db.execute(select(DocumentVerificationField).where(
         DocumentVerificationField.verification_id == verification.id)).scalars().all()
-    under_review = [f for f in fields if (review_all or not f.agreed) and not f.field_path.startswith(FIELD_PATH_PREFIX)]
+    # F-360. As the resolve decides it: a document fragment (line items) is never part of a decision.
+    under_review = [f for f in fields if (review_all or not f.agreed) and not f.field_path.startswith(FIELD_PATH_PREFIX)
+                    and not is_document_fragment(f)]
     out = {
         "verification_id": verification.id, "status": getattr(verification.status, "value", verification.status),
         "confidence": _f(verification.confidence), "field_ids": [f.id for f in under_review],

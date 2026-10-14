@@ -75,13 +75,17 @@ class TrialStatus:
     state: str
     ends_at: Optional[datetime]
     days_left: Optional[int]
+    #: Campaign session 4 (F-342): ENDED because a paid subscription ended, the trial long over.
+    #: The screens then speak of the subscription, not of a trial the customer never noticed.
+    lapsed: bool = False
 
     @property
     def ended(self) -> bool:
         return self.state == TRIAL_ENDED
 
     def as_dict(self) -> dict[str, Any]:
-        return {"state": self.state, "ends_at": self.ends_at, "days_left": self.days_left}
+        return {"state": self.state, "ends_at": self.ends_at, "days_left": self.days_left,
+                "lapsed": self.lapsed}
 
 
 _NONE = TrialStatus(state=NOT_ON_TRIAL, ends_at=None, days_left=None)
@@ -130,14 +134,31 @@ def status(db: Session, *, organization_id: uuid.UUID, now: Optional[datetime] =
     ends_at = _utc(organization.trial_ends_at)
     moment = _utc(now or datetime.now(timezone.utc))
     if moment >= ends_at:
-        return TrialStatus(state=TRIAL_ENDED, ends_at=ends_at, days_left=0)
+        return TrialStatus(state=TRIAL_ENDED, ends_at=ends_at, days_left=0,
+                           lapsed=_ever_subscribed(db, organization_id))
     days_left = max(1, math.ceil((ends_at - moment).total_seconds() / 86_400))
     return TrialStatus(state=TRIAL_ACTIVE, ends_at=ends_at, days_left=days_left)
 
 
+def _ever_subscribed(db: Session, organization_id: uuid.UUID) -> bool:
+    """Whether this organization ever held a paid subscription (it lapsed to Free, F-342)."""
+    from sqlalchemy import select
+
+    from app.models.billing_account import BillingAccount
+    from app.models.subscription import Subscription
+
+    return db.execute(
+        select(Subscription.id)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(BillingAccount.organization_id == organization_id)
+        .limit(1)
+    ).first() is not None
+
+
 def ended_error(trial: TrialStatus, *, organization_id: uuid.UUID) -> TrialEndedError:
+    what = "Your subscription has ended" if trial.lapsed else "Your free trial has ended"
     return TrialEndedError(
-        "Your free trial has ended. Subscribe to a plan to upload documents, ask the "
+        f"{what}. Subscribe to a plan to upload documents, ask the "
         "assistant and run automations again. Everything stays readable and export "
         "remains available.",
         details={

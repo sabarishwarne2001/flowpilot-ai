@@ -37,6 +37,7 @@ import uuid
 from typing import Any, Iterable, Optional
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
 from app.models.ingestion import (
@@ -261,15 +262,25 @@ def apply_to_workspace(
     if existing is not None:
         return existing
 
-    row = WorkspaceSchemaPreset(
-        workspace_id=workspace_id,
-        preset_id=preset.id,
-        enabled=False,
-        applied_by_user_id=user_id,
+    # F-398. Two applies racing (two administrators, a retried request) both
+    # find no row above; a plain INSERT made the loser fail on the primary key
+    # with a 500. ON CONFLICT DO NOTHING waits for the winner and keeps its row.
+    db.execute(
+        pg_insert(WorkspaceSchemaPreset)
+        .values(
+            workspace_id=workspace_id,
+            preset_id=preset.id,
+            enabled=False,
+            applied_by_user_id=user_id,
+        )
+        .on_conflict_do_nothing(index_elements=["workspace_id", "preset_id"])
     )
-    db.add(row)
-    db.flush([row])
-    return row
+    return db.execute(
+        select(WorkspaceSchemaPreset).where(
+            WorkspaceSchemaPreset.workspace_id == workspace_id,
+            WorkspaceSchemaPreset.preset_id == preset.id,
+        )
+    ).scalar_one()
 
 
 def set_enabled(

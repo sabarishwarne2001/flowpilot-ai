@@ -27,7 +27,10 @@ A CONNECTION
     close         presence dropped and re-announced; on a CLEAN close (1000 /
                   1001: the tab closed) the connection's leases are released
                   at once, on an abnormal one (network) they are kept until
-                  they lapse, so a reconnect within LOCK_TTL keeps the lock
+                  they lapse, so a reconnect within LOCK_TTL keeps the lock.
+                  A connection the re-check ENDED (access, session or plan
+                  gone) releases them at once too: its person cannot come
+                  back for them (campaign session 4, F-338)
 
 Every database step runs in a worker thread with its own session and commits
 before anything is announced (claim, commit, then publish -- ARCH-47's shape).
@@ -81,6 +84,8 @@ class Connection:
     leases: dict[tuple[str, str], uuid.UUID] = field(default_factory=dict)
     stamps: collections.deque = field(default_factory=lambda: collections.deque(maxlen=v.RATE_MESSAGES + 1))
     close_code: Optional[int] = None
+    #: The re-check refused this connection (access, session or plan gone): its leases go at once.
+    ended: bool = False
     #: The event loop serving this connection: events published from a worker thread
     #: (a REST route after its commit) are handed to it with call_soon_threadsafe.
     loop: Optional[asyncio.AbstractEventLoop] = None
@@ -222,7 +227,7 @@ class Hub:
 
     async def _leave(self, connection: Connection, workspace_id: str, clean: bool) -> None:
         broker = self.broker
-        if clean and connection.leases:
+        if (clean or connection.ended) and connection.leases:
             try:
                 await in_thread(self._release_all, connection, v.RELEASE_DISCONNECTED)
             except Exception:  # noqa: BLE001 - the leases lapse by themselves
@@ -344,6 +349,7 @@ class Hub:
             except gate.LiveRefused as exc:
                 logger.info("collab.connection_closed", extra={"reason": exc.reason, "code": exc.close_code,
                                                                "user_id": str(principal.user_id)})
+                connection.ended = True
                 self._close(connection, exc.close_code)
                 return
 

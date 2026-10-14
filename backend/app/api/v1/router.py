@@ -11,6 +11,7 @@ from app.api.v1 import (
     packet_splits,
     cases,
     public_document_requests,
+    public_pricing,
     tables,
     corroboration,
     obligations,
@@ -111,6 +112,10 @@ api_router.include_router(custom_domains.router)
 api_router.include_router(internal_tls.router)  # ARCH-25 Caddy on-demand TLS `ask`
 api_router.include_router(tenant_branding.router)
 api_router.include_router(tenant_branding.public_router)
+
+# Campaign session 4 (CAMPAIGN-MAP 4.3). The public price list behind /pricing:
+# unauthenticated, registered in PUBLIC_ROUTES, holds nothing about a tenant.
+api_router.include_router(public_pricing.router)
 
 # ARCH-26 Enterprise Analytics, BI Egress & Warehouse Sync.
 #

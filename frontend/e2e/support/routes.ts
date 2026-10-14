@@ -84,6 +84,8 @@ export const NAV_LABEL: Record<string, string> = {
   "ws:corroboration": "Document corroborator",
   "ws:truthmesh": "TruthMesh",
   "ws:assertion-reviews": "Clause assertions",
+  // Campaign session 4: Batch operations had no label here, so the plan matrix skipped it.
+  "ws:batches": "Batch operations",
 };
 
 export const PLATFORM_PAGES = [

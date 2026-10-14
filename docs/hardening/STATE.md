@@ -1,8 +1,77 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-12 (pre-launch campaign, session 3 of 4 finished: consoles, identity, settings truthfulness, security; session 4 next)_
+_Last updated: 2026-10-14 (pre-launch campaign, session 4 of 4 complete; what is left is in `docs/hardening/NEXT-SESSION-PROMPT.md`)_
 
-## Current phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
+## Current phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
+Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
+(PR #22, session 3, is merged; HANDOFF.md has "Session 3 → later sessions"). Draft PR titled
+`Campaign session 4: experience, operations and launch certification`. Owner delegated founder
+authority: decisions are taken, built and recorded in NEEDS-OWNER.md as
+`DECIDED (campaign session 4)`. **If this session is cut off, re-run the same prompt: continue on
+this branch and its open pull request, from the first unticked box in CAMPAIGN-MAP.md §4.**
+
+**Plan for this slice (priority order; each fix proven by a failing test first):**
+1. CI: keep it green on every push; remove the pytest duplication (F-030) and make the browser job
+   a required check.
+2. Carry-overs that can be wrong money or lost work: F-324 (verify, then fix), F-256 (late usage
+   not disclosed), refunds recorded (credit note, negative revenue), the duplicate gateway
+   subscription alert and its refund playbook, every "change plan" screen leading to the portal.
+3. Operations (§C): configuration contract test and docs, the whole migration chain up/down/up,
+   every host cron line run by hand against the stack the runbook builds, backup and timed restore
+   drill, error and dead-job alerts for the owner, the Windows scripts, `COSTS.md`.
+4. Customer journeys (§D) as Playwright specs against the production bundle with the worker on.
+5. Item actions, the live collaborative-review WebSocket, the engine page journeys, the billing
+   jobs through the fake gateway, ERP delivery through the mock targets (§4.1 rows).
+6. Experience (§A): shell, every page at four widths in light and dark, accessibility (axe-core),
+   first run, public pricing/terms/privacy pages, email rendering.
+7. Performance (§B): bundle split and Lighthouse, Locust load run, N+1 and indexes, 10,000
+   documents, 500-document bulk delete timing; `PERFORMANCE.md`.
+8. Ledger to `--check all` = 0, `PRODUCT-NEXT.md`, the launch certification, the owner launch
+   checklist, HANDOFF, final suites, CI green, PR ready.
+
+**Progress (checkpoint 1, 2026-10-13):** items 1 and 2 done, item 5 partly. CI is green on every
+complete run, pytest now runs once in four shards, the browser tests are a required job and the
+whole migration chain goes down to base and up again (F-030, F-330). Fixed and proven, each with a
+failing test first (FINDINGS.md, session 4 section): F-324 (a released document ran its rules
+never, or twice), F-256 (late usage into an empty hour), F-327 (refunds recorded on the invoice,
+negative revenue, the organization told; N-069), F-328 (API measurements written while it runs),
+F-331/F-332 (the owner is emailed about dead jobs, unapplied payments, error bursts and a second
+live subscription; RUNBOOK §9.8 refund playbook; N-070), F-333 to F-337 (closed cases, clause checks
+and reviews, redaction previews, packet plans). Every one of the 30 engine item actions is now used
+for real, and ERP delivery over HTTPS runs against the mock target. **Next:** the live
+collaborative-review WebSocket, engine page journeys, the billing jobs through the fake gateway,
+then operations (§C), the customer journeys (§D), experience (§A), performance (§B), the ledger.
+
+**Progress (checkpoint 2, 2026-10-13):** items 3 (largely), 4 and 7 (bundle) done. All eight customer
+journeys are Playwright specs that pass against the production bundle with the worker running
+(`frontend/e2e/tests/60` to `67-journey-*.spec.ts`; journey 4, Enterprise, proves the domain over a
+real DNS lookup, a SAML sign-in, SCIM, egress lockdown and the audit export). Every host cron line
+runs as cron runs it (`backend/tests/operational/test_host_cron_lines.py`) and by hand against the
+stack; the encrypted backup restores in a timed drill (RUNBOOK §9.4). The whole migration chain is
+proven up, down to base and up. The first load is 191.9 KB gzipped (was 634 KB; Lighthouse
+performance 91 on sign-in). Public pricing, terms and privacy pages (N-073). COSTS.md and
+PRODUCT-NEXT.md written; the 17 integrations and every migration and job row closed in the ledger.
+Fixed and proven since checkpoint 1: F-338 to F-348. **Next:** the configuration contract (282
+rows, in progress), the Locust load run, the engine page journeys and the open endpoint, page and
+navigation rows, accessibility and widths (§A), the Windows scripts, then the certification,
+HANDOFF and the owner launch checklist.
+
+**Progress (checkpoint 3, 2026-10-14 — session close):** all eight plan items done. Fixed and proven
+since checkpoint 2: F-349 to F-364 (configuration contract, seeded workspaces ready, the audit sweep,
+sealed redaction files, empty assistant answers, old links, the PDF viewer, line-item reviews, every
+page WCAG 2.1 AA in light and dark, the reset link, the assistant freezing the API under load, old
+document links), F-380 (emails for mail clients) and F-381 (four widths). First run: a
+getting-started card with a sample invoice. At the owner's request the session then audited
+TruthMesh, Batch Operations and Document Packs in depth: three new browser specs on tenants of their
+own (75, 76, 77) and backend hardening tests; fixed F-382 (concurrent mesh builds), F-390 and F-407
+(hostile or damaged packages), F-398/F-399 and F-406/F-408 (packs), F-409 (an empty mesh rebuilt on
+every poll). Helper sessions proved the eight unproven settings (F-365, a legal name never reaching
+Stripe) and fixed F-370 (key rotation missed 14 secret columns), F-371 and F-372. Decisions N-069 to
+N-077. The audit's reproduced-but-unproven items, the N-076/N-077 builds and 32 features with
+partial browser coverage are in **`docs/hardening/NEXT-SESSION-PROMPT.md`** (paste it into a new
+session). `campaign_slices --check all` exits 0; one Alembic head (`s4b1_drop_email_settings`).
+
+## Previous phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
 `3caab78` (PR #21, the campaign map, is merged; HANDOFF.md has "Campaign review before session 3").
 Draft PR titled `Campaign session 3: consoles, identity, settings and security`. Owner delegated
@@ -377,6 +446,10 @@ launch, Dodo selectable; **N-027** Postmark before the first paying customer; **
 plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
+_Updated 2026-10-14 (session 4 close):_ merge pull request #23 once CI is green, then start a new
+session with `docs/hardening/NEXT-SESSION-PROMPT.md`; the owner works through HANDOFF.md
+"Owner launch checklist". The list below is the earlier (session 3) text, kept for history.
+
 _Updated 2026-10-12. The earlier list here (merge PR #18; the Redis frame buffer; one matching case
 per invoice copy) is done: PR #18 merged, the buffer moved off the event loop (F-263), one case per
 invoice (F-264, N-055)._

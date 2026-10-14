@@ -185,12 +185,18 @@ def test_outbox_queue_alias_is_the_public_queue() -> None:
 async def test_rules_evaluate_without_email_settings(
     db_session, tenant, work_item_factory, rule_factory, monkeypatch
 ) -> None:
+    from app.models.organization_email_settings import OrganizationEmailSettings
+    from app.models.workspace_email_override import WorkspaceEmailOverride
     from app.services.automation_service import automation_service
 
-    assert (
-        __import__("app").crud.get_email_settings(
-            db_session, workspace_id=tenant.workspace.id
-        )
+    # The two tables the email resolver reads (campaign session 4: the workspace
+    # `email_settings` table this used to check had had no reader since ARCH-40, and is dropped).
+    assert db_session.get(WorkspaceEmailOverride, tenant.workspace.id) is None and (
+        db_session.execute(
+            select(OrganizationEmailSettings).where(
+                OrganizationEmailSettings.organization_id == tenant.organization.id
+            )
+        ).first()
         is None
     ), "this test requires a workspace with no email settings"
     # ...and no platform relay to fall back to: with one reachable (the browser
@@ -223,17 +229,20 @@ async def test_rules_evaluate_without_email_settings(
 async def test_email_settings_are_not_read_until_an_email_action_runs(
     db_session, tenant, work_item_factory, rule_factory, monkeypatch
 ) -> None:
-    from app import crud
+    from app.services import email_resolution
     from app.services.automation_service import automation_service
 
+    # Campaign session 4: this spied on `crud.get_email_settings`, which nothing had called
+    # since ARCH-40 moved the email action to the resolver, so it could not fail. It spies on
+    # the resolver now, and the second half proves the spy sees a read when one happens.
     reads: list[uuid.UUID] = []
-    original = crud.get_email_settings
+    original = email_resolution.resolve_email_identity
 
-    def _spy(db, *, workspace_id):
-        reads.append(workspace_id)
-        return original(db, workspace_id=workspace_id)
+    def _spy(db, **kwargs):
+        reads.append(kwargs.get("workspace_id"))
+        return original(db, **kwargs)
 
-    monkeypatch.setattr("app.crud.get_email_settings", _spy)
+    monkeypatch.setattr(email_resolution, "resolve_email_identity", _spy)
 
     work_item = work_item_factory(classification="Receipt")
     rule_factory(
@@ -251,6 +260,24 @@ async def test_email_settings_are_not_read_until_an_email_action_runs(
     )
 
     assert reads == []
+
+    # The control: a rule that matches and sends reads the settings, once.
+    monkeypatch.setattr(settings, "PLATFORM_SMTP_HOST", "")
+    rule_factory(
+        name="matches",
+        conditions=[
+            {"field": "extracted_entities.document_classification",
+             "operator": "EQUALS", "value": "Receipt"}
+        ],
+        actions=[{"action_type": "email", "config": {"recipient": "a@b.com"}}],
+    )
+    db_session.commit()
+
+    await automation_service.execute_rules_for_work_item(
+        db_session, work_item_id=work_item.id, event="WORK_ITEM_COMPLETED"
+    )
+
+    assert reads == [tenant.workspace.id]
 
 
 def test_valueless_operators_do_not_require_a_value(work_item_factory) -> None:

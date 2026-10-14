@@ -116,7 +116,7 @@ export const CalendarFeeds: React.FC<Props> = ({ workspaceId }) => {
       {query.isError ? <p className="text-sm text-destructive">{errorMessage(query.error, "Feeds could not be loaded.")}</p> : null}
       <ul className="space-y-2">
         {(query.data?.items ?? []).map((feed) => (
-          <li key={feed.id} className={`${SURFACE} flex flex-wrap items-center gap-2 p-3 text-sm ${feed.revoked_at ? "opacity-60" : ""}`}>
+          <li key={feed.id} className={`${SURFACE} flex flex-wrap items-center gap-2 p-3 text-sm ${feed.revoked_at ? "fp-inactive" : ""}`}>
             <span className="font-semibold">{feed.label}</span>
             <span className={HINT}>
               {feed.scope === "MINE" ? "my obligations" : "whole workspace"} · created {formatDateTime(feed.created_at)}

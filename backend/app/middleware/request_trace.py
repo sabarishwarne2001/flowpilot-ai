@@ -13,7 +13,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.core import slo_recorder
+from app.core import ops_signals, slo_recorder
 from app.core.public_route_registry import redact_path
 from app.core.request_context import (
     context_fields,
@@ -80,6 +80,9 @@ class RequestTraceMiddleware(BaseHTTPMiddleware):
                 return response
             finally:
                 elapsed_ms = (time.perf_counter() - started) * 1000.0
+                if status_code >= 500:
+                    # Campaign session 4 (§C.4): counted in memory for the owner's error-burst alert.
+                    ops_signals.record_server_error()
 
                 if organization_id and _is_measured(request.url.path):
                     slo_recorder.recorder.observe(

@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from typing import Sequence
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.crud.membership_filters import ACTIVE_ONLY, SEAT_CONSUMING_STATUSES
 from app.models.organization import (
@@ -106,8 +106,12 @@ def list_organization_members(
     """
     Returns the member directory for an organization.
     """
-    stmt = select(OrganizationMember).where(
-        OrganizationMember.organization_id == organization_id
+    stmt = (
+        select(OrganizationMember)
+        .where(OrganizationMember.organization_id == organization_id)
+        # Campaign session 4 (F-350): each member's person was loaded one query at a time when
+        # the directory was rendered; one more query loads them all.
+        .options(selectinload(OrganizationMember.user))
     )
     if statuses is not None:
         stmt = stmt.where(OrganizationMember.status.in_(statuses))

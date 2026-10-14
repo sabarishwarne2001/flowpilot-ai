@@ -153,7 +153,7 @@ export const UserMenu: React.FC<UserMenuProps> = ({
                 <span className="block truncate text-[11px] text-muted-foreground">{user?.email}</span>
               )}
             </span>
-            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground/70 group-hover:text-muted-foreground" aria-hidden="true" />
+            <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground group-hover:text-muted-foreground" aria-hidden="true" />
           </>
         )}
       </button>

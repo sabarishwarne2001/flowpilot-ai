@@ -278,7 +278,7 @@ export COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.produc
 | File storage | AWS S3, Cloudflare R2 or Backblaze B2 (recommended), or the optional MinIO service | one server disk is not durable storage for customers' documents |
 | Outgoing email | an SMTP provider (Postmark, SES, ...) | the app **refuses to start** without one: invitations, verification and password-reset emails depend on it |
 | Payments | Stripe **test** keys and/or Dodo **test** keys | stay in test mode until you decide to go live; never put live keys on a server you are still testing |
-| An AI key | `GROQ_API_KEY` (or `GEMINI_API_KEY`) | without one, every AI feature errors for customers who have not brought their own key |
+| An AI key | `GROQ_API_KEY` from https://console.groq.com/keys | the app **refuses to start** without it: documents are read and Ask AI answers on this key (the platform serves Groq's GPT-OSS models, N-054) |
 
 Only ports 80, 443/tcp and 443/udp are published (by Caddy). Postgres, Redis, MinIO and the
 API are not reachable from outside. Do not add `ports:` to them.
@@ -417,7 +417,11 @@ password. (The compose file deliberately does not pass these two to the running 
 **9. Point billing at your server (test mode)** *(not run here)*.
 
 In Stripe (Developers, Webhooks) add the endpoint `https://app.example.com/api/v1/billing/webhooks/stripe`
-and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
+for the events `checkout.session.completed`, `customer.subscription.*`, `invoice.*`,
+`payment_intent.payment_failed`, `charge.refunded` and `charge.refund.updated` (the last two record
+refunds on the customer's invoice, N-069; `invoice.*` includes `invoice.created`, which closes each
+billing period: FlowPilot adds the period's overage to the renewal before Stripe charges it, section
+9.9), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
 listed, separated by commas, while you rotate one). For Dodo the endpoint is
 `https://app.example.com/api/v1/billing/webhooks/dodo` and the secret goes in
 `DODO_WEBHOOK_SECRET`. Use the lowercase gateway name. After editing `.env.production`, run
@@ -515,6 +519,14 @@ The drill compares row counts and the migration revision with the live database,
 scratch database, and prints the restore time. **That time is how long a recovery takes for a
 database of this size.** It never touches the live database.
 
+**What you can promise (N-012).** You lose at most one day of data: the backup runs nightly at
+02:11 UTC, so the worst case is a failure just before the next one. Measured in campaign session 4,
+on the full stack with the browser suite's data (32 MB, 14 organizations): the encrypted backup took
+under a second and the drill restored it, with every row count matching, in 2 seconds. Expect
+roughly a minute or two per gigabyte on a small server; run the drill after your first real
+month and note the time. Every line of section 9.6's schedule, these two included, runs in the test
+suite against a fresh database exactly as cron runs it (`backend/tests/operational/test_host_cron_lines.py`).
+
 **An off-server copy.** A backup that sits on the server dies with the server. Set
 `FLOWPILOT_BACKUP_MIRROR_CMD` in `sweepers.env` to any command that copies the file whose path
 arrives as `$1`, for example `aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/flowpilot/` or
@@ -599,6 +611,11 @@ FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
 # Is the site up? A check with a 1-minute period and a 5-minute grace (N-017):
 # FLOWPILOT_PUBLIC_URL=https://app.example.com
 # HEARTBEAT_UUID_UPTIME=<check id>
+# Every sweep can ping its own check too: HEARTBEAT_UUID_<NAME> (for example HEARTBEAT_UUID_ERP_POSTINGS).
+# The hourly watchdog reports any of the thirteen sweeps without a success in 26 hours; to be told,
+# point ALERT_WEBHOOK at a Healthchecks.io check's failure address (it accepts the watchdog's POST
+# and emails you):
+# ALERT_WEBHOOK=https://hc-ping.com/<check id>/fail
 EOF
 sudo chown root:flowpilot /etc/flowpilot/sweepers.env && sudo chmod 640 /etc/flowpilot/sweepers.env
 sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-sweepers /etc/cron.d/flowpilot-sweepers
@@ -619,6 +636,22 @@ tail -n 20 /srv/flowpilot/logs/sweep_compliance.log                      # a "SW
 After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
 `compose_backup.log`, `compose_restore_drill.log`), or better, let the monitor tell you.
 
+**Know when something breaks (campaign session 4).** The app emails the addresses in
+`OPERATOR_ALERT_EMAILS` (in `.env.production`; required, the app refuses to start without it) through
+your mail relay when:
+
+- a background job fails every attempt (one email per job type, with the latest error; retry it in
+  Platform admin, Background jobs, once the cause is fixed);
+- a payment event (Stripe or Dodo) cannot be applied, so a plan or invoice may be out of step with the
+  payment dashboard;
+- the API answers `OPERATOR_ALERT_5XX_THRESHOLD` (default 20) requests with a server error within five
+  minutes (look for `Traceback` in `$COMPOSE logs --tail 200 web`);
+- a customer has two live subscriptions (section 9.8: they are being charged twice).
+
+The `ops.alerts` sweep runs every five minutes inside the stack (`worker-scheduler` and `worker-light`);
+the same alert repeats at most once an hour (`OPERATOR_ALERT_REPEAT_MINUTES`) while it keeps happening,
+with the count. Nothing to install on the host.
+
 **Know when the site is down (N-017).** `flowpilot-compose-backups` also runs
 `flowpilot-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
 through Caddy (the API, Postgres and Redis must all answer) and pings `HEARTBEAT_UUID_UPTIME`.
@@ -634,9 +667,86 @@ prints nothing and `0` when the site is up.
 | The site does not load | `$COMPOSE ps`, then `$COMPOSE logs --tail 100 caddy web` |
 | `web` restarts in a loop | `$COMPOSE logs web`: a configuration refusal lists every setting to fix |
 | Emails never arrive | `PLATFORM_SMTP_*` in `.env.production`; then `$COMPOSE logs worker-delivery` |
-| AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is missing or wrong |
+| AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is wrong or out of credit (a missing one stops the app from starting) |
 | Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
 | People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 20 per address per 5 minutes; decided N-018), then `$COMPOSE up -d web` |
 | A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |
+| An alert email says "could not be applied" for a payment event | open Platform admin, Background jobs; compare the organization's plan and seats with the payment dashboard; then section 9.8 if money is involved |
+
+### 9.8 Refunds, and a customer charged twice
+
+**Refunding a payment.** Refunds are made in the payment dashboard, never in FlowPilot (a refund is a
+money decision a person takes, usually after talking to the customer). In Stripe: Payments, open the
+payment, Refund, choose the amount (all or part) and a reason. Make sure the Stripe webhook includes
+`charge.refunded` and `charge.refund.updated` (section 9.2 step 9): FlowPilot then records the refund on
+the customer's invoice ("Refunded" or "Partially refunded"), tells the organization's owners and Billing
+members by email, and shows it in Platform admin, RevOps ("Refunded in the last 30 days"). Dodo Payments
+is the merchant of record and handles refunds in its own dashboard.
+
+**A customer charged twice (alert: "Customer charged twice").** FlowPilot refuses a new checkout while a
+paid subscription is live, but a checkout finished in a browser tab opened *before* the first purchase can
+still create a second subscription at the gateway. FlowPilot keeps the first one (named "recorded" in
+the alert), does not record the second, and emails you at once. The customer is paying for both until you
+act. Within the day:
+
+1. In the Stripe Dashboard open Customers and search for the customer id in the alert. You will see two
+   active subscriptions.
+2. **Keep the recorded one.** Open the *other* one (the id the alert says is not recorded): Actions,
+   Cancel subscription, **Immediately**.
+3. On that subscription's invoice, open the payment and **Refund** it in full (reason: duplicate).
+4. If the customer meant to change plan with that second purchase, change the plan of the *recorded*
+   subscription in the billing portal (N-050) instead. Never cancel the recorded one to keep the
+   duplicate: FlowPilot would then show the organization on Free until the duplicate's next event.
+5. Email the customer: "You were charged twice for your FlowPilot subscription because a second
+   checkout completed. We cancelled the duplicate and refunded {amount}; it reaches your card in 5 to
+   10 business days. Nothing changes in your account."
+6. In FlowPilot, Platform admin, RevOps shows the refund; the organization's Billing page still shows
+   one subscription.
+
+### 9.9 Billing periods, overage and replaying a payment event
+
+**What happens at the end of each billing period (nothing to do).** Stripe charges seats in advance:
+at each period's end it opens the renewal invoice for the next month and charges it about an hour
+later. When FlowPilot receives that invoice (`invoice.created`), it writes the customer's statement for
+the month that just ended (Billing, Invoices: the seats, what the plan included for that many seats,
+and any overage priced from the price book) and adds each overage line to the renewal, so the customer
+pays it with the next month's seats. If that event arrives after Stripe has already charged the
+renewal, the overage goes on the following invoice instead; the statement says which. A subscription
+that ends (cancelled at period end) gets no renewal, so its last month's overage is not charged
+(N-071). Dodo cannot take usage lines yet: on Dodo, statements are written but overage is not billed.
+
+**If a statement is missing.** Every hour the worker closes any period whose renewal never reached
+FlowPilot (more than two hours after it ended); its overage goes on the next invoice and the worker log
+shows `billing.assemble_invoice_backstop`. To close the period of one Stripe invoice by hand (the
+invoice id starts with `in_`):
+
+```bash
+$COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
+with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing.assemble_invoice', payload={'stripe_invoice_id': 'in_...'})"
+```
+
+**Replaying one payment event.** The alert "... events could not be applied" names the event type.
+List those events with their ids and errors:
+
+```bash
+$COMPOSE exec -T db psql -U flowpilot -d flowpilot -c "SELECT id, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
+```
+
+Once the cause is fixed, re-apply one by its id; a replay never charges anything twice:
+
+```bash
+$COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
+with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing.reconcile', payload={'inbound_event_id': '...'})"
+```
+
+**Checking a supplier's bill (monthly).** The authoritative check is Platform admin, COGS: enter the
+supplier's invoice and reconcile it there. An older, optional check compares Groq's usage export for a
+month with what FlowPilot metered: export the month's CSV from the Groq console and queue
+`usage.reconcile` the same way, with `payload={'provider': 'groq', 'period_start':
+'2026-09-01T00:00:00+00:00', 'period_end': '2026-10-01T00:00:00+00:00', 'fetch_options': {'csv_text':
+open('groq-2026-09.csv').read(), 'source_key': 'groq:2026-09'}}` (at least two days after the month
+ends). The job's result in Platform admin, Jobs shows the drift; `alert_raised` is true when it is
+above `RECONCILE_ALERT_BPS` or something was generated but never metered.
+

@@ -296,13 +296,20 @@ def create_config(organization_id: str, payload: dict = Body(...),
     else:
         discovery_url = payload.get("oidc_discovery_url")
         if discovery_url:
-            doc = oidc_gateway.fetch_discovery(discovery_url)
+            # F-371 (campaign session 4): a discovery document or key set the server cannot use
+            # is invalid configuration input, a 422 with the reason, as the SAML metadata URL
+            # above; it fell through to the identity error's default 400.
+            try:
+                doc = oidc_gateway.fetch_discovery(discovery_url)
+                jwks = oidc_gateway.fetch_jwks(doc["jwks_uri"])
+            except IdpConfigError as exc:
+                raise HTTPException(422, exc.message) from exc
             config.oidc_issuer = doc["issuer"]
             config.oidc_authorization_endpoint = doc["authorization_endpoint"]
             config.oidc_token_endpoint = doc["token_endpoint"]
             config.oidc_jwks_uri = doc["jwks_uri"]
             config.oidc_discovery_url = discovery_url
-            config.oidc_jwks_json = oidc_gateway.fetch_jwks(doc["jwks_uri"])
+            config.oidc_jwks_json = jwks
             config.oidc_jwks_cached_at = utcnow()
         else:
             config.oidc_issuer = _optional_text(payload, "oidc_issuer")

@@ -48,6 +48,7 @@ import {
 import { cogsKeys } from "@/services/api/queryKeys";
 import {
   confidenceLabel,
+  COST_BASIS_SOURCE_LABEL,
   formatMicros,
   formatRatio,
   formatSignedMicros,
@@ -670,7 +671,7 @@ export const AdminMarginsHub: React.FC = () => {
                         {entry.unit_margin_micros !== null && entry.unit_margin_micros !== undefined ? perMillion(entry.unit_margin_micros) : <Unknown />}
                       </td>
                       <td className="py-2 text-xs text-muted-foreground">
-                        {entry.cost_basis_source ?? "—"}
+                        {entry.cost_basis_source ? COST_BASIS_SOURCE_LABEL[entry.cost_basis_source] ?? entry.cost_basis_source : "—"}
                       </td>
                     </tr>
                   ))}

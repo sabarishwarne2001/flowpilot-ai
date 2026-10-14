@@ -44,7 +44,7 @@ from app.schemas.usage import (
     PlanListResponse,
     PlanOption,
 )
-from app.services import audit_service, quota_service
+from app.services import audit_service, plan_catalog, quota_service
 from app.services.billing import (
     account_service,
     dunning_service,
@@ -58,6 +58,7 @@ from app.services.billing.portal_service import (
     ReauthenticationRequiredError,
 )
 from app.services.billing.payment_gateway import GatewayNotConfiguredError
+from app.services.billing.stripe_gateway import StripePermanentError
 
 logger = logging.getLogger("app.api.v1.billing")
 
@@ -158,7 +159,8 @@ def list_plans(
         entitlements = [
             PlanEntitlement(
                 event_type=entry.limit_key,
-                limit_quantity=int(entry.max_quantity) if entry.max_quantity is not None else None,
+                # Campaign session 4: Free's 0.25 GB of storage reached the card as 0.
+                limit_quantity=plan_catalog.allowance_quantity(entry.max_quantity),
                 limit_cost_micros=entry.max_cost_micros,
                 overage_policy=entry.overage_policy,
                 period=entry.period.value if hasattr(entry.period, "value") else str(entry.period),
@@ -168,9 +170,8 @@ def list_plans(
 
         # ARCH-29 Tranche 2 (D-1, F-2).
         #
-        # This block previously read
-        #     price_id = getattr(settings, "BILLING_SEAT_PRICE_ID", None)
-        # INSIDE this loop, which is loop-invariant: every tier received the
+        # This block previously read the one global BILLING_SEAT_PRICE_ID setting
+        # (since removed) INSIDE this loop, which is loop-invariant: every tier received the
         # same gateway price while advertising different entitlements. Setting
         # that env var would have charged an Enterprise subscriber the one
         # global amount and granted them Enterprise limits, with nothing in
@@ -193,14 +194,10 @@ def list_plans(
         # books, plus the tier version's own price when no book covers it.
         from app.schemas.usage import PlanPriceOption
 
+        # Campaign session 4: the public price list reads the same function.
         options = [PlanPriceOption(interval=p.interval, currency=p.currency, unit_amount=p.unit_amount_minor,
                                    price_id=p.gateway_price_id, source=p.source)
-                   for p in book_prices if p.tier_key == tier.key]
-        if tier.unit_amount_micros is not None and not any(
-                (o.interval, o.currency) == (tier.billing_interval or "month", tier.currency or "USD") for o in options):
-            options.append(PlanPriceOption(interval=tier.billing_interval or "month", currency=tier.currency or "USD",
-                                           unit_amount=tier.unit_amount_micros // 10_000,
-                                           price_id=tier.gateway_price_id, source="TIER"))
+                   for p in plan_catalog.prices_for_tier(tier, book_prices)]
 
         plans.append(
             PlanOption(
@@ -642,7 +639,21 @@ def create_portal_session(
             organization_id=context.organization_id,
             return_url=(payload.return_url if payload else None),
             authorization_header=authorization,
+            # Campaign session 4 (F-344): a subscriber's pick opens the portal on that change.
+            plan_pick=(
+                portal_service.PlanPick(
+                    quota_tier_key=payload.quota_tier_key, seats=payload.seats,
+                    interval=payload.interval, currency=payload.currency,
+                )
+                if payload is not None and payload.quota_tier_key
+                else None
+            ),
         )
+    except CheckoutConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except StripePermanentError as exc:
+        # F-344: a subscription Stripe cannot move to the picked plan (no licensed item).
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ReauthenticationRequiredError as exc:
         audit_service.record(
             db,

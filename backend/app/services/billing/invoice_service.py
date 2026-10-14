@@ -481,13 +481,18 @@ def assemble(
     if unsealed:
         notes["unsealed_event_types"] = sorted(unsealed)
 
+    # Campaign session 4 (F-339). A paid plan's allowances are per seat, pooled across the
+    # organization (N-044): the tier's figure times the seats billed, exactly as
+    # `quota_service.seat_factor` scales them when usage is admitted. One seat's allowance here
+    # billed a 10-seat organization overage on nine tenths of what its plan includes.
+    seat_factor = Decimal(max(1, seats))
     for tier_entry in tier_entries:
         limit_key = tier_entry.limit_key
         if limit_key == "*":
             continue
 
         allowance = (
-            Decimal(str(tier_entry.max_quantity))
+            Decimal(str(tier_entry.max_quantity)) * seat_factor
             if tier_entry.max_quantity is not None
             else None
         )
@@ -711,6 +716,30 @@ def void_invoice(db: Session, *, invoice: Invoice, reason: str) -> Invoice:
         "invoice.voided", extra={"number": invoice.number, "reason": reason}
     )
     return invoice
+
+
+def record_refund(
+    db: Session,
+    *,
+    invoice: Invoice,
+    amount_refunded_micros: int,
+    refunded_at: Optional[datetime] = None,
+) -> int:
+    """Set how much of the invoice's payment has been refunded; return the change (N-069).
+
+    The figure is the gateway's running total for the charge, so this sets rather than adds: a
+    repeated event changes nothing, events in any order converge, and a refund that later fails
+    brings it back down. Never more than was paid (also a database check). The invoice keeps its
+    status: the payment happened, and the gateway shows a refunded invoice as paid too.
+    """
+    target = max(0, min(int(amount_refunded_micros), int(invoice.amount_paid_micros)))
+    change = target - int(invoice.amount_refunded_micros or 0)
+    if change:
+        invoice.amount_refunded_micros = target
+        if change > 0:
+            invoice.refunded_at = refunded_at or datetime.now(timezone.utc)
+        db.flush()
+    return change
 
 
 def record_payment(

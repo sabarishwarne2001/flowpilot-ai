@@ -185,7 +185,7 @@ export const TwinDrawer: React.FC<TwinDrawerProps> = ({ workspaceId, workItemId,
                 ) : (
                   <ul className="space-y-2">
                     {doc.links.map((l: MeshLink) => (
-                      <li key={l.id} className={`rounded-lg border px-3 py-2.5 ${l.status === "REJECTED" ? "border-dashed border-border opacity-60" : "border-border/70"}`} data-testid="twin-link">
+                      <li key={l.id} className={`rounded-lg border px-3 py-2.5 ${l.status === "REJECTED" ? "border-dashed border-border fp-inactive" : "border-border/70"}`} data-testid="twin-link">
                         <div className="flex items-start justify-between gap-2">
                           <div className="min-w-0 text-sm">
                             {l.outgoing || !l.directed ? (

@@ -212,7 +212,10 @@ const Batches: React.FC = () => {
               ) : null}
             </div>
           ) : (
-            <div className="fp-card overflow-x-auto">
+            <div className="fp-card relative overflow-x-auto">
+              {/* relative: a dispatched batch's lane chips carry screen-reader labels that are
+                  absolutely placed; without an anchor they escaped this scroll box and the page
+                  scrolled sideways on a phone (F-410). */}
               <table className="w-full min-w-[640px] border-collapse text-left">
                 <thead>
                   <tr className="sticky top-0 border-b border-border bg-muted/40 text-[11px] font-semibold uppercase tracking-[0.06em] text-muted-foreground">

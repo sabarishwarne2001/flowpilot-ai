@@ -34,14 +34,14 @@ from app.models.workspace import Workspace, WorkspaceRole, WorkspaceStatus
 from app.models.audit_log import AuditAction, AuditResourceType
 from app.services import audit_service
 
-from app.core.ai_models import PLATFORM_DEFAULT_MODEL
+from app.core.ai_models import platform_default_model
 from app.schemas.ai_settings import AISettingsUpdate, AIProvider
 from app.schemas.document_settings import DocumentSettingsCreate
 
 logger = logging.getLogger("app.services.workspace_service")
 
 
-def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid.UUID) -> None:
+def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid.UUID | None) -> None:
     """A new workspace's AI and document settings, inside the caller's transaction.
 
     Every workspace needs both before its first question or upload: the assistant,
@@ -59,8 +59,9 @@ def add_default_settings(db: Session, *, workspace_id: uuid.UUID, actor_id: uuid
             **AISettingsUpdate(
                 provider=AIProvider.GROQ,
                 # F-196. Was "mixtral-8x7b-32768": retired by Groq (March 2025), absent from
-                # AI_MODELS and from the price book. The platform's listed default instead.
-                model=PLATFORM_DEFAULT_MODEL,
+                # AI_MODELS and from the price book. The platform's default instead
+                # (GROQ_MODEL_NAME, F-353).
+                model=platform_default_model(),
                 temperature=0.7,
                 max_output_tokens=2048,
                 top_p=1.0,

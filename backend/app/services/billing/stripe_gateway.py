@@ -145,6 +145,43 @@ class StripeInvoiceSnapshot:
 
 
 @dataclass(frozen=True)
+class StripeInvoiceItemDraft:
+    """One line FlowPilot adds to a customer's Stripe invoice (campaign session 4, F-339)."""
+
+    key: str
+    amount_cents: int
+    description: str
+    metadata: dict[str, str] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class SubscriptionUpdate:
+    """A subscriber's picked plan and seats, confirmed in the billing portal (campaign session 4, F-344)."""
+
+    subscription_id: str
+    price_id: str
+    quantity: int
+
+
+@dataclass(frozen=True)
+class StripeChargeSnapshot:
+    """A charge, in Stripe's units (cents): what was paid and how much of it was refunded.
+
+    Campaign session 4 (N-069). `amount_refunded_cents` is Stripe's running total across every
+    refund of the charge, so re-reading it is the whole reconciliation, in any event order.
+    """
+
+    id: str
+    invoice_id: Optional[str]
+    customer_id: Optional[str]
+    currency: Optional[str]
+    amount_cents: int
+    amount_refunded_cents: int
+    refunded: bool
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class StripeSeatChangePreview:
     """What Stripe says a seat change costs, before anyone commits to it.
 
@@ -660,6 +697,30 @@ class StripeGateway:
             raw=raw,
         )
 
+    def update_customer_name(
+        self, *, customer_id: str, name: str
+    ) -> StripeCustomerSnapshot:
+        """Campaign session 4 (F-365). The name Stripe prints on invoices and receipts."""
+        client = self._stripe_client()
+        try:
+            obj = client.v1.customers.update(
+                customer_id,
+                {"name": name},
+                {"timeout": int(self._timeout_seconds * 1000)},
+            )
+        except Exception as exc:
+            raise self._classify(
+                exc, context=f"customer.update {customer_id}"
+            ) from exc
+        raw = _as_mapping(obj)
+        return StripeCustomerSnapshot(
+            id=str(raw.get("id") or customer_id),
+            email=(str(raw["email"]) if raw.get("email") else None),
+            currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+            metadata=_string_metadata(raw.get("metadata")),
+            raw=raw,
+        )
+
     def set_subscription_seats(
         self,
         *,
@@ -705,6 +766,51 @@ class StripeGateway:
             ) from exc
 
         return self._snapshot_subscription(_as_mapping(obj), state_version=issued_at)
+
+    def add_invoice_items(
+        self,
+        *,
+        customer_id: str,
+        currency: str,
+        items: Sequence[StripeInvoiceItemDraft],
+        invoice_id: Optional[str] = None,
+        subscription_id: Optional[str] = None,
+    ) -> list[str]:
+        """Add one-off lines (a closed period's overage) to what the customer is charged next.
+
+        Campaign session 4 (F-339, N-071). With `invoice_id`, onto that DRAFT invoice (the renewal
+        Stripe opens at the period boundary and finalizes about an hour later); without one, as
+        pending items the subscription's next invoice collects. Each item carries its own
+        idempotency key, so a retried reconcile never charges a line twice. Returns the item ids.
+        """
+        client = self._stripe_client()
+        created: list[str] = []
+        for item in items:
+            params: dict[str, Any] = {
+                "customer": customer_id,
+                "amount": int(item.amount_cents),
+                "currency": str(currency).lower(),
+                "description": item.description,
+                "metadata": dict(item.metadata),
+            }
+            if invoice_id:
+                params["invoice"] = invoice_id
+            elif subscription_id:
+                params["subscription"] = subscription_id
+            try:
+                obj = client.v1.invoice_items.create(
+                    params,
+                    {
+                        "idempotency_key": idempotency_key(
+                            "invoiceitem", item.key, invoice_id or "next"
+                        ),
+                        "timeout": int(self._timeout_seconds * 1000),
+                    },
+                )
+            except Exception as exc:
+                raise self._classify(exc, context=f"invoice item {item.key}") from exc
+            created.append(str(_as_mapping(obj).get("id") or ""))
+        return created
 
     def preview_seat_change(
         self,
@@ -846,16 +952,65 @@ class StripeGateway:
     def fetch_invoice_total_cents(self, invoice_id: str) -> int:
         return self.fetch_invoice(invoice_id).total_cents
 
+    def fetch_charge(self, charge_id: str) -> StripeChargeSnapshot:
+        client = self._stripe_client()
+        try:
+            obj = client.v1.charges.retrieve(
+                charge_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(exc, context=f"charge {charge_id}") from exc
+        return charge_snapshot(_as_mapping(obj), fallback_id=charge_id)
+
+    def fetch_refund_charge_id(self, refund_id: str) -> str:
+        """The charge a refund belongs to, read from the gateway (not the event body)."""
+        client = self._stripe_client()
+        try:
+            obj = client.v1.refunds.retrieve(
+                refund_id, {}, {"timeout": int(self._timeout_seconds * 1000)}
+            )
+        except Exception as exc:
+            raise self._classify(exc, context=f"refund {refund_id}") from exc
+        return _customer_id(_as_mapping(obj).get("charge"))
+
     # -- sessions (Tranche 4) -------------------------------------------
 
     def create_portal_session(
-        self, *, customer_id: str, return_url: Optional[str] = None
+        self,
+        *,
+        customer_id: str,
+        return_url: Optional[str] = None,
+        subscription_update: Optional[SubscriptionUpdate] = None,
     ) -> Any:
         from app.services.billing.portal_service import EphemeralSession
 
         params: dict[str, Any] = {"customer": customer_id}
         if return_url:
             params["return_url"] = return_url
+        if subscription_update is not None:
+            # Campaign session 4 (F-344). The portal opens on the confirmation of the plan and seats
+            # the customer picked in FlowPilot, prorated, instead of on its home page where the pick
+            # was lost. Stripe changes one item of the subscription: its licensed (seat) item.
+            item_id = self._primary_item_id(subscription_update.subscription_id)
+            if item_id is None:
+                raise StripePermanentError(
+                    f"Subscription {subscription_update.subscription_id} has no licensed item "
+                    "to move to another plan."
+                )
+            flow: dict[str, Any] = {
+                "type": "subscription_update_confirm",
+                "subscription_update_confirm": {
+                    "subscription": subscription_update.subscription_id,
+                    "items": [{
+                        "id": item_id,
+                        "price": subscription_update.price_id,
+                        "quantity": int(subscription_update.quantity),
+                    }],
+                },
+            }
+            if return_url:
+                flow["after_completion"] = {"type": "redirect", "redirect": {"return_url": return_url}}
+            params["flow_data"] = flow
 
         client = self._stripe_client()
         try:
@@ -988,6 +1143,21 @@ class StripeGateway:
 # ============================================================================
 
 
+def charge_snapshot(raw: Mapping[str, Any], *, fallback_id: str = "") -> StripeChargeSnapshot:
+    """A charge object (from the API or a test's fake) as a snapshot."""
+    invoice = raw.get("invoice")
+    return StripeChargeSnapshot(
+        id=str(raw.get("id") or fallback_id),
+        invoice_id=_customer_id(invoice) if invoice else None,
+        customer_id=_customer_id(raw.get("customer")) if raw.get("customer") else None,
+        currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+        amount_cents=int(raw.get("amount") or 0),
+        amount_refunded_cents=int(raw.get("amount_refunded") or 0),
+        refunded=bool(raw.get("refunded", False)),
+        raw=dict(raw),
+    )
+
+
 def idempotency_key(*parts: str) -> str:
     joined = "|".join(str(part) for part in parts if part is not None)
     digest = hashlib.sha256(joined.encode("utf-8")).hexdigest()[:48]
@@ -1036,6 +1206,7 @@ __all__ = [
     "StripeSubscriptionSnapshot",
     "StripeSeatChangePreview",
     "StripeTransientError",
+    "SubscriptionUpdate",
     "configured_secrets",
     "get_gateway",
     "idempotency_key",

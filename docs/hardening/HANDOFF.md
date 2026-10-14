@@ -261,8 +261,9 @@ its reason).
   test fails on a new raw client. An organization's lockdown and rules are enforced (live test).
 - **Audit (F-294, F-295, F-304, N-067).** Identity and webhook changes are audited. The nightly
   ARCH-07 sweep deletes audit entries per organization by its own retention period (blank keeps
-  them). **On deploy:** the host cron needs `AUDIT_SWEEPER_DATABASE_URL` (the sweeper role, the only
-  one allowed to delete audit rows) and the four host crons installed
+  them). **On deploy:** the four host crons installed (session 4, F-355: the sweep deletes through
+  the application's database unless `AUDIT_SWEEPER_DATABASE_URL` names a separate login; before,
+  it skipped or was refused by the audit trigger every night)
   (`backend/deploy/cron.d/flowpilot-sweepers`: arch07, arch09, identity, invitations).
 - **Display layer (N-064, F-298).** One module per side: `frontend/src/utils/displayTime.ts` and
   `backend/app/core/display_format.py`. The person's own zone and language win; the open
@@ -319,3 +320,102 @@ its reason).
   test database at start); after a backend change restart the e2e API (`kill` the pid in
   `/tmp/flowpilot-e2e-logs/pids/api.pid`, then `E2E_LLM=1 frontend/e2e/scripts/start-stack.sh`)
   before running browser specs.
+
+## Session 4 → later sessions
+
+Session 4 (experience, performance, operations, launch certification; then, at the owner's
+request, TruthMesh, Batch Operations and Document Packs in depth) fixed F-324 to F-409 (FINDINGS.md,
+session 4 sections), took decisions N-069 to N-077 (NEEDS-OWNER.md, each
+`DECIDED (campaign session 4)`), and closed every ledger row (`campaign_slices --check all` exits 0).
+**What is left is listed, with instructions, in `docs/hardening/NEXT-SESSION-PROMPT.md`** — paste it
+into a new Claude Code session to continue.
+
+**Build on these (all sessions):**
+- **Browser tests are the proof for screens.** The suite (`frontend/e2e/tests`, 58 files, 811 tests) runs
+  in CI against the production bundle with the worker on; it is a required check. New since this
+  session: every page at four widths (74), every page in light and dark through axe-core (72), the
+  first run (73), TruthMesh (75), batch operations (76) and document packs (77) in depth, each on a
+  tenant of its own so they never race the shared seeded tenants.
+- **No database work on the event loop.** An `async def` route must hand database work to the
+  threadpool and reload expired objects there (F-218, F-363); a test fails on a query run on the loop.
+- **Mesh writes are serialized per workspace (F-382).** Anything that writes TruthMesh rows takes
+  `truthmesh.service.lock_workspace` first.
+- **Uploaded archives are hostile (F-390, F-407).** Package verification caps what it reads and
+  turns every unreadable entry into a verdict; any new upload parser needs the same.
+- **Encryption-key rotation covers every secret column (F-370).** A new `*_encrypted` or
+  `*_ciphertext` column fails a test until the rotation sweep covers it.
+- **Emails:** every transactional email uses `BASE_EMAIL_HTML_LAYOUT` (F-380); a new one must pass
+  `test_emails_render_in_mail_clients.py`.
+- **Say what a feature does.** Document packs today apply their field list only (N-075, F-408);
+  PRODUCT-NEXT item 10 wires the rest.
+
+**Known, not done (details and order in NEXT-SESSION-PROMPT.md):** the audit's unverified TruthMesh,
+batch and pack items (FINDINGS.md, "Session 4 (continued) — … unverified"); N-076 and N-077 to build;
+32 features whose browser coverage is partial (the coverage-gap table in the prompt file); Tailwind 4
+and least-privilege database roles (N-074).
+
+## Owner launch checklist
+
+Only you can do these. They are in the order to do them; each says where the detailed steps are.
+Tick them in a copy of this file or in your notes. Nothing here needs code changes.
+
+**A. Accounts and keys (a day or two before the first deploy)**
+1. **Rotate every key ever pasted into a chat or committed** (session 3's history scan lists them in
+   SECURITY-REVIEW.md). Create new ones; the old ones must stop working.
+2. **Stripe, test mode first** (N-026, N-050, N-072, F-125):
+   - one per-seat monthly price for Developer ($49), Business ($299) and Enterprise ($799); put their
+     ids in `GATEWAY_PRICE_ID_DEVELOPER/BUSINESS/ENTERPRISE` in `.env.production` (read by
+     `seed_quota_tiers.py`);
+   - optional yearly prices: Developer $490, Business $2,990 per seat (N-051);
+   - Developers → Webhooks: the endpoint, the events and the signing secret exactly as RUNBOOK §9
+     step 9 lists them (`/api/v1/billing/webhooks/stripe`; the secret goes in `STRIPE_WEBHOOK_SECRETS`);
+   - Settings → Billing → Customer portal: allow customers to **switch plans** between Developer,
+     Business and Enterprise with **proration**, to **change quantities**, to update payment methods
+     and to cancel at the period's end (the plan picker opens the portal on the chosen plan and
+     seats, F-344);
+   - Billing → Revenue recovery → Retries: Smart Retries, and "if all retries fail" → **mark the
+     subscription as unpaid** (not cancel) (N-072);
+   - run one test checkout, one plan change in the portal and one cancellation; then switch to live
+     keys and repeat with a real card for one seat.
+3. **Postmark** for email (N-027): its SMTP server and token in the `PLATFORM_SMTP_*` settings of
+   `.env.production` (the app refuses to start without a mail server), the SPF and DKIM records it
+   gives you added at your DNS provider, and a sender signature for `no-reply@` your domain.
+4. **Operator alerts** (N-070): `OPERATOR_ALERT_EMAILS` = your address (the app refuses to start
+   without it in production).
+5. **Groq**: a key in `GROQ_API_KEY`; on Groq's and Google's price pages, check the prices in
+   `backend/scripts/seed_price_book.py` (N-054).
+
+**B. Server (RUNBOOK §9)**
+6. A server of **4 vCPU, 16 GB RAM, 160 GB SSD** (COSTS.md), Docker installed.
+7. **DNS:** an A record for `app.YOUR-DOMAIN` pointing at the server **before** Caddy's first start
+   (Caddy gets the certificate on its first request); a mailbox for `admin@` (N-028).
+8. Follow RUNBOOK §9.1 to §9.3: clone, `.env.production` from the template, pin images by digest
+   (N-017), `docker compose up -d`, then `seed_quota_tiers.py` and `seed_price_book.py --version auto`
+   (also on every later deploy, §9.3).
+9. **Backups (§9.4):** create `/etc/flowpilot/backup.key` and copy it into your password manager
+   **now**; set `FLOWPILOT_BACKUP_MIRROR_CMD` to copy each backup to another provider; run one backup
+   and one restore drill by hand and note the restore time.
+10. **Scheduled jobs and monitoring (§9.6):** install `/etc/flowpilot/sweepers.env` and the two cron
+    files, switch off the three point-in-time lines with the command given, create free
+    Healthchecks.io checks (uptime with a 1-minute period, the backup, the restore drill, the
+    retention sweep) and set `ALERT_WEBHOOK` for the sweeper watchdog. Check them once by hand.
+11. **The CPU-only image** (F-045): build it on a machine that can reach download.pytorch.org and
+    push it to your registry; use its digest.
+
+**C. Before the first customer**
+12. **Legal:** have counsel replace the placeholder terms and privacy pages (`/terms`, `/privacy`;
+    N-029, N-073) and add a support or sales email to the pricing page footer.
+13. **Real-model spot checks** (sessions 2 and 3): a prompt-injection document, an invoice with many
+    line items, an Indian GST invoice, a photographed page and a handwritten page; check the fields
+    and the review queue. Real OCR (PaddleOCR) on scans was never run in the test sandbox.
+14. **Enterprise identity on a staging domain:** claim and verify a real domain with a TXT record
+    and sign in once through a real Okta or Entra ID test tenant (`branding.domain` and the live
+    IdP were stood in by tests).
+15. **One SQL check** for workspace regional settings saved before F-320 (HANDOFF, session 3).
+16. Merge the last pull request; deploy; sign up as a new customer yourself and go through the
+    first-run checklist end to end.
+17. **After any encryption-key rotation** (`EMAIL_ENCRYPTION_KEYS`): run the re-encryption sweep and
+    its `--verify` (RUNBOOK) before removing the old key; F-370 made it cover every secret.
+18. **Healthcare customers:** tell them the HIPAA redaction profile removes names, dates of birth,
+    SSNs, card numbers, emails and phone numbers; the other Safe Harbor identifiers need a manual
+    pass (N-077).

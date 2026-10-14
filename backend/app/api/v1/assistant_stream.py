@@ -5,7 +5,7 @@ from fastapi import Request
 
 import logging
 import uuid
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import StreamingResponse
@@ -35,6 +35,16 @@ SSE_HEADERS = {
     "Connection": "keep-alive",
     "X-Accel-Buffering": "no",
 }
+
+
+def _load_expired(db: Session, *objects: Any) -> None:
+    """Reload any ORM object whose attributes a commit expired (F-363)."""
+    from sqlalchemy import inspect as sa_inspect
+
+    for obj in objects:
+        state = sa_inspect(obj, raiseerr=False)
+        if state is not None and state.session is db and state.expired_attributes:
+            db.refresh(obj)
 
 
 def _prepare_plan(
@@ -72,6 +82,12 @@ def _prepare_plan(
         # reloads it through this session on the event loop.
         db.expire_on_commit = False
         db.commit()
+        # Campaign session 4 (F-363). A commit earlier in `prepare` (expire_on_commit
+        # still on) had already expired them, so the stream's first read of the
+        # provider reloaded both rows on the event loop; with the connection pool
+        # spent that read waited up to pool_timeout and froze the whole API. Load
+        # whatever is expired here, in the threadpool.
+        _load_expired(db, plan.conversation, getattr(plan.ai_settings, "_base", plan.ai_settings))
 
     except SpendLimitExceededError as exc:
         db.rollback()

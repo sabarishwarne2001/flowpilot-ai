@@ -106,3 +106,6 @@ def downgrade() -> None:
         "ix_workspace_invitations_workspace_id", table_name="workspace_invitations"
     )
     op.drop_table("workspace_invitations")
+    # Campaign session 4 (F-330): the type the upgrade created goes with its table, or a second
+    # upgrade from base fails on it.
+    op.execute("DROP TYPE IF EXISTS invitation_status")

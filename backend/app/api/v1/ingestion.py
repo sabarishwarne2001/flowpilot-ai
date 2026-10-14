@@ -593,14 +593,17 @@ def set_preset_enabled(
     context: deps.TenantContext = Depends(deps.RequireWorkspaceAdmin),
 ) -> PresetResponse:
     try:
+        # F-399. Look the pack up first: an unknown id, or another
+        # organization's own pack, is a 404 as it is on apply -- not a 400
+        # telling the caller to apply something they cannot see.
+        preset = preset_service.get_preset(
+            db, organization_id=context.organization_id, preset_id=preset_id
+        )
         applied = preset_service.set_enabled(
             db,
             workspace_id=context.workspace_id,
             preset_id=preset_id,
             enabled=payload.enabled,
-        )
-        preset = preset_service.get_preset(
-            db, organization_id=context.organization_id, preset_id=preset_id
         )
     except preset_service.PresetError as exc:
         db.rollback()

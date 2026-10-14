@@ -40,13 +40,6 @@ from app.crud.notification import (
     mark_all_notifications_as_read,
     delete_notification,
 )
-from app.crud.email_settings import (
-    create_email_settings,
-    get_email_settings,
-    update_email_settings,
-    delete_email_settings,
-    upsert_email_settings,
-)
 from app.crud.assistant import (
     create_conversation,
     get_document_conversation,
@@ -166,13 +159,6 @@ __all__ = [
     "update_notification_delivery_status",
     "mark_all_notifications_as_read",
     "delete_notification",
-    
-    # email_settings
-    "create_email_settings",
-    "get_email_settings",
-    "update_email_settings",
-    "delete_email_settings",
-    "upsert_email_settings",
     
     # assistant / conversations
     "create_conversation",

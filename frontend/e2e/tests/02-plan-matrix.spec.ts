@@ -37,6 +37,7 @@ const WS_PROBES: Record<string, { path: string; plan: Plan }> = {
   "ws:corroboration": { path: "corroboration/runs", plan: "enterprise" },
   "ws:truthmesh": { path: "truthmesh/overview", plan: "business" },
   "ws:assertion-reviews": { path: "assertions/clause-checks", plan: "enterprise" },
+  "ws:batches": { path: "processing-batches", plan: "business" },
 };
 
 const ORG_PROBES: Record<string, { path: string; plan: Plan }> = {

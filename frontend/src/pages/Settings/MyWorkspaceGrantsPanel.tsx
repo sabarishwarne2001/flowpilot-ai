@@ -119,7 +119,7 @@ export const MyWorkspaceGrantsPanel: React.FC = () => {
                   workspace.archived ? "bg-muted/30" : ""
                 }`}
               >
-                <div className={`min-w-0 ${workspace.archived ? "opacity-70" : ""}`}>
+                <div className={`min-w-0 ${workspace.archived ? "fp-inactive" : ""}`}>
                   <p className="truncate text-sm font-medium text-foreground">
                     {workspace.workspace_name}
                   </p>

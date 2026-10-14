@@ -407,7 +407,9 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
         />
       </label>
 
-      <div className="mb-2 flex items-center gap-1" role="tablist" aria-label="Conversation type">
+      <div className="mb-2 flex items-center gap-1">
+        {/* Session 4 (§A.3, axe): a tablist holds only tabs; the Archived toggle sits beside it. */}
+        <div className="flex items-center gap-1" role="tablist" aria-label="Conversation type">
         {TABS.map((tab) => (
           <button
             key={tab.key}
@@ -424,6 +426,7 @@ const ConversationSidebar: React.FC<ConversationSidebarProps> = ({
             {tab.label}
           </button>
         ))}
+        </div>
         <button
           type="button"
           onClick={() => setArchived((value) => !value)}

@@ -78,14 +78,45 @@ def _assert_retention_window_matches_trigger(session: Session) -> None:
         )
 
 
-def _audit_sweeper_session() -> Optional[Session]:
-    if settings.AUDIT_SWEEPER_DATABASE_URL is None:
-        return None
-    engine = create_engine(
-        settings.AUDIT_SWEEPER_DATABASE_URL.get_secret_value(),
-        pool_pre_ping=True,
+def _audit_sweeper_session() -> Session:
+    """The connection audit deletions go through (campaign session 4, F-355).
+
+    AUDIT_SWEEPER_DATABASE_URL names a separate database login for them, where the operator made
+    one; otherwise the application's own database, which is what the shipped deployment has (one
+    database user). Either way a delete passes the audit trigger only inside `delete_as_sweeper`.
+    """
+    url = (
+        settings.AUDIT_SWEEPER_DATABASE_URL.get_secret_value()
+        if settings.AUDIT_SWEEPER_DATABASE_URL is not None
+        else settings.sqlalchemy_database_uri
     )
+    engine = create_engine(url, pool_pre_ping=True)
     return sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)()
+
+
+def delete_as_sweeper(session: Session, where: str, params: dict) -> int:
+    """Delete one batch of audit rows matching `where`, as the retention sweeper; returns the count.
+
+    The audit trigger refuses every UPDATE, and every DELETE except one made by a session that has
+    named itself the sweeper (`flowpilot.audit_sweeper_role` = its own login) of a row older than
+    400 days. The name is set for this transaction only, so nothing else on the connection, and no
+    application code (which never sets it), can delete an audit entry. It guards against mistakes,
+    not against someone holding the database password: that user can drop the trigger.
+    """
+    session.execute(text("SELECT set_config('flowpilot.audit_sweeper_role', session_user, true)"))
+    return session.execute(
+        text(
+            f"""
+            DELETE FROM audit_logs
+             WHERE id IN (
+                   SELECT id FROM audit_logs
+                    WHERE {where}
+                    ORDER BY created_at
+                    LIMIT :batch)
+            """
+        ),
+        {"batch": BATCH_SIZE, **params},
+    ).rowcount
 
 
 def audit_retention_cutoffs(session: Session, *, now: datetime) -> list[tuple[uuid.UUID, datetime]]:
@@ -115,13 +146,6 @@ def sweep_audit_retention(*, dry_run: bool) -> JobResult:
     result = JobResult(job="audit-retention", dry_run=dry_run)
     session = _audit_sweeper_session()
 
-    if session is None:
-        result.skipped_reason = (
-            "AUDIT_SWEEPER_DATABASE_URL is not set. Skipping audit deletion."
-        )
-        logger.warning("audit-retention SKIPPED: %s", result.skipped_reason)
-        return result
-
     try:
         _assert_retention_window_matches_trigger(session)
         with SessionLocal() as app_session:
@@ -135,19 +159,7 @@ def sweep_audit_retention(*, dry_run: bool) -> JobResult:
             if dry_run:
                 continue
             while True:
-                deleted = session.execute(
-                    text(
-                        f"""
-                        DELETE FROM audit_logs
-                         WHERE id IN (
-                               SELECT id FROM audit_logs
-                                WHERE {_PAST_CUTOFF}
-                                ORDER BY created_at
-                                LIMIT :batch)
-                        """
-                    ),
-                    {**window, "batch": BATCH_SIZE},
-                ).rowcount
+                deleted = delete_as_sweeper(session, _PAST_CUTOFF, window)
                 session.commit()
                 if not deleted:
                     break

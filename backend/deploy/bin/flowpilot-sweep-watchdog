@@ -6,7 +6,11 @@ CONFIG_FILE="${FLOWPILOT_SWEEPER_ENV:-/etc/flowpilot/sweepers.env}"
 
 TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
 DEADLINE_SECONDS="${SWEEPER_DEADLINE_SECONDS:-93600}"
-SWEEPERS=(arch07 identity invitations arch09)
+# Every sweep in cron.d/flowpilot-sweepers that a Compose deployment runs (the three
+# point-in-time-recovery lines are switched off there, RUNBOOK §9.6). Campaign session 4 (F-346):
+# the list named four of the thirteen, so a retention purge or ERP retry sweep that stopped for good
+# was never reported. A deployment that runs fewer sweeps sets WATCHED_SWEEPERS in sweepers.env.
+read -r -a SWEEPERS <<< "${WATCHED_SWEEPERS:-arch07 identity invitations arch09 compliance extraction_memory entities cases corroboration obligations erp_postings process revops}"
 
 NOW="$(date -u +%s)"
 STALE=()

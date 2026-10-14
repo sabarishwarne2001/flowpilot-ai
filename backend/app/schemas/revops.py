@@ -115,6 +115,27 @@ class PromoCodeOut(BaseModel):
     redemptions: dict[str, int] = {}
 
 
+class PromoRedemptionOut(BaseModel):
+    """One use of a promo code (campaign session 4: the console listed counts only)."""
+
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    organization_name: str
+    organization_slug: str
+    status: str
+    tier_key: str
+    billing_interval: str
+    currency: str
+    list_amount_micros: int
+    discount_micros: int
+    contract_id: Optional[uuid.UUID] = None
+    contract_number: Optional[str] = None
+    reserved_at: datetime
+    expires_at: datetime
+    redeemed_at: Optional[datetime] = None
+    released_at: Optional[datetime] = None
+
+
 class PromoActiveIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -239,6 +260,8 @@ class RevenueMetricsOut(BaseModel):
     compare_days: int
     currencies: dict[str, dict[str, Any]]
     receivables: dict[str, dict[str, int]]
+    #: Campaign session 4 (N-069): per currency, money refunded at the gateway in the window.
+    refunds: dict[str, dict[str, int]] = {}
     unpriced_subscriptions: list[dict[str, Any]]
     promo_redemptions: dict[str, dict[str, int]]
     snapshots: list[dict[str, Any]]

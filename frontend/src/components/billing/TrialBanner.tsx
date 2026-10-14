@@ -111,6 +111,8 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
     );
   }
 
+  // Campaign session 4 (F-342): a former customer whose subscription ended is not told about a trial.
+  const endedTitle = trial.lapsed ? "Your subscription has ended" : "Your free trial has ended";
   const onPlansPage = pathname.startsWith(plansPath);
   const closeDialog = () => {
     writeDismissed(organizationId);
@@ -127,7 +129,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-3">
           <Lock className="h-5 w-5 shrink-0 text-destructive" aria-hidden="true" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-destructive">Your free trial has ended</p>
+            <p className="text-sm font-semibold text-destructive">{endedTitle}</p>
             <p className="mt-0.5 text-sm text-foreground/80">
               You can still read, search and export everything. New uploads, the assistant
               and automations are paused until {canChoosePlan ? "you choose" : "someone chooses"} a
@@ -144,7 +146,7 @@ export const TrialBanner: React.FC<TrialBannerProps> = ({
       <ConfirmDialog
         open={!dismissed && !onPlansPage}
         tone="primary"
-        title="Your free trial has ended"
+        title={endedTitle}
         message={
           canChoosePlan
             ? "Choose a plan to upload documents, ask the assistant and run automations again. Nothing has been deleted: everyone can still read, search and export in the meantime."

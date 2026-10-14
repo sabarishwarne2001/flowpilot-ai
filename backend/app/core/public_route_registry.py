@@ -251,6 +251,16 @@ PUBLIC_ROUTES: tuple[PublicRoute, ...] = (
         credential="none — returns image bytes or 404",
         rate_limit_policy="POLICY_PUBLIC_READ",
     ),
+    # Campaign session 4 (CAMPAIGN-MAP 4.3). The price list behind the public
+    # /pricing page: the published plans, their prices and the trial length.
+    # The same answer for everyone; nothing about an organization or a person.
+    PublicRoute(
+        path="/api/v1/pricing",
+        methods=("GET",),
+        phase="S4-PUBLIC-FACE",
+        credential="none — the published price list, no tenant data",
+        rate_limit_policy="POLICY_PUBLIC_READ",
+    ),
 )
 
 

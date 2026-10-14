@@ -22,6 +22,8 @@ import { useActiveWorkspaceId } from "@/hooks/useActiveWorkspace";
 import { dashboardKeys, invalidateWorkspace, keepPreviousWithinWorkspace } from "@/services/api/queryKeys";
 
 import { UploadTray } from "@/components/common/UploadTray";
+import { GettingStarted } from "@/components/onboarding/GettingStarted";
+import { canInviteMembers } from "@/permissions/organizationPermissions";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
@@ -239,6 +241,18 @@ export const Dashboard: React.FC = () => {
       </header>
 
       {canUpload && <UploadTray compact onUploadSuccess={handleUploadSuccess} />}
+
+      {resolvedTenant && workspaceId && metrics ? (
+        <GettingStarted
+          workspaceId={workspaceId}
+          organizationId={resolvedTenant.organization.organization_id}
+          orgSlug={orgSlug}
+          workspaceSlug={workspaceSlug}
+          totalDocuments={metrics.total_work_items}
+          canUpload={canUpload}
+          canInvite={canInviteMembers(resolvedTenant.organizationRole)}
+        />
+      ) : null}
 
       <section aria-label="Dashboard Metrics" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         <KpiCard

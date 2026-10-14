@@ -1,9 +1,12 @@
 import React, { useEffect } from "react";
+import { Link } from "react-router-dom";
 
 import { Brand } from "@/components/branding/Brand";
+import { PUBLIC_PAGE_LINKS } from "@/constants/routes";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { isHexColour } from "@/utils/brandTheme";
 import { DocumentShowcase } from "./DocumentShowcase";
+import { AUTH_MUTED_LINK } from "./authStyles";
 
 /**
  * Chrome for every page before sign-in: the form on an elevated card on the
@@ -79,9 +82,22 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
           </div>
         </div>
 
-        <p className="relative z-10 text-center text-xs text-muted-foreground lg:hidden">
-          © {year} {brandLabel}
-        </p>
+        <footer className="relative z-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
+          {/* Campaign session 4: pricing, terms and privacy, on the platform's own address only.
+              On a white-labelled domain FlowPilot's pages would name the vendor the tenant hides. */}
+          {custom ? null : (
+            <nav aria-label="Pricing and legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              {PUBLIC_PAGE_LINKS.map((link) => (
+                <Link key={link.to} to={link.to} className={AUTH_MUTED_LINK}>
+                  {link.label}
+                </Link>
+              ))}
+            </nav>
+          )}
+          <p className="lg:hidden">
+            © {year} {brandLabel}
+          </p>
+        </footer>
       </section>
 
       {/* The product (desktop) */}

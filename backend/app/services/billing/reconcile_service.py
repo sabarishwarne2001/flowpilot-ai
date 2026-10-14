@@ -126,6 +126,10 @@ def reconcile_subscription(db: Session, event: StripeEvent) -> ReconcileOutcome:
     if snapshot.currency:
         account_service.assert_currency(db, currency=snapshot.currency)
 
+    duplicate = _duplicate_of_live_subscription(db, account=account, snapshot=snapshot)
+    if duplicate is not None:
+        return duplicate
+
     subscription, applied = subscription_service.upsert_from_stripe(
         db, account=account, snapshot=snapshot
     )
@@ -266,11 +270,41 @@ def reconcile_invoice(db: Session, event: StripeEvent) -> ReconcileOutcome:
         db, stripe_invoice_id=stripe_invoice_id
     )
 
+    # Campaign session 4 (F-339, N-071). A renewal invoice closes the period behind it: its
+    # statement is assembled and its overage added to the renewal while Stripe still holds it as a
+    # draft (`invoice.created`). Should that event be lost, the renewal's later events close the
+    # period instead (the overage then goes on the next invoice). Before, nothing ever assembled a
+    # statement, so this answered "assembly_pending" forever and overage was never charged.
     if invoice is None:
+        from app.services.billing import period_close_service
+
+        closed = period_close_service.close_for_gateway_invoice(db, snapshot=snapshot)
+        if closed is not None:
+            invoice = closed.invoice
+
+    if event.type == "invoice.created":
+        if invoice is None:
+            return ReconcileOutcome.ignored(
+                "closes_no_period",
+                stripe_invoice_id=stripe_invoice_id,
+                billing_reason=str((snapshot.raw or {}).get("billing_reason") or ""),
+            )
         return ReconcileOutcome.processed(
             organization_id=account.organization_id,
             stripe_invoice_id=stripe_invoice_id,
-            action="assembly_pending",
+            action="period_closed",
+            invoice_number=invoice.number,
+            overage_billing=(invoice.assembly_notes or {}).get("overage_billing"),
+        )
+
+    if invoice is None:
+        # A first invoice or a seat change's proration closes no period: Stripe's invoice is the
+        # whole record of it (the customer reads it in the billing portal).
+        return ReconcileOutcome.processed(
+            organization_id=account.organization_id,
+            stripe_invoice_id=stripe_invoice_id,
+            action="no_statement",
+            billing_reason=str((snapshot.raw or {}).get("billing_reason") or ""),
             stripe_total_cents=snapshot.total_cents,
         )
 
@@ -307,6 +341,105 @@ def reconcile_invoice(db: Session, event: StripeEvent) -> ReconcileOutcome:
     )
 
 
+def reconcile_charge_refund(db: Session, event: StripeEvent) -> ReconcileOutcome:
+    """Record the refunds of a charge against the invoice it paid (campaign session 4, N-069).
+
+    `charge.refunded` carries the charge; `charge.refund.updated` (a refund that later failed or
+    was cancelled) carries the refund, which names its charge. Either way the charge is re-fetched
+    and its running refunded total is written to the invoice, so delivery order does not matter.
+    """
+    from app.services.billing import invoice_service
+
+    obj = event.data_object
+    object_id = str(obj.get("id") or "")
+    if not object_id:
+        raise ReconcileRefused(f"Event {event.id} names no charge or refund.")
+    gateway = stripe_gateway.get_gateway()
+    charge_id = gateway.fetch_refund_charge_id(object_id) if object_id.startswith("re_") else object_id
+
+    charge = gateway.fetch_charge(charge_id)
+    if not charge.invoice_id:
+        return ReconcileOutcome.ignored("refund_without_invoice", charge_id=charge_id)
+    invoice = invoice_service.get_by_stripe_id(db, stripe_invoice_id=charge.invoice_id)
+    if invoice is None:
+        return ReconcileOutcome.ignored(
+            "refund_unmapped_to_invoice", charge_id=charge_id, stripe_invoice_id=charge.invoice_id
+        )
+
+    refunded_micros = charge.amount_refunded_cents * invoice_service.MICROS_PER_CENT
+    change = invoice_service.record_refund(
+        db, invoice=invoice, amount_refunded_micros=refunded_micros, refunded_at=event.created
+    )
+    organization_id = invoice.billing_account.organization_id
+    if change > 0:
+        from app.services import organization_notification_service as notices
+
+        notices.notify_refund_recorded(
+            db,
+            organization_id=organization_id,
+            invoice_number=invoice.number,
+            amount_micros=change,
+            currency=invoice.currency,
+            fully_refunded=invoice.amount_refunded_micros >= invoice.amount_paid_micros,
+        )
+    return ReconcileOutcome.processed(
+        organization_id=organization_id,
+        stripe_invoice_id=charge.invoice_id,
+        invoice_number=invoice.number,
+        amount_refunded_micros=int(invoice.amount_refunded_micros),
+        change_micros=change,
+    )
+
+
+def _duplicate_of_live_subscription(
+    db: Session, *, account: Any, snapshot: Any
+) -> Optional[ReconcileOutcome]:
+    """A second live subscription for an organization that already has one (campaign session 4).
+
+    An organization holds one live subscription (`uq_subscriptions_live_account`). Checkout is
+    refused while one is live (F-253), but a checkout completed in a tab opened before the first
+    one still creates a second subscription at the gateway, which charges the customer. Writing
+    it violated the unique index on every attempt until the event dead-lettered, and nobody was
+    told. Now it is not written, the event is settled as ignored with that reason, and the
+    deployment's owner is alerted at once with the refund playbook (RUNBOOK §9.8).
+    """
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES
+
+    if subscription_service.get_by_stripe_id(db, stripe_subscription_id=snapshot.id) is not None:
+        return None
+    if subscription_service._coerce_status(snapshot.status) not in LIVE_SUBSCRIPTION_STATUSES:
+        return None
+    live = subscription_service.live_subscription_for_organization(db, organization_id=account.organization_id)
+    if live is None or live.stripe_subscription_id == snapshot.id:
+        return None
+
+    from app.services import operator_alert_service
+
+    operator_alert_service.duplicate_subscription(
+        db,
+        organization_id=account.organization_id,
+        gateway="STRIPE",
+        customer_id=snapshot.customer_id,
+        recorded_subscription_id=str(live.stripe_subscription_id or live.gateway_subscription_id),
+        duplicate_subscription_id=snapshot.id,
+        duplicate_status=str(snapshot.status),
+    )
+    logger.warning(
+        "billing.duplicate_live_subscription",
+        extra={
+            "organization_id": str(account.organization_id),
+            "recorded_subscription_id": str(live.stripe_subscription_id),
+            "duplicate_subscription_id": snapshot.id,
+        },
+    )
+    return ReconcileOutcome.ignored(
+        "duplicate_live_subscription",
+        organization_id=str(account.organization_id),
+        stripe_subscription_id=snapshot.id,
+        recorded_subscription_id=str(live.stripe_subscription_id),
+    )
+
+
 # ============================================================================
 # Dispatch table
 # ============================================================================
@@ -323,22 +456,23 @@ RECONCILERS: dict[str, Reconciler] = {
     "customer.created": reconcile_customer,
     "customer.updated": reconcile_customer,
     "customer.deleted": reconcile_customer,
+    "invoice.created": reconcile_invoice,  # campaign session 4 (F-339): the period closes
     "invoice.finalized": reconcile_invoice,
     "invoice.paid": reconcile_invoice,
     "invoice.payment_succeeded": reconcile_invoice,
     "invoice.payment_failed": reconcile_invoice,
     "invoice.marked_uncollectible": reconcile_invoice,
     "invoice.voided": reconcile_invoice,
+    "charge.refunded": reconcile_charge_refund,
+    "charge.refund.updated": reconcile_charge_refund,
 }
 
 KNOWN_UNHANDLED: dict[str, str] = {
-    "invoice.created": "assembled_on_period_close",
     "invoice.upcoming": "informational_only",
     "invoice.updated": "superseded_by_finalized",
     "invoiceitem.created": "we_do_not_push_line_items",
     "charge.succeeded": "covered_by_invoice_paid",
     "charge.failed": "covered_by_invoice_payment_failed",
-    "charge.refunded": "credit_note_not_modelled",
     "payment_intent.succeeded": "covered_by_invoice_paid",
     "payment_intent.payment_failed": "covered_by_invoice_payment_failed",
     "payment_method.attached": "portal_owned",
@@ -379,6 +513,7 @@ __all__ = [
     "ReconcileOutcome",
     "ReconcileRefused",
     "Reconciler",
+    "reconcile_charge_refund",
     "event_from_row",
     "reconcile_customer",
     "reconcile_event",

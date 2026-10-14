@@ -211,6 +211,8 @@ export interface RevenueMetrics {
   readonly compare_days: number;
   readonly currencies: Record<string, CurrencyMetrics>;
   readonly receivables: Record<string, { readonly outstanding_micros: number; readonly overdue_micros: number; readonly overdue_invoices: number }>;
+  /** Campaign session 4 (N-069): money refunded at the gateway in the comparison window. */
+  readonly refunds?: Record<string, { readonly refunded_micros: number; readonly invoices: number }>;
   readonly unpriced_subscriptions: readonly Record<string, unknown>[];
   readonly promo_redemptions: Record<string, { readonly count: number; readonly discount_micros: number }>;
   readonly snapshots: readonly Record<string, unknown>[];

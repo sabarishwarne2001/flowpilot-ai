@@ -43,8 +43,6 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     
-    HOST: str = "0.0.0.0"
-    PORT: int = 8000
     LOG_LEVEL: str = "INFO"
     # text: one line per event with its context as key=value; json: one JSON object per line.
     LOG_FORMAT: str = "text"
@@ -141,6 +139,8 @@ class Settings(BaseSettings):
     STORAGE_BACKEND: str = "local"
     UPLOAD_DIR: Path = Path("uploads")
     STORAGE_QUARANTINE_DIR: Path = Path("uploads/quarantine")
+    # A separate database login for the nightly audit-retention sweep (scripts/sweep_arch07.py).
+    # Optional: unset, the sweep uses DATABASE_URL, as the shipped deployment does (F-355).
     AUDIT_SWEEPER_DATABASE_URL: Optional[SecretStr] = None
     FILE_RECLAMATION_DAYS: int = 30
 
@@ -158,9 +158,28 @@ class Settings(BaseSettings):
 
     GROQ_API_KEY: SecretStr | None = None
     GEMINI_API_KEY: SecretStr | None = None
-    LLM_PROVIDER: str = "groq"
+    #: F-353. The model the platform's own Groq key serves by default: what a new workspace
+    #: starts with, and what a call falls back to when its workspace chose a model that needs
+    #: the organization's own key. One of the models the platform serves (N-054):
+    #: openai/gpt-oss-120b (better answers) or openai/gpt-oss-20b (cheaper and faster).
     GROQ_MODEL_NAME: str = "openai/gpt-oss-120b"
-    GEMINI_MODEL_NAME: str = "gemini-3.5-flash"
+
+    @field_validator("GROQ_MODEL_NAME")
+    @classmethod
+    def validate_groq_model_name(cls, v: str) -> str:
+        # Not app.core.ai_models: it imports the schemas package, whose modules import these
+        # settings, a cycle while they are being built. platform_models imports nothing.
+        from app.core.platform_models import PLATFORM_SERVED_MODELS
+
+        cleaned = (v or "").strip()
+        served = PLATFORM_SERVED_MODELS["groq"]
+        if cleaned not in served:
+            raise ValueError(
+                f"GROQ_MODEL_NAME={cleaned!r} is not a model the platform serves on its own Groq "
+                f"key. Use one of: {', '.join(served)} (N-054). Other models run on an "
+                "organization's own key, chosen in its AI settings."
+            )
+        return cleaned
 
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_BATCH_SIZE: int = 32
@@ -178,6 +197,22 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_ENCRYPTION: str = "TLS"
     PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
     PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
+
+    # ---- Campaign session 4 (§C.4): alerts for whoever runs the deployment ----
+    #: Who is emailed (through the platform relay) about dead background jobs, gateway events
+    #: that will never be applied, bursts of server errors and duplicate gateway subscriptions.
+    #: Comma-separated addresses. Required in production (the start-up guard refuses an empty
+    #: value): an error nobody hears about is found by a customer first.
+    OPERATOR_ALERT_EMAILS: str = ""
+    #: Server errors (5xx answers, all API processes together) in five minutes that count as a
+    #: burst worth an alert.
+    OPERATOR_ALERT_5XX_THRESHOLD: int = 20
+    #: The same alert is emailed again at most this often while it keeps happening.
+    OPERATOR_ALERT_REPEAT_MINUTES: int = 60
+
+    @property
+    def operator_alert_recipients(self) -> list[str]:
+        return [part.strip() for part in (self.OPERATOR_ALERT_EMAILS or "").split(",") if part.strip()]
 
     FRONTEND_URL: str = "http://localhost:3000"
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
@@ -211,8 +246,9 @@ class Settings(BaseSettings):
     # only once the production ingress hop count has actually been verified.
     TRUSTED_PROXY_HOPS_CONFIRMED: bool = False
     RATE_LIMIT_GLOBAL_IP_PER_MINUTE: int = 600
-    # Campaign session 3 (N-061): signed-in requests are counted per person; 600 matches the
-    # allowance each person effectively had when every request was counted per address.
+    # Campaign session 3 (N-061): signed-in requests are counted per person (anonymous ones per
+    # address, API keys per key); 600 matches the allowance each person effectively had when
+    # every request was counted per address.
     RATE_LIMIT_USER_PER_MINUTE: int = 600
     # F-048 / N-018: sign-in attempts per address per 5 minutes. 10 is the
     # allowance the product had in effect while each attempt was counted twice
@@ -246,18 +282,10 @@ class Settings(BaseSettings):
     RAG_MAX_CONTEXT_LENGTH: int = 15000
     MAX_CONVERSATION_MESSAGES: int = 10
     MAX_CONVERSATION_TITLE_LENGTH: int = 150
-    MAX_SOURCE_CITATIONS: int = 5
-    LLM_TEMPERATURE: float = 0.2
     LLM_CLASSIFICATION_TEMPERATURE: float = 0.0
     LLM_ENTITY_EXTRACTION_TEMPERATURE: float = 0.1
     LLM_SUMMARIZATION_TEMPERATURE: float = 0.3
-    GROQ_RAG_TEMPERATURE: float = 0.3
-    GEMINI_RAG_TEMPERATURE: float = 0.2
-    LLM_MAX_OUTPUT_TOKENS: int = 2048
     
-    ENABLE_TOKEN_TRACKING: bool = True
-    TOKEN_COST_PER_1K_INPUT: float = 0.0
-    TOKEN_COST_PER_1K_OUTPUT: float = 0.0
     MAX_CONTEXT_CHUNKS_PER_DOCUMENT: int = 3
     
     RERANK_MIN_RESULTS: int = 4
@@ -266,19 +294,12 @@ class Settings(BaseSettings):
     
     DOCUMENT_FILTER_MARGIN: float = 0.25
     DOCUMENT_SCORE_TOP_K: int = 3
-    MAX_RESPONSE_CITATIONS: int = 3
-    CITATION_RERANK_WEIGHT: float = 0.60
-    CITATION_RRF_WEIGHT: float = 0.25
-    CITATION_SEMANTIC_WEIGHT: float = 0.15
 
-    SNIPPET_MAX_SENTENCES: int = 2
-    MAX_SNIPPET_LENGTH: int = 240
     RETRIEVAL_MIN_RECALL: float = 0.95
     RETRIEVAL_MIN_PRECISION: float = 0.90
     RETRIEVAL_MIN_MRR: float = 0.85
     RETRIEVAL_MAX_CONTAMINATION: float = 0.10
     RETRIEVAL_MAX_LATENCY_MS: float = 300.0
-    RETRIEVAL_FAIL_FAST: bool = False
 
     SPEND_DEFAULT_MONTHLY_COST_MICROS: Optional[int] = 25_000_000
     SPEND_DEFAULT_DAILY_COST_MICROS: Optional[int] = 5_000_000
@@ -459,6 +480,9 @@ class Settings(BaseSettings):
     # ======================================================================
 
     # ---- DNS resolution (shared with ARCH-16 identity domain checks) ----
+    # The DNS servers asked when a customer verifies a domain: comma-separated, each `address`
+    # (port 53) or `address:port` / `[ipv6]:port` (for a resolver on another port, such as a
+    # local caching resolver).
     DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
     DNS_TIMEOUT_S: float = 5.0
     DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"
@@ -503,10 +527,9 @@ class Settings(BaseSettings):
     # means no issuance is attempted and request_certificate refuses rather
     # than silently marking a domain as covered.
     ACME_AGENT_URL: str = ""
-    ACME_AGENT_TOKEN: SecretStr | None = None
-    ACME_DIRECTORY_URL: str = "https://acme-v02.api.letsencrypt.org/directory"
+    #: Where Let's Encrypt sends certificate expiry warnings. Read by Caddy
+    #: (deploy/Caddyfile) through docker-compose.prod.yml, not by the app itself.
     ACME_CONTACT_EMAIL: str = ""
-    ACME_REQUEST_TIMEOUT_S: float = 20.0
 
     # Renew this many days before expiry. Let's Encrypt issues for 90 days;
     # 30 leaves two full retry windows before anything is user-visible.
@@ -515,7 +538,6 @@ class Settings(BaseSettings):
     # renewed is an alert, not a retry — expiry on a customer's vanity domain
     # is a total outage for that tenant with no error in our logs.
     TLS_DEAD_MAN_DAYS: int = 7
-    TLS_RENEWAL_SWEEP_INTERVAL_MINUTES: int = 60
 
     # ---- Branding ------------------------------------------------------
     BRANDING_MANIFEST_CACHE_SECONDS: int = 60
@@ -545,13 +567,10 @@ class Settings(BaseSettings):
     HNSW_ITERATIVE_SCAN: str = "relaxed_order"
     HNSW_EF_SEARCH: int = 40
     APPLY_HNSW_SESSION_DEFAULTS: bool = True
-    CHUNK_SIZE_TOKENS: int = 220
-    CHUNK_OVERLAP_PCT: int = 10
     SPEND_PLATFORM_MONTHLY_BACKFILL_TOKENS: Optional[int] = 200_000_000
 
     LEXICAL_TSVECTOR_CONFIG: str = "english"
     LEXICAL_TRIGRAM_THRESHOLD: float = 0.3
-    LEXICAL_CANDIDATES: int = 50
     HYBRID_CANDIDATES: int = 150
     HYBRID_WEIGHT_DENSE: float = 1.0
     HYBRID_WEIGHT_FULL_TEXT: float = 1.0
@@ -649,7 +668,6 @@ class Settings(BaseSettings):
     ROLLUP_MAX_BATCHES: int = 20
     SPEND_USE_ROLLUP_READS: bool = True
     QUOTA_TIER_CACHE_TTL_SECONDS: float = 300.0
-    QUOTA_DEFAULT_TIER_KEY: Optional[str] = None
 
     # ---- ARCH-14 Step 5: provider reconciliation --------------------------
     RECONCILE_MIN_AGE_DAYS: int = 2
@@ -673,8 +691,6 @@ class Settings(BaseSettings):
     # ---- ARCH-14 Step 14.6: Gemini billing labels -------------------------
     GEMINI_BILLING_LABELS_ENABLED: bool = False
     GEMINI_USE_VERTEX: bool = False
-    GEMINI_VERTEX_PROJECT: Optional[str] = None
-    GEMINI_VERTEX_LOCATION: str = "us-central1"
 
     # ---- ARCH-13: automation engine ---------------------------------------
     AUTOMATION_MAX_DEPTH: int = 5
@@ -821,7 +837,6 @@ class Settings(BaseSettings):
 
     BILLING_DEFAULT_CURRENCY: str = "USD"
     BILLING_DEFAULT_QUOTA_TIER_KEY: str | None = None
-    BILLING_SEAT_PRICE_LOOKUP_KEY: str | None = None
     BILLING_SEAT_SYNC_ENABLED: bool = True
     BILLING_SEAT_PRORATION_BEHAVIOR: str = "create_prorations"
 
@@ -837,7 +852,6 @@ class Settings(BaseSettings):
     BILLING_PORTAL_RETURN_URL: str | None = None
     BILLING_CHECKOUT_SUCCESS_URL: str | None = None
     BILLING_CHECKOUT_CANCEL_URL: str | None = None
-    BILLING_SEAT_PRICE_ID: str | None = None
     BILLING_DUNNING_MAX_STEP: str = "NOTIFY_3"
 
     @field_validator("BILLING_DUNNING_MAX_STEP")
@@ -1274,7 +1288,11 @@ class Settings(BaseSettings):
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
-        extra="ignore"
+        extra="ignore",
+        # F-352: a refusal names the setting and the reason, never the value. Without this,
+        # pydantic appends `input_value=` (the rejected secret, or every setting's values cut
+        # to their first and last characters) to the message printed at start-up.
+        hide_input_in_errors=True,
     )
 
 settings = Settings()

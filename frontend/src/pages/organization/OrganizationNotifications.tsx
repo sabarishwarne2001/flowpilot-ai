@@ -168,7 +168,7 @@ export const OrganizationNotifications: React.FC = () => {
             {items.map((notification: Notification) => (
               <li
                 key={notification.id}
-                className={`p-4 ${notification.is_read ? "opacity-70" : ""}`}
+                className={`p-4 ${notification.is_read ? "fp-inactive" : ""}`}
               >
                 <div className="flex flex-wrap items-start gap-2">
                   <div className="min-w-0 flex-1">

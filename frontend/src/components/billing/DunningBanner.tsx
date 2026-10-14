@@ -50,8 +50,10 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
   if (HEALTHY_STATES.has(access.access_state.toUpperCase())) {
     // ARCH-30 Tranche 3 (D-11). A failed renewal inside its grace window keeps
     // full access, so the access state is healthy — but the customer needs to
-    // hear about it now, not on the day writes stop.
-    if (access.subscription_status === "past_due" && access.grace_ends_at) {
+    // hear about it now, not on the day writes stop. Campaign session 4: Stripe
+    // gives no grace date (its retries decide, N-072), and the notice showed only
+    // with one, so a Stripe customer heard nothing in the app until access stopped.
+    if (access.subscription_status === "past_due") {
       return (
         <div
           role="status"
@@ -61,7 +63,8 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
             <AlertOctagon className="h-5 w-5 shrink-0 text-amber-600" aria-hidden="true" />
             <p className="min-w-0 flex-1 text-sm text-foreground">
               <span className="font-semibold">Payment failed.</span> Full access continues
-              until {formatTimestampDate(access.grace_ends_at)} while the payment is retried.
+              {access.grace_ends_at ? ` until ${formatTimestampDate(access.grace_ends_at)}` : ""} while the
+              payment is retried.
               {canManageBilling
                 ? " Update the payment method to avoid interruption."
                 : ` ${askOwners}`}

@@ -244,6 +244,7 @@ const TierPicker: React.FC<{
   if (tiers.length === 0) {
     return (
       <select
+        aria-label="Rate limit tier"
         value={value}
         disabled
         onChange={() => undefined}
@@ -260,6 +261,7 @@ const TierPicker: React.FC<{
 
   return (
     <select
+      aria-label="Rate limit tier"
       value={value}
       disabled={disabled}
       onChange={(event) => onChange(event.target.value as ApiRateTier)}
@@ -1045,7 +1047,7 @@ export const OrganizationDeveloperPortal: React.FC = () => {
                 className={`rounded-md border p-3 text-sm ${
                   tier.assignable
                     ? "border-border"
-                    : "border-border/60 opacity-60"
+                    : "border-border/60 fp-inactive"
                 }`}
               >
                 <p className="flex items-center justify-between font-medium text-foreground">

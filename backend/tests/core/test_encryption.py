@@ -131,10 +131,10 @@ class TestSweeperIdempotence:
         configure(new, old)
 
         before = db_session.execute(
-            text("SELECT id, encrypted_password FROM email_settings ORDER BY id")
+            text("SELECT id, encrypted_password FROM organization_email_settings ORDER BY id")
         ).all()
         reencrypt_all_smtp_passwords(db_session, dry_run=True)
         after = db_session.execute(
-            text("SELECT id, encrypted_password FROM email_settings ORDER BY id")
+            text("SELECT id, encrypted_password FROM organization_email_settings ORDER BY id")
         ).all()
         assert before == after

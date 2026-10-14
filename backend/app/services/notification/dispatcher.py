@@ -12,7 +12,6 @@ from typing import TYPE_CHECKING
 
 from app.services.notification.base import NotificationProvider
 from app.services.notification.email import email_notification_provider
-from app.models.email_settings import EmailSettings
 
 if TYPE_CHECKING:
     from app.core.smtp import SMTPConfig
@@ -67,7 +66,7 @@ class NotificationDispatcher:
         self,
         *,
         action_type: str,
-        settings: EmailSettings | SMTPConfig,
+        settings: SMTPConfig,
         recipient: str,
         title: str,
         body: str,

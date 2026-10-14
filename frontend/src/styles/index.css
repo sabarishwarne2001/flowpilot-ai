@@ -28,7 +28,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 224 32% 11%;
 
-    --primary: 221 83% 53%;
+    /* Session 4 (§A.3, axe): 53% gave 4.05:1 for the active sidebar item; 48% passes AA everywhere. */
+    --primary: 221 83% 48%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 5% 93%;
@@ -40,7 +41,8 @@
     --accent: 240 5% 92%;
     --accent-foreground: 224 32% 13%;
 
-    --destructive: 0 72% 46%;
+    /* Session 4 (§A.3): 40% keeps red badge text at 5:1 on its own tint (46% gave 4.06). */
+    --destructive: 0 72% 40%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 152 69% 31%;
@@ -53,7 +55,7 @@
     --border: 240 6% 88.5%;
     --border-strong: 240 5% 79%;
     --input: 240 6% 84%;
-    --ring: 221 83% 53%;
+    --ring: 221 83% 48%;
     /* The second glow behind the sign-in pages; an organization's accent colour on its domain (F-300). */
     --brand-accent: 262 83% 62%;
     /* Primary-coloured text and links on dark surfaces: the primary, lightened to read on near-black. */
@@ -78,7 +80,9 @@
     --popover: 240 5% 9%;
     --popover-foreground: 240 5% 96%;
 
-    --primary: 217 91% 56%;
+    /* Session 4 (§A.3): white text on the button reaches 5:1 (was 4.15). Blue TEXT on dark
+       surfaces uses --primary-on-dark (below), as no one blue can serve both. */
+    --primary: 217 91% 50%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 240 4% 13%;
@@ -90,7 +94,7 @@
     --accent: 240 4% 14%;
     --accent-foreground: 240 5% 96%;
 
-    --destructive: 0 72% 55%;
+    --destructive: 0 72% 50%;
     --destructive-foreground: 0 0% 100%;
 
     --success: 152 60% 45%;
@@ -313,23 +317,60 @@
 }
 
 /* Light-mode contrast: mid-tone status text (text-emerald-500 ...) reads at
-   about 2.5:1 on white. One step deeper in light mode only. */
+   about 2.5:1 on white. Session 4 (§A.3, axe, WCAG AA 4.5:1): the 600 shades still
+   read 3.2-3.8:1, and amber-700 4.35:1 on its own tint, so status text is the 700
+   shade (amber 800) in light mode, whichever shade the markup names. */
 @layer base {
-  :root:not(.dark) .text-emerald-500 {
-    color: rgb(5 150 105);
+  :root:not(.dark) .text-emerald-500,
+  :root:not(.dark) .text-emerald-600 {
+    color: rgb(4 120 87);
   }
-  :root:not(.dark) .text-amber-500 {
-    color: rgb(217 119 6);
+  :root:not(.dark) .text-amber-500,
+  :root:not(.dark) .text-amber-600,
+  :root:not(.dark) .text-amber-700 {
+    color: rgb(146 64 14);
   }
-  :root:not(.dark) .text-sky-500 {
-    color: rgb(2 132 199);
+  :root:not(.dark) .text-sky-500,
+  :root:not(.dark) .text-sky-600 {
+    color: rgb(3 105 161);
   }
-  :root:not(.dark) .text-green-500 {
-    color: rgb(22 163 74);
+  :root:not(.dark) .text-green-500,
+  :root:not(.dark) .text-green-600,
+  :root:not(.dark) .text-green-700 {
+    color: rgb(22 101 52);
+  }
+  :root:not(.dark) .text-orange-500,
+  :root:not(.dark) .text-orange-600 {
+    color: rgb(194 65 12);
+  }
+}
+
+/* Dark-mode contrast (session 4, §A.3): the brand blue and red are tuned for white
+   text on a button; as text on a dark surface they read 4.1-4.5:1. Text takes the
+   lighter tones (8.3:1 and 6.6:1). */
+@layer base {
+  .dark .text-primary {
+    color: hsl(var(--primary-on-dark));
+  }
+  .dark .text-destructive {
+    color: hsl(0 84% 70%);
   }
 }
 
 @layer components {
+  /* Session 4 (§A.3, F-362): an inactive row (read, revoked, disabled, superseded, removed) is
+     marked by a muted surface, never by fading its text with opacity, which drops it below the
+     WCAG AA contrast its content still needs. Its status badge says which state it is in. */
+  .fp-inactive {
+    background-color: hsl(var(--muted) / 0.45);
+  }
+
+  /* A sidebar item the plan does not include: its lock icon and "Not included in your plan"
+     say so; the label keeps full contrast (it was faded to 80% and failed AA in dark mode). */
+  .fp-locked {
+    cursor: pointer;
+  }
+
   /* ---- Overlays: modals, drawers, popovers ---------------------------- */
 
   .fp-overlay {

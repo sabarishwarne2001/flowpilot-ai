@@ -22,6 +22,7 @@ import { ROUTES } from "@/constants/routes";
 import { isSafeRedirectPath } from "@/routes/tenantPaths";
 import { useAuthStore } from "@/store/useAuthStore";
 import { AuthShell } from "@/components/auth/AuthShell";
+import { takeFragmentParams } from "@/utils/fragmentToken";
 
 type Phase = "working" | "verified" | "failed" | "missing";
 
@@ -34,25 +35,14 @@ type Phase = "working" | "verified" | "failed" | "missing";
  * support ticket.
  */
 const takeTokenFromFragment = (): { token: string | null; redirect: string | null } => {
-  const fragment = window.location.hash.replace(/^#/, "");
-  if (!fragment) {
-    return { token: null, redirect: null };
-  }
-
-  const params = new URLSearchParams(fragment);
+  // F-361. Read once per page load (utils/fragmentToken): a second render gets the same token.
+  const params = takeFragmentParams();
   const token = params.get("token");
   // F-225. The server puts where sign-up began beside the token
   // (/verify-email#token=…&redirect=…, validated there); it is read before the
   // fragment is cleared and validated again here, so sign-in can return to it.
   const requested = params.get("redirect");
   const redirect = requested && isSafeRedirectPath(requested) ? requested : null;
-  if (token) {
-    window.history.replaceState(
-      null,
-      "",
-      window.location.pathname + window.location.search,
-    );
-  }
   return { token, redirect };
 };
 

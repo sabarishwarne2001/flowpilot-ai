@@ -51,7 +51,7 @@ dark:bg-background/60
   >
     {children}
     <SelectPrimitive.Icon asChild>
-      <ChevronDown className="h-4 w-4 text-muted-foreground/80 opacity-70 shrink-0" />
+      <ChevronDown className="h-4 w-4 text-muted-foreground opacity-70 shrink-0" />
     </SelectPrimitive.Icon>
   </SelectPrimitive.Trigger>
 ));
@@ -148,7 +148,7 @@ export const SelectLabel = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <SelectPrimitive.Label
     ref={ref}
-    className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/80 select-none ${className ?? ""}`}
+    className={`px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground select-none ${className ?? ""}`}
     {...props}
   />
 ));

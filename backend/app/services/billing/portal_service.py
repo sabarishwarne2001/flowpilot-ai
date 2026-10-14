@@ -45,6 +45,20 @@ class EphemeralSession:
         )
 
 
+@dataclass(frozen=True)
+class PlanPick:
+    """A subscriber's pick in the plan picker (campaign session 4, F-344).
+
+    The billing portal opens on the confirmation of this plan with these seats; `seats` None keeps
+    the seats the subscription holds.
+    """
+
+    quota_tier_key: str
+    seats: Optional[int] = None
+    interval: Optional[str] = None
+    currency: Optional[str] = None
+
+
 # ============================================================================
 # F6 — the re-authentication window
 # ============================================================================
@@ -199,8 +213,15 @@ def create_portal_session(
     return_url: Optional[str] = None,
     authorization_header: Optional[str] = None,
     issued_at: Optional[datetime] = None,
+    plan_pick: Optional[PlanPick] = None,
 ) -> EphemeralSession:
-    """Mint a Customer Portal URL. Owner-only, re-auth gated, never stored."""
+    """Mint a Customer Portal URL. Owner-only, re-auth gated, never stored.
+
+    With a `plan_pick` (campaign session 4, F-344) a Stripe portal opens on the confirmation of
+    that plan and seat count on the live subscription; a pick the subscription cannot take is
+    refused here, before the gateway is called. Another gateway's portal has no such entry point
+    and opens on its home page, where the customer makes the change.
+    """
     assert_recent_authentication(
         authorization_header=authorization_header, issued_at=issued_at
     )
@@ -252,9 +273,15 @@ def create_portal_session(
             stripe_session_id=remote.session_id,
         )
     else:
+        update = (
+            _subscription_update(db, organization_id=organization_id, pick=plan_pick)
+            if plan_pick is not None
+            else None
+        )
         session = stripe_gateway.get_gateway().create_portal_session(
             customer_id=account.stripe_customer_id,
             return_url=return_url or settings.BILLING_PORTAL_RETURN_URL,
+            **({"subscription_update": update} if update is not None else {}),
         )
 
     logger.info(
@@ -265,6 +292,88 @@ def create_portal_session(
         },
     )
     return session
+
+
+def _tier_gateway_price(db: Session, *, quota_tier_key: str) -> Optional[str]:
+    """The gateway price of the plan on sale under `quota_tier_key`; refuses a plan that is not sold."""
+    tier = quota_service.published_tier_by_key(db, key=quota_tier_key)
+    if tier is None:
+        raise CheckoutConfigurationError(
+            f"No published quota tier named {quota_tier_key!r}. Refusing "
+            "to start a checkout for a plan that is not on sale."
+        )
+    if tier.unit_amount_micros == 0:
+        raise CheckoutConfigurationError(
+            f"Tier {quota_tier_key!r} is free. A free plan is assigned, "
+            "not purchased; there is no gateway price to check out "
+            "against and starting a session would create an invoice for "
+            "nothing."
+        )
+    if not tier.is_priced:
+        raise CheckoutConfigurationError(
+            f"Tier {quota_tier_key!r} v{tier.version} carries no price. "
+            "This tier is quoted, not self-serve — route the customer to "
+            "sales rather than to a gateway that would have to invent an "
+            "amount."
+        )
+    return tier.gateway_price_id
+
+
+def _subscription_update(
+    db: Session, *, organization_id: uuid.UUID, pick: PlanPick
+) -> stripe_gateway.SubscriptionUpdate:
+    """The change of the live Stripe subscription a subscriber picked (campaign session 4, F-344).
+
+    Refused, before the gateway is called, when there is no live subscription to change (that is a
+    checkout), when the pick is Free (that is a cancellation, made in the portal), or when it holds
+    fewer seats than the people already in the organization.
+    """
+    from sqlalchemy import select
+
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+    from app.services import seat_capacity_service
+
+    live = db.execute(
+        select(Subscription.stripe_subscription_id, Subscription.seats_purchased)
+        .join(BillingAccount, BillingAccount.id == Subscription.billing_account_id)
+        .where(
+            BillingAccount.organization_id == organization_id,
+            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+            Subscription.stripe_subscription_id.is_not(None),
+        )
+        .limit(1)
+    ).first()
+    if live is None:
+        raise CheckoutConfigurationError(
+            "There is no paid subscription to change. Choose a plan to start a checkout."
+        )
+    if pick.quota_tier_key == quota_service.FREE_TIER_KEY or is_free_tier(db, quota_tier_key=pick.quota_tier_key):
+        raise CheckoutConfigurationError(
+            "Moving to Free is a cancellation: cancel the subscription in the billing portal."
+        )
+    seats = int(pick.seats if pick.seats is not None else live.seats_purchased)
+    in_use = seat_capacity_service.seat_capacity(db, organization_id=organization_id).used
+    if seats < in_use:
+        raise CheckoutConfigurationError(
+            f"{in_use} seats are in use (members and pending invitations); pick at least {in_use}."
+        )
+    if pick.interval or pick.currency:
+        from app.services.revops import checkout as revops_checkout
+
+        price_id: Optional[str] = revops_checkout.prepare(
+            db, organization_id=organization_id, tier_key=pick.quota_tier_key,
+            interval=pick.interval or "month", currency=pick.currency or "USD", seats=seats,
+            price_id=None, promo_code=None,
+        ).price_id
+    else:
+        price_id = _tier_gateway_price(db, quota_tier_key=pick.quota_tier_key)
+    if not price_id:
+        raise CheckoutConfigurationError(
+            f"The {pick.quota_tier_key} plan has no gateway price to move the subscription to."
+        )
+    return stripe_gateway.SubscriptionUpdate(
+        subscription_id=str(live.stripe_subscription_id), price_id=price_id, quantity=seats
+    )
 
 
 def create_checkout_session(
@@ -322,30 +431,7 @@ def create_checkout_session(
     # failure mode was not "no checkout" but "every checkout at one price".
     # An explicit `price_id` argument is still honoured for the operator paths
     # that pass one, but it is no longer the silent default for all four tiers.
-    if price_id:
-        resolved_price = price_id
-    else:
-        tier = quota_service.published_tier_by_key(db, key=quota_tier_key)
-        if tier is None:
-            raise CheckoutConfigurationError(
-                f"No published quota tier named {quota_tier_key!r}. Refusing "
-                "to start a checkout for a plan that is not on sale."
-            )
-        if tier.unit_amount_micros == 0:
-            raise CheckoutConfigurationError(
-                f"Tier {quota_tier_key!r} is free. A free plan is assigned, "
-                "not purchased; there is no gateway price to check out "
-                "against and starting a session would create an invoice for "
-                "nothing."
-            )
-        if not tier.is_priced:
-            raise CheckoutConfigurationError(
-                f"Tier {quota_tier_key!r} v{tier.version} carries no price. "
-                "This tier is quoted, not self-serve — route the customer to "
-                "sales rather than to a gateway that would have to invent an "
-                "amount."
-            )
-        resolved_price = tier.gateway_price_id
+    resolved_price = price_id or _tier_gateway_price(db, quota_tier_key=quota_tier_key)
 
     if not resolved_price:
         raise CheckoutConfigurationError(

@@ -246,11 +246,11 @@ export const NotificationTray: React.FC<NotificationTrayProps> = ({
                     </h4>
                   </div>
 
-                  <p className="text-[11px] font-medium leading-relaxed leading-snug text-muted-foreground/90 pr-4 select-text">
+                  <p className="text-[11px] font-medium leading-relaxed leading-snug text-muted-foreground pr-4 select-text">
                     {alert.message}
                   </p>
 
-                  <span className="text-[9px] font-semibold text-muted-foreground/60 select-none block pt-1">
+                  <span className="text-[9px] font-semibold text-muted-foreground select-none block pt-1">
                     {formatDateTime(alert.created_at)}
                   </span>
                 </div>

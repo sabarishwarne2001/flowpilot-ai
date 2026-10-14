@@ -72,7 +72,8 @@ test.describe("Brand colours on a verified domain", () => {
     await page.goto("/login");
     const signIn = page.getByRole("button", { name: /^continue$/i });
     await expect(signIn).toBeVisible();
-    expectColour(await signIn.evaluate((node) => getComputedStyle(node).backgroundColor), "#2463eb");
+    // FlowPilot's blue, 221 83% 48% since campaign session 4 (F-362: 53% failed WCAG AA contrast).
+    expectColour(await signIn.evaluate((node) => getComputedStyle(node).backgroundColor), "#1555e0");
     expect((await page.locator("html").getAttribute("style")) ?? "").not.toContain("--primary");
   });
 });

@@ -186,6 +186,14 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
         ai_settings = crud.get_ai_settings(db, workspace_id=workspace_id)
 
         for rule in rules:
+            if _already_ran_for_document(db, rule=rule, work_item=work_item, event=event):
+                db.commit()  # releases the per-document lock taken by the check
+                logger.info(
+                    "automation.document_ready_already_ran",
+                    extra={"rule_id": str(rule.id), "outbox_event_id": str(event.id)},
+                )
+                results.append({"rule_id": str(rule.id), "status": "ALREADY_RAN"})
+                continue
             try:
                 execution, created = executor.create_execution(
                     db,
@@ -280,12 +288,68 @@ def handle_automation_execute(payload: dict[str, Any]) -> dict[str, Any]:
         outcome = Outcome.TIMED_OUT
     elif AutomationExecutionStatus.FAILED.value in statuses:
         outcome = Outcome.FAILED
-    elif statuses and statuses <= {"SUPPRESSED_CYCLE", "SUPPRESSED_DEPTH", "REPLAY"}:
+    elif statuses and statuses <= {"SUPPRESSED_CYCLE", "SUPPRESSED_DEPTH", "REPLAY", "ALREADY_RAN"}:
         outcome = Outcome.SUPPRESSED
     else:
         outcome = Outcome.COMPLETED
 
     return {"outcome": outcome, "executions": results}
+
+
+def _already_ran_for_document(
+    db: Session, *, rule: AutomationRule, work_item: Optional[WorkItem], event: OutboxEvent
+) -> bool:
+    """Campaign session 4 (F-324): a "Document processed" rule runs once per document.
+
+    The trigger listens to two events: the enriched document, and a verification that released
+    it. With verification on, either can reach the engine first (the engine holds rules while a
+    verification is open, and two workers take the jobs in any order), and runs are de-duplicated
+    per rule and *event*. So a rule that ran on the enriched document ran again on the release,
+    and a rule held on the enriched document was never run when the agents agreed. The check is
+    per rule and document, from the document's latest enriched event on (a document that is read
+    again emits no new one, so this is once per document), and is serialised per document and
+    rule with a transaction lock that the caller's commit releases.
+    """
+    if work_item is None or event.event_type not in _DOCUMENT_READY_EVENT_TYPES:
+        return False
+
+    from sqlalchemy import func, text
+
+    from app.models.automation_execution import AutomationExecution
+
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(hashtextextended(:key, 0))"),
+        {"key": f"automation.document-ready:{work_item.id}:{rule.id}"},
+    )
+    floor = db.execute(
+        select(func.max(OutboxEvent.seq)).where(
+            OutboxEvent.resource_id == work_item.id,
+            OutboxEvent.event_type == "work_item.enriched",
+        )
+    ).scalar_one_or_none()
+    earlier = (
+        select(AutomationExecution.id)
+        .join(OutboxEvent, OutboxEvent.id == AutomationExecution.outbox_event_id)
+        .where(
+            AutomationExecution.rule_id == rule.id,
+            AutomationExecution.work_item_id == work_item.id,
+            AutomationExecution.outbox_event_id != event.id,
+            OutboxEvent.event_type.in_(_DOCUMENT_READY_EVENT_TYPES),
+        )
+        .limit(1)
+    )
+    if floor is not None:
+        earlier = earlier.where(OutboxEvent.seq >= floor)
+    return db.execute(earlier).first() is not None
+
+
+def _document_ready_event_types() -> frozenset[str]:
+    from app.services.automation.triggers import TRIGGERS_BY_KEY
+
+    return frozenset(TRIGGERS_BY_KEY["document.ready"].event_types)
+
+
+_DOCUMENT_READY_EVENT_TYPES: frozenset[str] = _document_ready_event_types()
 
 
 def _verification_blocks(db: Session, *, work_item_id: uuid.UUID) -> bool:

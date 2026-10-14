@@ -251,7 +251,7 @@ export default function MarketplaceCatalog() {
       </section>
 
       {inspecting ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center text-muted-foreground/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center text-muted-foreground p-4">
           <div className="max-h-[85vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-card shadow-xl">
             <div className="border-b border-border p-5">
               <h2 className="text-lg font-semibold text-foreground">

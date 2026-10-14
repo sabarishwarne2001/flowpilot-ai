@@ -205,6 +205,40 @@ def test_dispatch_records_lanes_tags_documents_and_follows_the_policy(engines: E
     assert retried["requeued"] == 1, retried
 
 
+def _dispatch_tags(engines: Engines) -> dict[uuid.UUID, str]:
+    engines.refresh()
+    return dict(engines.db.execute(
+        select(WorkItemTag.work_item_id, WorkItemTag.tag).where(WorkItemTag.tag.like("dispatch-%"))
+    ).all())
+
+
+def test_with_tagging_off_a_dispatch_records_lanes_but_tags_nothing(engines: Engines, docs) -> None:
+    """Campaign session 4 (SETTINGS-LEDGER): "Tag dispatched documents" off was read but never proven."""
+    defaults = engines.get("/dispatch-policy").json()
+    thresholds = {"straight_through_min_confidence": defaults["straight_through_min_confidence"],
+                  "review_min_confidence": defaults["review_min_confidence"], "require_required_fields": True}
+    off = engines.put("/dispatch-policy", {**thresholds, "tag_documents": False})
+    assert off.status_code == 200 and off.json()["tag_documents"] is False, off.text
+    batch = _create(engines, docs)
+    failed = engines.item(docs["contract"])
+    failed.status, failed.failure_reason = "FAILED", "PDF could not be parsed"
+    engines.refresh()
+
+    result = engines.post(f"/processing-batches/{batch['id']}/dispatch").json()
+    assert result["tagged"] is False, result
+    assert (result["straight_through"], result["review"], result["exception"]) == (1, 1, 1)
+    assert {d["dispatched_lane"] for d in _detail(engines, batch["id"]).values()} == {
+        "STRAIGHT_THROUGH", "REVIEW", "EXCEPTION"}, "the lanes are still recorded"
+    assert _dispatch_tags(engines) == {}, "a dispatch with tagging off wrote lane tags"
+    assert not [t for t in engines.get("/work-items/tags").json()["tags"] if t.startswith("dispatch-")]
+
+    # Switched back on, the same batch's next dispatch tags every document with its lane.
+    assert engines.put("/dispatch-policy", {**thresholds, "tag_documents": True}).status_code == 200
+    assert engines.post(f"/processing-batches/{batch['id']}/dispatch").json()["tagged"] is True
+    assert _dispatch_tags(engines) == {docs["clean"]: "dispatch-straight-through", docs["drifted"]: "dispatch-review",
+                                       docs["contract"]: "dispatch-exception"}
+
+
 def _download(engines: Engines, package_id: str) -> bytes:
     response = engines.get(f"/export-packages/{package_id}/download")
     assert response.status_code == 200, response.text

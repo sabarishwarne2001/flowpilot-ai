@@ -406,7 +406,7 @@ def emit_outcome(
         else "work_item.verification_disagreed"
     )
 
-    return outbox_service.emit_internal(
+    event = outbox_service.emit_internal(
         db,
         organization_id=verification.organization_id,
         workspace_id=verification.workspace_id,
@@ -420,7 +420,33 @@ def emit_outcome(
         },
         caused_by=caused_by,
     )
+    if releasing:
+        # Campaign session 4 (F-324). A release must reach the engine: rules held while the
+        # verification was open run now. Before, only a person's review queued this job, so when
+        # the agents agreed while the engine job had already skipped the held rules, nothing ever
+        # ran them. The engine runs a "Document processed" rule once per document whichever of
+        # the two events reaches it first (`automation._already_ran_for_document`), and the key
+        # is the one the review paths use, so queuing it from both places is one job.
+        from app.services import job_service
 
+        job_service.enqueue(
+            db,
+            job_type=outbox_service.AUTOMATION_JOB_TYPE,
+            organization_id=verification.organization_id,
+            payload={"outbox_event_id": str(event.id)},
+            idempotency_key=f"automation:execute:{event.id}",
+        )
+    return event
+
+
+
+def is_document_fragment(field: Any) -> bool:
+    """Campaign session 2 (F-273). A list or object field (line items, a table) is a document
+    fragment: a resolve refuses one as a value, so it is never part of a decision. It keeps its
+    extracted value. Asked for anyway under review_all, no review of a document with line items
+    could be completed. Session 4 (F-360): the exception agent reads fields through this too."""
+    values = [field.consensus_value, *(field.agent_values or [])]
+    return any(isinstance(value, (list, dict)) for value in values)
 
 def resolve(
     db: Session,
@@ -474,20 +500,12 @@ def resolve(
             "review_all_fields"
         )
     )
-    # Campaign session 2 (F-273). A list or object field (line items, a table) is a document
-    # fragment: the request refuses one as a value, so it is never part of the decision here.
-    # It keeps its extracted value. Asked for anyway under review_all, no review of a document
-    # with line items could be completed.
-    def _fragment(field: Any) -> bool:
-        values = [field.consensus_value, *(field.agent_values or [])]
-        return any(isinstance(value, (list, dict)) for value in values)
-
     disagreed = {
         f.field_path: f
         for f in verification.fields
         if (review_all or not f.agreed)
         and not f.field_path.startswith(FIELD_PATH_PREFIX)
-        and not _fragment(f)
+        and not is_document_fragment(f)
     }
     unknown = sorted(set(chosen) - set(disagreed))
     if unknown:
