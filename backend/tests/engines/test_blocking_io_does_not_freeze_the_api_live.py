@@ -17,6 +17,7 @@ while the slow step runs. The route itself must still answer.
 
 from __future__ import annotations
 
+import contextlib
 import io
 import threading
 import time
@@ -410,3 +411,75 @@ def test_a_streamed_answers_replay_buffer(live_server, db_session, tenant: Fixtu
     )
     _assert_responsive(health, elapsed, outcome, expect=(200,))
     assert "The total is 10." in outcome["response"].text
+
+
+
+def test_a_streamed_answer_runs_no_query_on_the_event_loop(engines, monkeypatch) -> None:  # noqa: ANN001
+    """Campaign session 4 (F-363). No SQL on the event loop while an answer streams.
+
+    Preparing a turn runs in the threadpool (F-218), but a commit inside it expired the AI settings
+    row, so the stream's first read of `plan.ai_settings.provider` loaded it again: a query on the
+    event-loop thread. Normally a millisecond; under load, with the connection pool spent, it waited
+    for a connection (pool_timeout, 10 s) and the whole API stood still, /health included, as the
+    session 4 load test showed. Any statement executed by a thread that is running an event loop is
+    recorded here; there must be none.
+    """
+    from app import crud
+    from app.services import llm_stream
+    from app.services.workspace_service import add_default_settings
+    from tests.engines.test_assistant_stream_provider_errors_live import _opened
+
+    if crud.get_ai_settings(engines.db, workspace_id=engines.ws) is None:
+        add_default_settings(engines.db, workspace_id=engines.ws, actor_id=engines.tenant.owner.user.id)
+        engines.db.commit()
+    monkeypatch.setattr(llm_stream, "open_stream", lambda *a, **k: _opened("The total is 1,234.50 USD."))
+    created = engines.post("/assistant/conversations", {"title": "loop probe"})
+    assert created.status_code in (200, 201), created.text
+
+    with _queries_on_the_event_loop() as on_loop:
+        response = engines.client.post(
+            engines.url(f"/assistant/conversations/{created.json()['id']}/messages/stream"),
+            json={"content": "What is the total amount of the invoice?"}, headers=engines.tenant.owner.headers,
+        )
+    assert response.status_code == 200, response.text[:300]
+    assert "1,234.50" in response.text, response.text[:500]
+    assert on_loop == [], f"{len(on_loop)} queries ran on the event loop: {on_loop[:5]}"
+
+
+@contextlib.contextmanager
+def _queries_on_the_event_loop():
+    """Every SQL statement run by a thread that is running an event loop, while the block runs."""
+    import asyncio
+
+    from sqlalchemy import event
+    from sqlalchemy.engine import Engine
+
+    on_loop: list[str] = []
+
+    def record(conn, cursor, statement, parameters, context, executemany) -> None:  # noqa: ANN001
+        try:
+            asyncio.get_running_loop()
+        except RuntimeError:
+            return  # a worker thread: where blocking work belongs
+        on_loop.append(" ".join(statement.split())[:160])
+
+    event.listen(Engine, "before_cursor_execute", record)
+    try:
+        yield on_loop
+    finally:
+        event.remove(Engine, "before_cursor_execute", record)
+
+
+def test_the_load_tests_requests_run_no_query_on_the_event_loop(engines) -> None:  # noqa: ANN001
+    """Campaign session 4 (F-363). What fifty people did at once in the load test (§B.2): browse,
+    open a document, upload, and an owner's administration. None may query on the event loop."""
+    document = engines.upload("loop.pdf", make_pdf(["INVOICE INV-LOOP-1", "Total 10.00"]))
+    with _queries_on_the_event_loop() as on_loop:
+        for path, org in (("/work-items?limit=25", False), ("/dashboard/overview", False),
+                          (f"/work-items/{document}", False), ("/usage/summary", False),
+                          ("/members", True), ("/audit-logs?limit=50", True), ("/billing/subscription", True)):
+            response = engines.get(path, org=org)
+            assert response.status_code == 200, (path, response.status_code, response.text[:200])
+        assert engines.client.get("/api/v1/me/context", headers=engines.tenant.owner.headers).status_code == 200
+        engines.upload("loop-2.pdf", make_pdf(["INVOICE INV-LOOP-2", "Total 20.00"]))
+    assert on_loop == [], f"{len(on_loop)} queries ran on the event loop: {on_loop[:5]}"
