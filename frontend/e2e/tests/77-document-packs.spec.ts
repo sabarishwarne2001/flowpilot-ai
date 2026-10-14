@@ -85,6 +85,12 @@ test.describe("Document packs — every pack reviewed", () => {
       await expect(redaction).toContainText(profile.removes);
       await expect(redaction).not.toContainText(pack.redaction_profile ?? "");
 
+      // What it does and does not do, said plainly: matched by its phrases; checks and profile are
+      // recommendations nothing applies by itself.
+      await expect(card.getByTestId("pack-hints")).toContainText("at least");
+      await expect(card).toContainText("enabling the pack does not create them");
+      await expect(redaction).toContainText("enabling the pack does not redact anything");
+
       if (pack.redaction_profile === "hipaa_safe_harbor") {
         expect(pack.safe_harbor_notice).toBeTruthy();
         await expect(redaction).toContainText(pack.safe_harbor_notice ?? "");
@@ -137,7 +143,7 @@ test.describe("Document packs — apply, review, enable", () => {
     expect([mine?.applied, mine?.enabled]).toEqual([true, false]);
 
     await card.getByRole("button", { name: "Enable" }).click();
-    await expect(page.getByText(`${LABEL} is enabled for new documents.`)).toBeVisible();
+    await expect(page.getByText(`${LABEL} is enabled: new documents that match it are read with its fields.`)).toBeVisible();
     await expect(card).toContainText("Enabled");
     await expect(card).not.toContainText("Applied but not enabled.");
     await page.reload();

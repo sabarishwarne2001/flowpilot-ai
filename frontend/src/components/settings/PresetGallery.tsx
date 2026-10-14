@@ -76,7 +76,7 @@ const PresetCard: React.FC<{
     onSuccess: (_, enabled) => {
       toast.success(
         enabled
-          ? `${preset.label} is enabled for new documents.`
+          ? `${preset.label} is enabled: new documents that match it are read with its fields.`
           : `${preset.label} is disabled.`,
       );
       invalidate();
@@ -164,6 +164,16 @@ const PresetCard: React.FC<{
 
       {expanded && (
         <div id={detailsId} className="mt-3 space-y-3 border-t border-border pt-3">
+          {preset.classifier_hints.length > 0 && (
+            <div>
+              <h5 className="text-xs font-medium">Recognised by</h5>
+              <p className="mt-1 text-xs text-muted-foreground" data-testid="pack-hints">
+                New documents that mention at least {Math.min(2, preset.classifier_hints.length)} of these:{" "}
+                {preset.classifier_hints.map((hint) => `“${hint}”`).join(", ")}.
+              </p>
+            </div>
+          )}
+
           <div>
             <h5 id={fieldsHeadingId} className="text-xs font-medium">Extracted fields</h5>
             <ul aria-labelledby={fieldsHeadingId} className="mt-1 flex flex-wrap gap-1.5">
@@ -184,9 +194,13 @@ const PresetCard: React.FC<{
           {preset.assertions.length > 0 && (
             <div>
               <h5 id={checksHeadingId} className="text-xs font-medium">Suggested checks</h5>
+              <p className="mt-0.5 text-[11px] text-muted-foreground">
+                Recommendations: enabling the pack does not create them. Add the ones you want under
+                Clause assertions.
+              </p>
               <ul aria-labelledby={checksHeadingId} className="mt-1 space-y-1">
-                {preset.assertions.map((assertion) => (
-                  <li key={assertion.sentence} className="text-xs text-muted-foreground">
+                {preset.assertions.map((assertion, index) => (
+                  <li key={`${index}-${assertion.sentence}`} className="text-xs text-muted-foreground">
                     {assertion.sentence}
                     <span className="ml-1.5 text-[10px] uppercase">
                       {assertion.severity}
@@ -199,13 +213,16 @@ const PresetCard: React.FC<{
 
           {profile && (
             <div data-testid="pack-redaction-profile">
-              <h5 className="text-xs font-medium">Redaction profile</h5>
+              <h5 className="text-xs font-medium">Suggested redaction profile</h5>
               <p className="mt-1 text-xs text-muted-foreground">
                 <span className="font-medium text-foreground">{profile.label}</span>
               </p>
               {profile.hint ? (
                 <p className="text-xs text-muted-foreground">What it removes: {profile.hint}</p>
               ) : null}
+              <p className="text-[11px] text-muted-foreground">
+                Choose it when you start a redaction; enabling the pack does not redact anything.
+              </p>
               {preset.safe_harbor_notice && (
                 <p className="mt-1.5 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-xs">
                   <ShieldAlert
@@ -259,8 +276,9 @@ export const PresetGallery: React.FC<PresetGalleryProps> = ({
       <div>
         <h3 className="text-sm font-medium">Document packs</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          A pack gives a document type its field list, its suggested checks and
-          a redaction profile. Apply one, review it, then enable it.
+          A pack gives a document type its field list: once enabled, new documents that match it
+          are read with those fields. It also recommends checks and a redaction profile, which you
+          add yourself. Apply one, review it, then enable it.
         </p>
       </div>
 
