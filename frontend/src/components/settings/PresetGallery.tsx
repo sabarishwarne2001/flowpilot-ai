@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useId, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Info, Loader2, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
@@ -10,6 +10,7 @@ import {
   type DocumentPreset,
 } from "@/services/api/ingestion";
 import { errorMessage } from "@/services/api/errors";
+import { REDACTION_PROFILE_LABELS } from "@/components/redaction/StartRedactionButton";
 import { ingestionKeys } from "@/services/api/queryKeys";
 
 /**
@@ -45,6 +46,13 @@ const PresetCard: React.FC<{
 }> = ({ preset, workspaceId, canManage }) => {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState(false);
+  const detailsId = useId();
+  const fieldsHeadingId = useId();
+  const checksHeadingId = useId();
+  // The profile by its name and what it removes; the key is internal.
+  const profile = preset.redaction_profile
+    ? REDACTION_PROFILE_LABELS[preset.redaction_profile] ?? { label: preset.redaction_profile, hint: "" }
+    : null;
 
   const invalidate = (): void => {
     void queryClient.invalidateQueries({
@@ -147,16 +155,18 @@ const PresetCard: React.FC<{
       <button
         type="button"
         onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+        aria-controls={detailsId}
         className="mt-2 text-xs font-medium text-primary hover:underline"
       >
         {expanded ? "Hide details" : `Review ${fields.length} fields`}
       </button>
 
       {expanded && (
-        <div className="mt-3 space-y-3 border-t border-border pt-3">
+        <div id={detailsId} className="mt-3 space-y-3 border-t border-border pt-3">
           <div>
-            <h5 className="text-xs font-medium">Extracted fields</h5>
-            <ul className="mt-1 flex flex-wrap gap-1.5">
+            <h5 id={fieldsHeadingId} className="text-xs font-medium">Extracted fields</h5>
+            <ul aria-labelledby={fieldsHeadingId} className="mt-1 flex flex-wrap gap-1.5">
               {fields.map((field) => (
                 <li
                   key={field.name}
@@ -173,8 +183,8 @@ const PresetCard: React.FC<{
 
           {preset.assertions.length > 0 && (
             <div>
-              <h5 className="text-xs font-medium">Suggested checks</h5>
-              <ul className="mt-1 space-y-1">
+              <h5 id={checksHeadingId} className="text-xs font-medium">Suggested checks</h5>
+              <ul aria-labelledby={checksHeadingId} className="mt-1 space-y-1">
                 {preset.assertions.map((assertion) => (
                   <li key={assertion.sentence} className="text-xs text-muted-foreground">
                     {assertion.sentence}
@@ -187,12 +197,15 @@ const PresetCard: React.FC<{
             </div>
           )}
 
-          {preset.redaction_profile && (
-            <div>
+          {profile && (
+            <div data-testid="pack-redaction-profile">
               <h5 className="text-xs font-medium">Redaction profile</h5>
               <p className="mt-1 text-xs text-muted-foreground">
-                {preset.redaction_profile}
+                <span className="font-medium text-foreground">{profile.label}</span>
               </p>
+              {profile.hint ? (
+                <p className="text-xs text-muted-foreground">What it removes: {profile.hint}</p>
+              ) : null}
               {preset.safe_harbor_notice && (
                 <p className="mt-1.5 flex items-start gap-1.5 rounded-md border border-amber-500/40 bg-amber-500/5 px-2.5 py-2 text-xs">
                   <ShieldAlert
