@@ -265,7 +265,7 @@ def ensure_billing_account(
         snapshot = stripe_gateway.get_gateway().create_customer(
             organization_id=organization_id,
             email=email,
-            name=organization.legal_name or organization.name,
+            name=customer_name(organization),
             currency=resolved_currency,
         )
         customer_id = snapshot.id
@@ -341,6 +341,41 @@ def update_billing_email(
         },
     )
     return account
+
+
+def customer_name(organization: Organization) -> str:
+    """The name the payment provider's customer carries: the legal name, else the organization's name."""
+    return organization.legal_name or organization.name
+
+
+def push_customer_name(db: Session, *, organization: Organization) -> bool:
+    """Campaign session 4 (F-365). Bring the Stripe customer's name in line with the organization.
+
+    The customer is created with `customer_name` (ensure_billing_account); a later change of the
+    legal name (or of the name, when no legal name is set) is sent here, so invoices and receipts
+    stop printing the old one. Only a Stripe customer is updated: under Dodo (merchant of record)
+    the customer record is the vendor's, and FlowPilot never set its name. Like the billing email,
+    the local change stands if Stripe cannot be reached; the failure is logged. Returns whether the
+    provider accepted the new name.
+    """
+    account = get_for_organization(db, organization_id=organization.id)
+    if account is None or account.gateway != "STRIPE" or not account.stripe_customer_id:
+        return False
+    try:
+        stripe_gateway.get_gateway().update_customer_name(
+            customer_id=account.stripe_customer_id, name=customer_name(organization)
+        )
+    except stripe_gateway.StripeGatewayError as exc:
+        logger.warning(
+            "billing_account.name_push_failed",
+            extra={"organization_id": str(organization.id), "error": str(exc)},
+        )
+        return False
+    logger.info(
+        "billing_account.name_pushed",
+        extra={"organization_id": str(organization.id), "stripe_customer_id": account.stripe_customer_id},
+    )
+    return True
 
 
 def adopt_customer(
@@ -420,12 +455,14 @@ __all__ = [
     "assert_currency",
     "clear_delinquency",
     "currency_in_force",
+    "customer_name",
     "default_billing_email",
     "ensure_billing_account",
     "get_by_customer_id",
     "get_for_organization",
     "has_billing_account",
     "mark_delinquent",
+    "push_customer_name",
     "require_for_organization",
     "update_billing_email",
 ]

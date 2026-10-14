@@ -697,6 +697,30 @@ class StripeGateway:
             raw=raw,
         )
 
+    def update_customer_name(
+        self, *, customer_id: str, name: str
+    ) -> StripeCustomerSnapshot:
+        """Campaign session 4 (F-365). The name Stripe prints on invoices and receipts."""
+        client = self._stripe_client()
+        try:
+            obj = client.v1.customers.update(
+                customer_id,
+                {"name": name},
+                {"timeout": int(self._timeout_seconds * 1000)},
+            )
+        except Exception as exc:
+            raise self._classify(
+                exc, context=f"customer.update {customer_id}"
+            ) from exc
+        raw = _as_mapping(obj)
+        return StripeCustomerSnapshot(
+            id=str(raw.get("id") or customer_id),
+            email=(str(raw["email"]) if raw.get("email") else None),
+            currency=(str(raw["currency"]).upper() if raw.get("currency") else None),
+            metadata=_string_metadata(raw.get("metadata")),
+            raw=raw,
+        )
+
     def set_subscription_seats(
         self,
         *,

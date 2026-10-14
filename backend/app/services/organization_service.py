@@ -329,6 +329,9 @@ def update_organization_settings(
                 f"The identifier '{resolved_slug}' is already taken."
             )
 
+    from app.services.billing import account_service
+
+    billed_as = account_service.customer_name(organization)
     try:
         updated = organization_crud.update_organization(
             db,
@@ -353,8 +356,6 @@ def update_organization_settings(
         )
 
         commit_and_refresh(db, updated)
-        return updated
-
     except Exception as exc:
         rollback_and_log_error(
             db,
@@ -364,6 +365,14 @@ def update_organization_settings(
             str(exc),
             exc=exc,
         )
+        raise  # rollback_and_log_error re-raises; this only states it
+
+    # Campaign session 4 (F-365). The payment provider's customer was named once, when it was
+    # created; a later change of the name it carries now reaches it too. After the commit, so a
+    # provider that cannot be reached never undoes the change here (it is logged instead).
+    if account_service.customer_name(updated) != billed_as:
+        account_service.push_customer_name(db, organization=updated)
+    return updated
 
 
 def archive_organization(
