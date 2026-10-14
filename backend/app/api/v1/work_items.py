@@ -418,6 +418,31 @@ def _iter_range(driver: Any, key: str, *, start: int, end: int) -> Iterator[byte
             close()
 
 
+@router.post("/sample", response_model=WorkItemResponse, status_code=status.HTTP_201_CREATED)
+def upload_sample_document(
+    db: Session = Depends(deps.get_db),
+    context: deps.TenantContext = Depends(deps.RequireWorkspaceContributor),
+) -> WorkItemResponse:
+    """The built-in sample invoice, added as an ordinary upload (campaign session 4, §A.4).
+
+    A new customer with no document at hand tries FlowPilot on this one: it goes through the same
+    file checks, plan limits and processing as any upload, because it is one.
+    """
+    import io
+
+    from starlette.datastructures import Headers
+    from starlette.datastructures import UploadFile as StarletteUploadFile
+
+    from app.services.sample_document import SAMPLE_FILENAME, sample_invoice_pdf
+
+    sample = StarletteUploadFile(
+        file=io.BytesIO(sample_invoice_pdf()),
+        filename=SAMPLE_FILENAME,
+        headers=Headers({"content-type": "application/pdf"}),
+    )
+    return upload_document(file=sample, db=db, context=context)
+
+
 @router.post("/{work_item_id}/reprocess", status_code=status.HTTP_202_ACCEPTED)
 def reprocess_work_item(
     work_item_id: uuid.UUID,

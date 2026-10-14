@@ -42,6 +42,13 @@ export const uploadDocument = async (
   return response.data;
 };
 
+export const uploadSampleDocument = async (workspaceId: string): Promise<UploadDocumentResponse> => {
+  const response = await apiClient.post<UploadDocumentResponse>(WORK_ITEM_ENDPOINTS.sample(workspaceId), null, {
+    headers: JSON_HEADERS,
+  });
+  return response.data;
+};
+
 export const getWorkItems = async (
   workspaceId: string,
   filters: WorkItemQueryFilters,
@@ -107,6 +114,7 @@ export const getReindexStatus = async (
 
 export const workItemApi = {
   uploadDocument,
+  uploadSampleDocument,
   getWorkItems,
   getWorkItemDetails,
   reprocessWorkItem,
