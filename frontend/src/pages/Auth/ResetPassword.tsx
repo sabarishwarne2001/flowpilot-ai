@@ -32,22 +32,12 @@ import {
   AUTH_SUBTITLE,
   AUTH_TITLE,
 } from "@/components/auth/authStyles";
+import { takeFragmentParams } from "@/utils/fragmentToken";
 
 /**
  * Reads the token from the fragment and strips it from the address bar.
  */
-const takeTokenFromFragment = (): string | null => {
-  const fragment = window.location.hash.replace(/^#/, "");
-  if (!fragment) {
-    return null;
-  }
-
-  const token = new URLSearchParams(fragment).get("token");
-  if (token) {
-    window.history.replaceState(null, "", window.location.pathname + window.location.search);
-  }
-  return token;
-};
+const takeTokenFromFragment = (): string | null => takeFragmentParams().get("token");
 
 export function ResetPassword() {
   const navigate = useNavigate();
