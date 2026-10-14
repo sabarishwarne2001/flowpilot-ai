@@ -172,6 +172,28 @@ def test_a_metadata_or_discovery_url_inside_the_network_is_refused(
     assert response.status_code in (400, 422), (url, response.status_code, response.text)
 
 
+def test_saml_and_oidc_refuse_an_unusable_address_the_same_way(engines: Engines, published) -> None:
+    """F-371 (campaign session 4): an address the server cannot use is invalid configuration input.
+
+    SAML's metadata URL answered 422 with the reason; OIDC's discovery URL answered 400 (the
+    identity error's default) for the same mistake, in a different body.
+    """
+    engines.plan("enterprise")
+    provider = TestIdp.create()
+    domain_id = _claim_and_verify(engines, published, provider.domain)
+    engines.post(f"{ID}/domains/{domain_id}/bind-sso", org=True)
+    saml = engines.post(f"{ID}/idp-configs", {
+        "verified_domain_id": domain_id, "protocol": "SAML2", "metadata_url": "https://127.0.0.1/metadata",
+    }, org=True)
+    oidc = engines.post(f"{ID}/idp-configs", {
+        "verified_domain_id": domain_id, "protocol": "OIDC", "oidc_client_id": "x",
+        "oidc_discovery_url": "https://127.0.0.1/.well-known/openid-configuration",
+    }, org=True)
+    assert (saml.status_code, oidc.status_code) == (422, 422), (saml.text, oidc.text)
+    assert sorted(saml.json()) == sorted(oidc.json()), (saml.json(), oidc.json())
+    assert "discovery" in str(oidc.json()["detail"]).lower(), oidc.text
+
+
 def test_an_identity_provider_cannot_grant_owner(engines: Engines, published) -> None:
     engines.plan("enterprise")
     provider = TestIdp.create()
