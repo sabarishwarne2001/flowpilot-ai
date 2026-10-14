@@ -327,3 +327,57 @@ def test_what_one_workspace_applies_and_enables_no_other_workspace_sees(client, 
 
     # A member of A only cannot reach B's packs at all.
     assert client.get(_url(b), headers=tenant.viewer.headers).status_code in (403, 404)
+
+
+# ---------------------------------------------------------------------------
+# Concurrency
+# ---------------------------------------------------------------------------
+
+
+def _wait_for_a_lock_wait(timeout: float = 10.0) -> bool:
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        with TestSessionLocal() as probe:
+            waiting = probe.execute(text(
+                "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() "
+                "AND wait_event_type = 'Lock'")).scalar_one()
+        if waiting:
+            return True
+        time.sleep(0.05)
+    return False
+
+
+def test_two_administrators_applying_the_same_pack_at_once_both_succeed(db_session, tenant, packs) -> None:
+    """Two applies racing (two administrators, two tabs, a retried request): both see no row,
+    both insert. The second must end with the one row the first created, not an error."""
+    arguments = dict(organization_id=tenant.organization.id, workspace_id=tenant.workspace.id,
+                     preset_id=packs["customs_manifest"], user_id=tenant.owner.user.id)
+    first, second = TestSessionLocal(), TestSessionLocal()
+    outcome: dict[str, Any] = {}
+
+    def apply_in_second() -> None:
+        try:
+            row = preset_service.apply_to_workspace(second, **arguments)
+            second.commit()
+            outcome["row"] = (row.workspace_id, row.preset_id)
+        except Exception as exc:  # noqa: BLE001 - the assertion below reports it
+            second.rollback()
+            outcome["error"] = exc
+
+    try:
+        preset_service.apply_to_workspace(first, **arguments)  # inserted, not yet committed
+        racer = threading.Thread(target=apply_in_second)
+        racer.start()
+        assert _wait_for_a_lock_wait(), "the second apply never reached the insert"
+        first.commit()
+        racer.join(timeout=30)
+        assert not racer.is_alive()
+    finally:
+        first.close()
+        second.close()
+
+    assert "error" not in outcome, f"the second apply failed: {outcome.get('error')!r}"
+    assert outcome["row"] == (tenant.workspace.id, packs["customs_manifest"])
+    db_session.expire_all()
+    assert db_session.execute(select(func.count()).select_from(WorkspaceSchemaPreset).where(
+        WorkspaceSchemaPreset.workspace_id == tenant.workspace.id)).scalar_one() == 1
