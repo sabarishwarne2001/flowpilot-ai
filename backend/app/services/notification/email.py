@@ -17,7 +17,6 @@ from app.services.email_service import email_service
 from app.services.notification.base import NotificationProvider
 
 if TYPE_CHECKING:
-    from app.models.email_settings import EmailSettings
     from app.core.smtp import SMTPConfig
 
 logger = logging.getLogger("app.services.notification.email")
@@ -33,7 +32,7 @@ class EmailNotificationProvider(NotificationProvider):
     async def send(
         self,
         *,
-        settings: EmailSettings | SMTPConfig,
+        settings: SMTPConfig,
         recipient: str,
         title: str,
         body: str,

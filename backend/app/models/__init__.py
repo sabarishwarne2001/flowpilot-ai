@@ -47,7 +47,7 @@ from app.models.assistant import (
     StreamState,
     FinishReason,
 )
-from app.models.email_settings import EmailSettings, EmailEncryption
+from app.models.email_settings import EmailEncryption
 from app.models.workspace import Workspace, WorkspaceMember
 from app.models.organization_invitation import (
     OrganizationInvitation,
@@ -366,7 +366,6 @@ __all__ = [
     "ConversationMessage",
     "StreamState",
     "FinishReason",
-    "EmailSettings",
     "EmailEncryption",
     "Workspace",
     "WorkspaceMember",

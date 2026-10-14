@@ -52,7 +52,6 @@ class EncryptedColumn:
 
 
 ENCRYPTED_COLUMNS: Sequence[EncryptedColumn] = (
-    EncryptedColumn("email_settings", "encrypted_password", bounded=True),
     EncryptedColumn("organization_email_settings", "encrypted_password", bounded=True),
     EncryptedColumn("workspace_email_overrides", "smtp_password_encrypted", key="workspace_id", bounded=True),
     EncryptedColumn("user_mfa_factors", "secret_ciphertext", key="user_id", fingerprint_column="key_fingerprint"),

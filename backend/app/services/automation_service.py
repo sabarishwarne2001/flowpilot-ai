@@ -13,7 +13,6 @@ from sqlalchemy.orm import Session
 
 from app import crud
 from app.models.automation import AutomationRule
-from app.models.email_settings import EmailSettings
 from app.models.notification import (
     NotificationChannel,
     NotificationPriority,
