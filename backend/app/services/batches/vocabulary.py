@@ -37,6 +37,9 @@ PACKAGE_TTL_DAYS: Final = 7
 #: Verification limits for an uploaded package (zip-bomb guards).
 VERIFY_MAX_ENTRIES: Final = 20_000
 VERIFY_MAX_UNCOMPRESSED_BYTES: Final = 4 * 1024 * 1024 * 1024
+#: manifest.json and SHA256SUMS are parsed in memory, so each is capped on its own (a 2,000-document
+#: package's manifest is about 1.5 MB). The files themselves are hashed in chunks and need no cap.
+VERIFY_MAX_MANIFEST_BYTES: Final = 16 * 1024 * 1024
 
 #: Confidence histogram buckets: (label, lower bound inclusive, upper bound exclusive; the last is inclusive).
 CONFIDENCE_BUCKETS: Final[tuple[tuple[str, float, float], ...]] = (
@@ -69,5 +72,6 @@ __all__ = [
     "PACKAGE_FORMAT",
     "PACKAGE_TTL_DAYS",
     "VERIFY_MAX_ENTRIES",
+    "VERIFY_MAX_MANIFEST_BYTES",
     "VERIFY_MAX_UNCOMPRESSED_BYTES",
 ]

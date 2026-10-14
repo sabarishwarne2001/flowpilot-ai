@@ -502,10 +502,24 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
         sums_name = f"{root}SHA256SUMS"
         if sums_name not in names:
             return {**invalid, "message": "This is not a FlowPilot export package: it has no SHA256SUMS."}
+        too_large = {**invalid, "message": "The package's manifest or SHA256SUMS is too large to be a FlowPilot package."}
+        if max(archive.getinfo(manifest_name).file_size, archive.getinfo(sums_name).file_size) > v.VERIFY_MAX_MANIFEST_BYTES:
+            return too_large
+
+        def _small(name: str) -> bytes:
+            # Read at most one byte past the cap: a size the zip's header understates is caught too.
+            with archive.open(name) as stream:
+                data = stream.read(v.VERIFY_MAX_MANIFEST_BYTES + 1)
+            if len(data) > v.VERIFY_MAX_MANIFEST_BYTES:
+                raise OverflowError(name)
+            return data
+
         try:
-            manifest_bytes = archive.read(manifest_name)
+            manifest_bytes = _small(manifest_name)
             manifest = json.loads(manifest_bytes.decode("utf-8"))
-            sums = _parse_sums(archive.read(sums_name).decode("utf-8"))
+            sums = _parse_sums(_small(sums_name).decode("utf-8"))
+        except OverflowError:
+            return too_large
         except (ValueError, UnicodeDecodeError, KeyError, zipfile.BadZipFile, zlib.error, EOFError, OSError):
             return {**invalid, "message": "The package's manifest or SHA256SUMS cannot be read."}
         if manifest.get("format") != v.PACKAGE_FORMAT:
