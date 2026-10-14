@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-13 (pre-launch campaign, session 4 of 4 started: experience, performance, operations, launch certification)_
+_Last updated: 2026-10-14 (pre-launch campaign, session 4 of 4 complete; what is left is in `docs/hardening/NEXT-SESSION-PROMPT.md`)_
 
 ## Current phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
 Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
@@ -55,6 +55,21 @@ Fixed and proven since checkpoint 1: F-338 to F-348. **Next:** the configuration
 rows, in progress), the Locust load run, the engine page journeys and the open endpoint, page and
 navigation rows, accessibility and widths (§A), the Windows scripts, then the certification,
 HANDOFF and the owner launch checklist.
+
+**Progress (checkpoint 3, 2026-10-14 — session close):** all eight plan items done. Fixed and proven
+since checkpoint 2: F-349 to F-364 (configuration contract, seeded workspaces ready, the audit sweep,
+sealed redaction files, empty assistant answers, old links, the PDF viewer, line-item reviews, every
+page WCAG 2.1 AA in light and dark, the reset link, the assistant freezing the API under load, old
+document links), F-380 (emails for mail clients) and F-381 (four widths). First run: a
+getting-started card with a sample invoice. At the owner's request the session then audited
+TruthMesh, Batch Operations and Document Packs in depth: three new browser specs on tenants of their
+own (75, 76, 77) and backend hardening tests; fixed F-382 (concurrent mesh builds), F-390 and F-407
+(hostile or damaged packages), F-398/F-399 and F-406/F-408 (packs), F-409 (an empty mesh rebuilt on
+every poll). Helper sessions proved the eight unproven settings (F-365, a legal name never reaching
+Stripe) and fixed F-370 (key rotation missed 14 secret columns), F-371 and F-372. Decisions N-069 to
+N-077. The audit's reproduced-but-unproven items, the N-076/N-077 builds and 32 features with
+partial browser coverage are in **`docs/hardening/NEXT-SESSION-PROMPT.md`** (paste it into a new
+session). `campaign_slices --check all` exits 0; one Alembic head (`s4b1_drop_email_settings`).
 
 ## Previous phase — Pre-launch campaign, session 3 of 4: consoles, identity, settings, security
 Branch `claude/determined-planck-e5ftrx` (the session's assigned branch), based on `main` at
@@ -431,6 +446,10 @@ launch, Dodo selectable; **N-027** Postmark before the first paying customer; **
 plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
+_Updated 2026-10-14 (session 4 close):_ merge pull request #23 once CI is green, then start a new
+session with `docs/hardening/NEXT-SESSION-PROMPT.md`; the owner works through HANDOFF.md
+"Owner launch checklist". The list below is the earlier (session 3) text, kept for history.
+
 _Updated 2026-10-12. The earlier list here (merge PR #18; the Redis frame buffer; one matching case
 per invoice copy) is done: PR #18 merged, the buffer moved off the event loop (F-263), one case per
 invoice (F-264, N-055)._
