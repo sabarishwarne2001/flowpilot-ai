@@ -189,6 +189,9 @@ import TenantGuard from "@/routes/TenantGuard";
 import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
 import { ROUTES } from "@/constants/routes";
 
+/** The flat addresses from before ARCH-01, forwarded into the person's workspace. */
+const LEGACY_PREFIXES = ["work-items", "assistant", "automation", "notifications", "settings", "profile", "account"] as const;
+
 const AssistantCanvasRoute = () => {
   const { conversationId } = useParams<{ conversationId: string }>();
   const [search] = useSearchParams();
@@ -441,18 +444,16 @@ function AppRoutes() {
               element={<PartnerPortal />}
             />
 
-            {/* Legacy redirects */}
+            {/* Legacy redirects. Campaign session 4 (F-364): each prefix also has an explicit
+                two-segment route. "/work-items/*" and the workspace shell's dashboard
+                ("/:orgSlug/:workspaceSlug", index) rank equal for "/work-items/<id>", and the
+                shell won: the old address was read as organization "work-items" and sent to the
+                workspace picker. A named second segment outranks both. */}
             <Route path="/" element={<LegacyRouteRedirect />} />
-            <Route path="/work-items/*" element={<LegacyRouteRedirect />} />
-            <Route path="/assistant/*" element={<LegacyRouteRedirect />} />
-            <Route path="/automation/*" element={<LegacyRouteRedirect />} />
-            <Route
-              path="/notifications/*"
-              element={<LegacyRouteRedirect />}
-            />
-            <Route path="/settings/*" element={<LegacyRouteRedirect />} />
-            <Route path="/profile/*" element={<LegacyRouteRedirect />} />
-            <Route path="/account/*" element={<LegacyRouteRedirect />} />
+            {LEGACY_PREFIXES.flatMap((prefix) => [
+              <Route key={`${prefix}/*`} path={`/${prefix}/*`} element={<LegacyRouteRedirect />} />,
+              <Route key={`${prefix}/:legacySub`} path={`/${prefix}/:legacySub`} element={<LegacyRouteRedirect />} />,
+            ])}
 
             {/* Workspace-scoped shell */}
             <Route

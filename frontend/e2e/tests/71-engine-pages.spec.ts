@@ -233,6 +233,42 @@ test.describe("Engine pages that do their work", () => {
   });
 });
 
+test.describe("Old addresses and the not-found page", () => {
+  test.use({ user: "C.owner" });
+
+  test("a saved flat address opens the same page inside the workspace, with its query", async ({ page }) => {
+    // The workspace the person last used is where flat addresses land (here: operations).
+    await page.goto(ws("C", ""));
+    await settle(page);
+    const document = seeded("INV-E2E-1001");
+    const cases: Array<[string, RegExp]> = [
+      ["/", /\/caretakers-global\/operations\/?$/],
+      [`/work-items/${document}`, new RegExp(`/caretakers-global/operations/work-items/${document}$`)],
+      ["/assistant", /\/caretakers-global\/operations\/assistant$/],
+      ["/automation", /\/caretakers-global\/operations\/automation$/],
+      ["/notifications", /\/caretakers-global\/operations\/notifications$/],
+      ["/settings?section=ai", /\/caretakers-global\/operations\/settings\?section=ai$/],
+    ];
+    for (const [legacy, landed] of cases) {
+      await page.goto(legacy);
+      await expect(page, legacy).toHaveURL(landed, { timeout: 15_000 });
+      await expect(page.locator("main"), legacy).not.toContainText("Page not found");
+    }
+    await page.goto(`/work-items/${document}`);
+    await expect(page.locator("main")).toContainText("invoice-INV-E2E-1001.pdf", { timeout: 20_000 });
+    await expectHealthyPage(page);
+  });
+
+  test("an unknown address says so and its button leads back into the app", async ({ page, problems }) => {
+    problems.allowHttp(/./, [404], "the address does not exist");
+    await page.goto(`/no-such-page-${runId()}`);
+    await expect(page.getByText("Page not found")).toBeVisible();
+    await page.getByRole("link", { name: "Return to Dashboard" }).click();
+    await expect(page).toHaveURL(/\/caretakers-global\/[a-z0-9-]+\/?$/, { timeout: 15_000 });
+    await expect(page.locator("main")).not.toContainText("Page not found");
+  });
+});
+
 test.describe("An ERP posting's own page", () => {
   test.setTimeout(300_000);
 
