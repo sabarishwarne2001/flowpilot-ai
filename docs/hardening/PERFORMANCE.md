@@ -198,3 +198,42 @@ grow. The test stays in the suite, so a new per-row query fails CI.
   baseline can only shrink.
   **DECIDED (campaign session 4):** they stay as they are; declaring 283 database objects on the
   models would change nothing the database does, and the ratchet already stops new drift.
+
+## Load test (session 4, §B.2)
+
+**Tool and scripts:** Locust (`backend/perf/locustfile.py`), 5 tenants × 10 people seeded by
+`backend/perf/load_seed.py`, verdict by `backend/perf/load_report.py` (p95s, 5xx in the API log,
+tracebacks, pool exhaustion, `/health` latency as the event-loop probe). 50 simulated people, 5 per
+second ramp, 15 minutes, against one API process and one worker on the test machine:
+
+```
+LOAD_USERS=/tmp/flowpilot-load-users.json locust -f perf/locustfile.py --headless \
+    --host http://127.0.0.1:8000 -u 50 -r 5 -t 15m --csv /tmp/flowpilot-load
+python perf/load_report.py --csv /tmp/flowpilot-load --api-log /tmp/flowpilot-e2e-logs/api.log
+```
+
+| | Before F-363 | After F-363 (2026-10-14) |
+|---|---:|---:|
+| Requests | 12,015 | 27,102 |
+| Median | 200 ms | 130 ms |
+| p95 / p99 | 10,000 / 21,000 ms | **670 / 1,300 ms** |
+| `/health` p95 | 9,900 ms (event loop blocked) | **150 ms** |
+| Server errors (5xx) | 172 | **0** |
+| Tracebacks in the API log | 205 | **0** |
+| Database pool exhausted | yes | no |
+
+Per request after the fix (p95): dashboard 550 ms, document list 480 ms, one document 490 ms, my
+organizations 420 ms, admin pages 470–580 ms, a new assistant conversation 690 ms, a streamed answer
+1,400 ms (the model stand-in answers instantly; a real model adds its own time), a PDF upload 1,500 ms.
+
+**What it found:** F-363 — a commit inside the streamed answer's preparation expired the
+conversation, and its next attribute read ran a query on the event loop, freezing every request for
+seconds at a time. Fixed (the expired objects are reloaded in the threadpool) and guarded by a test
+that fails on any query run on the event loop.
+
+**The 9 dropped connections** (of 27,102) are the local server's 5-second keep-alive closing an
+idle connection just as Locust reused it; production runs gunicorn with `--keep-alive=75` behind
+Caddy (`backend/docker-compose.prod.yml`). They are not server errors.
+
+**Sizing note:** one API process served 30 requests a second at these latencies; production runs
+four (`--workers=4`) on COSTS.md's server (4 vCPU, 16 GB). Re-run this before a large customer onboards, against the real server.

@@ -245,7 +245,7 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       RUNBOOK §3 by hand on a clean environment, validate the compose files statically, and put the
       compose-only steps on the owner's checklist with exact commands.
       _Done (session 4): the compose files are validated statically (`tests/infra/test_production_compose_commands.py`, `test_production_env_template.py`, the configuration contract); RUNBOOK §3 and §9 steps were run by hand where they need no images; the compose-only steps are owner checklist B6-B11 with exact commands._
-- [ ] **Load test:** use Locust (installs from PyPI); k6 needs a download that may be blocked.
+- [x] **Load test:** use Locust (installs from PyPI); k6 needs a download that may be blocked. _Done: 50 people, 15 min, 27,102 requests, p95 670 ms, 0 5xx after F-363 (PERFORMANCE.md "Load test")._
 - [x] **Bundle size:** measure before splitting. The "~412 KB gzipped" figure is from an older pass;
       the build warns that the main chunk is over 1,000 kB; 54 routes are already lazy-loaded, so the
       weight is elsewhere (shared vendor code, `manualChunks` in `vite.config.ts`).
