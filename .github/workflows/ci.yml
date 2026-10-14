@@ -418,6 +418,10 @@ jobs:
       # sovereign edition's LOCAL_LLM_MODE=exclusive, so extraction, verification, the review queue,
       # tables, matching and the assistant run end to end without a provider key.
       E2E_LLM: "1"
+      # N-015: the production bundle is served with the production Content-Security-Policy (read
+      # from backend/deploy/Caddyfile) enforced, so a page that loads or connects to anything the
+      # policy forbids fails here instead of for a customer.
+      E2E_CSP: "1"
 
     steps:
       - uses: actions/checkout@v4
