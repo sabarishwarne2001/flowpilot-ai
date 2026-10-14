@@ -120,6 +120,18 @@ test.describe("Journey: a solo user upgrades to Developer and uses the API", () 
     await expect.poll(async () => (await documents(customer)).filter((d) => d.status === "COMPLETED").length,
       { timeout: 120_000 }).toBe(2);
 
+    // The worker sends the webhook a moment after the document completes, and the Deliveries
+    // panel lists what exists when it opens: wait for the server to have recorded the delivery.
+    const hooks = `/organizations/${customer.orgId}/webhooks`;
+    await expect.poll(async () => {
+      const endpoints = await api<unknown>(customer.session, "GET", `${hooks}/endpoints`);
+      const list = (Array.isArray(endpoints.body) ? endpoints.body : (endpoints.body as { items?: unknown[] })?.items ?? []) as Array<{ id: string }>;
+      if (!list[0]) return 0;
+      const sent = await api<unknown>(customer.session, "GET", `${hooks}/endpoints/${list[0].id}/deliveries`);
+      const rows = (Array.isArray(sent.body) ? sent.body : (sent.body as { items?: unknown[] })?.items ?? []) as unknown[];
+      return rows.length;
+    }, { timeout: 120_000, intervals: [2_000, 3_000] }).toBeGreaterThan(0);
+
     await page.goto(customer.org("webhooks"));
     await page.getByRole("button", { name: "Deliveries" }).first().click();
     await expect(page.getByRole("button", { name: "Attempt history for document.completed" }).first())
