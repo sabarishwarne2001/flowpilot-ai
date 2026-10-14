@@ -116,11 +116,12 @@ test.describe("Journey: a Business team", () => {
     problems.allowHttp(/\/work-items$/, [403, 404], "the removed contributor's upload is refused");
     await page.getByRole("button", { name: `Remove ${contributor.email}` }).click();
     await page.getByRole("button", { name: "Confirm removal" }).click();
-    // The list then shows them as removed, or no longer lists them.
-    await expect.poll(async () => {
-      const row = page.getByText(contributor.email).locator("xpath=ancestor::li[1]");
-      return (await row.count()) === 0 || /Removed/.test(await row.innerText());
-    }, { timeout: 15_000 }).toBe(true);
+    // The list then shows them as removed, or no longer lists them. Read in one step: counting the
+    // row and then reading its text raced the refetch that removes it, and the read then waited
+    // its whole timeout for a row that was gone.
+    await expect.poll(async () => page.getByText(contributor.email).locator("xpath=ancestor::li[1]")
+      .evaluateAll((rows) => rows.length === 0 || rows.some((row) => /Removed/.test(row.textContent ?? ""))),
+    { timeout: 15_000 }).toBe(true);
     const after = await uploadAs(contributor.session, customer.wsId, "team-removed");
     expect([403, 404]).toContain(after);
     await expectHealthyPage(page);
