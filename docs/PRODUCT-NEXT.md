@@ -109,6 +109,17 @@ aggregated TruthMesh and extraction data across organizations that opt in.
 can be singled out, and the owner's legal review. **Run:** a nightly aggregation job, small.
 Only worth doing after there are enough customers for the numbers to mean something.
 
+## 9. Correct an extracted field beside the page
+
+**What:** click a value in the document viewer, see where it was read on the page, type the right
+value and save, without opening the review queue (N-020 item 7, dropped for launch).
+
+**Why:** the fastest fix for one wrong field. Today a correction goes through the review queue, which
+records who changed what; this would record the same, from the viewer.
+
+**Build:** about 4 days: the viewer already draws each field's box (F-092); the save reuses the
+review's resolve rules (who may change a value, the audit entry, re-running automations).
+
 ---
 
 **Recommendation:** build 2 and 3 first. Together they take about three days, earn money from the

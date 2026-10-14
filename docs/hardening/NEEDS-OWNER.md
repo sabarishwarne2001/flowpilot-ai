@@ -107,6 +107,13 @@ community rebuild `pgsty/minio` (which includes `mc`).** Nothing to change.
 The recommendation to use a managed object store in production stays open as
 an option, but is not required.
 
+**DECIDED (campaign session 4):** production uses a managed object store (AWS S3, Cloudflare R2 or
+Backblaze B2), as `.env.production.template` recommends; the app refuses to start in production
+without `S3_BUCKET` (F-351). The pinned `pgsty/minio` image stays for development and for the optional
+`self-hosted-storage` profile. Reason: a single server's disk is a single point of loss for customer
+documents, and a managed store's signed download links reach the customer's browser directly (MinIO's
+internal address does not; F-356 streams files where links are not available).
+
 ## N-009 — When should production run the lossy ARCH-40 "contract" migration? (DECIDED)
 The newest migration, `arch40_step3_contract_ai_settings`, drops three unused
 `ai_settings` columns. It refuses to run unless `ARCH40_CONTRACT=1` is set,
@@ -303,6 +310,12 @@ exactly the allowance that was in effect. Your choice is now one line in `.env.p
 `RATE_LIMIT_LOGIN_IP_PER_5MIN=10` (option a, current) or `=20` (option b). Option (c), counting only
 failed sign-ins per address, is still a code change and still needs your go-ahead.
 
+**DECIDED (campaign session 4):** 20 sign-in attempts per address per 5 minutes (the value in force
+since the final release), with the per-account back-off unchanged. Counting only *failed* attempts
+per address (option c) is the better rule for large offices; it changes the rate limiter's core, so it
+is a later-session item (HANDOFF), not a launch blocker: sessions last days, so an office rarely signs
+in twenty times in five minutes.
+
 ## N-019 — What may Viewers and Members do? (Phase 3, F-053, F-065)
 The browser tests found two places where the code and the Phase 3 brief disagree:
 - **Viewers and workflows / review queue.** A workspace VIEWER sees Workflows, Run history and
@@ -318,6 +331,12 @@ The browser tests found two places where the code and the Phase 3 brief disagree
 "Access restricted - ask a workspace administrator" screen for a VIEWER instead of firing requests
 the server refuses (F-053, `cc48275`). **Still open:** whether viewers should get read-only access to
 those three pages (then the server must allow GET), or have them hidden from the sidebar.
+
+**DECIDED (campaign session 4, recording what is built):** viewers do not see Workflows, Run history or
+the Review queue in the sidebar (`minimumRole: "CONTRIBUTOR"` in `navigation.ts`), and opening one by
+its address shows "Access restricted". Viewers are read-only readers of documents and answers; review
+and automation are work, which starts at Contributor. ERP posting requires a workspace admin or the
+owner (F-065).
 
 ## N-020 — Which missing capabilities do you want before launch? (Phase 3, F-061)
 The brief asked the tests to exercise these, and the product does not have them:
@@ -337,6 +356,13 @@ The brief asked the tests to exercise these, and the product does not have them:
   **still open**; the current rule stands (viewers are refused, the sidebar still shows them).
 - N-020: items **1, 4 and 6 were requested** by the Phase 4 brief and are built (F-091, F-080,
   F-092). Items 2, 3, 5 and 7 are **still open**.
+
+**DECIDED (campaign session 4):** items 1, 4 and 6 were built in Phase 4; item 2 (notification category
+filters and mark as unread) was built in session 3 (`10-workspace-documents.spec.ts` proves it);
+item 3 (a promotion code at checkout) is built as `promo_code` on checkout (ARCH-50, RevOps promo
+codes); item 5 (invite from Organization > Members) is built (`InviteMembersPanel`). Item 7
+(correcting an extracted field directly in the document viewer) is dropped for launch: corrections go
+through the review queue, which records who changed what; it is in PRODUCT-NEXT.md.
 
 ## N-021 — Is BYOK (bring your own AI key) an Enterprise-only feature? (Phase 4, F-095)
 The console calls it "Enterprise BYOK & models", but the server lets every plan, Free included,
@@ -1252,3 +1278,25 @@ so the page can never show a price or allowance the product does not sell.
   make no compliance, certification, sub-processor, retention or jurisdiction claims (N-029).
 - **Owner action (launch checklist):** have counsel replace the terms and privacy text; add a
   support or sales email address to the pricing page footer once you have one.
+
+## N-074 — Decisions taken in campaign session 4 (recorded, nothing to do)
+
+All **DECIDED (campaign session 4)** under the founder authority given for this session:
+
+- **Tailwind 4 waits.** The seven development-only npm advisories (Tailwind CSS 3's file watcher and
+  selector parser; nothing ships to the browser, `npm audit --omit=dev` is 0) are accepted for launch.
+  Tailwind 4 rewrites the CSS configuration and needs a page-by-page visual comparison: a later
+  session (HANDOFF).
+- **One database user at launch.** The app connects as the database owner (the compose file's
+  `POSTGRES_USER`). The audit-log trigger therefore guards against mistakes, not against someone with
+  the database password; the nightly audit sweep names itself to the trigger for its own deletes only
+  (F-355). Separate least-privilege roles (an app role that cannot alter tables, a sweeper role) are a
+  later-session security item (HANDOFF), with migrations run by the owner role.
+- **F-017's 283 undeclared index and constraint lines stay** (PERFORMANCE.md "Indexes"): they are real
+  database objects created by migrations; the drift gate's baseline can only shrink.
+- **Accessibility target:** WCAG 2.1 AA, no serious or critical axe finding on any page in either theme,
+  enforced by `72-accessibility.spec.ts` in CI (F-362). The brand blue and red were darkened slightly
+  for it.
+- **First run:** every new workspace shows "Get started with FlowPilot" with a built-in sample invoice
+  (§A.4); it hides itself when done or when the person hides it.
+

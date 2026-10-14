@@ -104,7 +104,7 @@ is served from the same origin.
 | zxcvbn English dictionary (`index-*.js`) | 591.1 | the first keystroke in a "choose a password" field |
 | zxcvbn common dictionary (`index-*.js`) | 216.5 | same |
 | Entry script (`index-*.js`) | 169.2 | first load |
-| `pdf-*.js` | 125.5 | pages that show a PDF |
+| `pdf-*.js` | 125.5 (144.5 since F-359: pdf.js's legacy build, for browsers without `getOrInsertComputed`) | pages that show a PDF |
 | `AssistantCanvas-*.js` (with the markdown libraries) | 87.1 | the assistant canvas |
 | `Automation-*.js` | 44.0 | the automation page |
 | `Settings-*.js` | 30.7 | personal settings |
@@ -129,6 +129,10 @@ largest contentful paint from 4.7 s to 2.8 s and from 5.0 s to 3.3 s. The 4 poin
 best practices are one console error that exists only in this setup: with no backend behind
 `vite preview`, `GET /api/v1/branding/manifest` answers 404.
 
+**Later in session 4.** The getting-started card (§A.4), the accessibility fixes (F-362) and the
+pdf.js legacy build (F-359, outside the first load) leave the first load at **193.0 KB gzipped**
+(2026-10-14), still under the 200 KB goal.
+
 **Re-measure:**
 
 ```bash
@@ -149,3 +153,48 @@ CHROME_PATH=/opt/pw-browsers/chromium-1194/chrome-linux/chrome npx --yes lightho
   http://127.0.0.1:4317/login --only-categories=performance,accessibility,best-practices \
   --chrome-flags="--headless=new --no-sandbox" --output=json --output-path=./lh-login.json
 ```
+
+## A workspace with 10,000 documents (session 4, §B.3)
+
+- **Question:** do the document list and its search and filters stay fast when one workspace holds
+  10,000 documents, through the real API (authentication, tenant checks, serialization)?
+- **Run (2026-10-14):** the browser-test stack (uvicorn, Postgres 16), the Business tenant
+  `load-tenant-1` from `perf/load_seed.py`, 10,000 processed documents added as rows (no files: the
+  list is what is measured). Each read five times as the tenant's owner.
+  Script: `backend/perf/many_documents.py --org load-tenant-1 --count 10000`.
+
+| Read (50 per page) | Median ms | Slowest ms | Rows |
+| --- | ---: | ---: | ---: |
+| First page | 40 | 42 | 50 |
+| A page near the end (offset 9,950) | 41 | 44 | 50 |
+| Search by name | 39 | 41 | 10 |
+| Status filter | 37 | 46 | 50 |
+
+- **Database plan for the first page:** an index scan of `ix_work_items_workspace_created`
+  (workspace, newest first), 8.4 ms inside Postgres; the rest is the API around it. (The seeded rows
+  share one `created_at`, which forces the tie-break sort to read them all; real uploads have
+  distinct times, so production does less work than this.)
+- **Verdict:** no change needed. A customer with ten thousand documents sees the same list speed
+  as one with ten.
+
+## Queries per list request (session 4, §B.3)
+
+`backend/tests/api/test_list_queries_do_not_grow.py` counts the SQL statements one request runs
+with 3 and with 30 rows behind it, for the document list, the member directory and the audit log.
+The member directory ran one query per member (10 statements for a handful, 37 after adding 27):
+**F-350**, fixed by loading the people in one query. The document list and the audit log did not
+grow. The test stays in the suite, so a new per-row query fails CI.
+
+## Indexes (session 4, §B.4; F-017)
+
+- The slow paths measured above use indexes: the document list (`ix_work_items_workspace_created`),
+  the audit log (`ix_audit_logs_organization_id_created_at_id` and the partial index for denials), the status filter (`ix_work_items_workspace_status`) and
+  the per-organization lookups behind every tenant check (primary and foreign keys).
+- **F-017's 283 lines** are indexes and constraints that exist in the database (created by
+  migrations: partial indexes, GIN and vector indexes, check constraints, trigger-backed rules) but
+  are not declared on the SQLAlchemy models. They are real, wanted objects, not drift: the drift
+  gate (`backend/scripts/check_migration_drift.py`, run in CI) compares against a recorded baseline
+  of exactly these lines (`backend/alembic/drift_baseline.txt`) and fails on any new difference; the
+  baseline can only shrink.
+  **DECIDED (campaign session 4):** they stay as they are; declaring 283 database objects on the
+  models would change nothing the database does, and the ratchet already stops new drift.

@@ -170,9 +170,10 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       reviewers editing one field, a reviewer losing access mid-session.
       _Done (session 4): `backend/tests/engines/test_live_collaborative_review_live.py`; found and fixed
       F-338 (a removed reviewer's lock outlived their access by up to ninety seconds)._
-- [ ] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
+- [x] **Engine page journeys:** 25 pages and 26 navigation items are proven to render, not to work
       (Entities, Entity 360, packet splits, corroboration runs, obligations, ERP postings and targets,
       process proposals, three-way comparison, assistant canvas, notifications, legacy redirects).
+      _Done (session 4): `frontend/e2e/tests/71-engine-pages.spec.ts` (canvas, notifications link, palette, legacy and not-found addresses, redaction apply and downloads, F-145 failure messages, a proposal approved on its page, review hub take and assign, clause review, an ERP posting's decision); with 11, 12, 22, 24, 34 and the journeys, every page and nav row is `deep`. Found and fixed F-356, F-357, F-358, F-359, F-360, F-364._
 - [x] **Refunds are not recorded:** a Stripe `charge.refunded` leaves the invoice "paid" and RevOps
       revenue unchanged. Decide (Tier-1: a credit note and negative revenue) and implement if small.
       _Done (session 4): N-069, F-327; migration `s4a1_invoice_refunds`;
@@ -208,25 +209,30 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       subscribe → everything back (N-052; HANDOFF "Owner request").
       _Done (session 4): `frontend/e2e/tests/61-journey-trial-ends.spec.ts` (journey 2 of §D), with the
       clock and gateway stand-in `backend/scripts/e2e_stand_in.py`._
-- [ ] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
+- [x] **Browser-suite isolation:** keep new tests from signing a shared persona out everywhere.
+      _Done (session 4): `frontend/e2e/tests/00-suite-isolation.spec.ts`; a seeded persona cannot sign out everywhere (the session fixture refuses `/auth/logout-all` and `api()` throws for it)._
 
 ### 4.2 Operations gaps found in the 2026-10-12 review
-- [ ] **Host cron sweeps never ran against the compose stack.** 17 lines in `backend/deploy/cron.d/`
+- [x] **Host cron sweeps never ran against the compose stack.** 17 lines in `backend/deploy/cron.d/`
       (and the compose backup lines) run only from the host's cron (RUNBOOK §9.6), and the ledger's
       `cron:*` rows say "not run by docker-compose". Session 2 proved the 23 schedules inside the
       worker, not these. Run each line by hand against the compose stack (or the stack the runbook
       builds) and prove it succeeds; that includes the retention purge, ERP posting retries,
       obligations, invitations and every backup and drill.
-- [ ] **Configuration (282 rows):** one contract test that every `Settings` field is read by code
+      _Done (session 4): `backend/tests/operational/test_host_cron_lines.py` runs every host cron line through its wrapper against a freshly migrated database (13 sweeps, the watchdog, compose backup and timed restore drill, checksum tamper, heartbeat, monitor pings); found and fixed F-346 and F-355. A real compose run on the server is owner checklist B8-B10 (no image pulls here)._
+- [x] **Configuration (282 rows):** one contract test that every `Settings` field is read by code
       (otherwise remove it), documented in `docs/CONFIGURATION.md`, present in `.env.example` and
       `.env.production.template` where a deployment needs it, and refused at boot when a required
       secret is missing. Closes F-011's long tail.
-- [ ] **Migrations (163 rows):** one whole-chain proof on a fresh database: upgrade to head,
+      _Done (session 4): `backend/tests/infra/test_configuration_contract.py` covers all 293 settings (read by code, documented, in the templates where needed, refused at boot when required); 31 dead settings removed; F-351, F-352, F-353._
+- [x] **Migrations (163 rows):** one whole-chain proof on a fresh database: upgrade to head,
       downgrade to base, upgrade again. Add rows for `p9a1_truthmesh_engine` and
       `s2a1_free_trial_clock`. Review F-017's 283 undeclared index and constraint lines together
       with the index work in the prompt's section B.
-- [ ] **Integrations (17 rows):** mark each `deep` with the test that exercises it, or `blocked` with
+      _Done (session 4): the CI migrations job runs the whole chain up, down to base and up again (F-330); rows added for `p9a1`, `s2a1`, `s4a1`-`s4a3`; F-017's 283 lines DECIDED to stay (PERFORMANCE.md "Indexes", N-074)._
+- [x] **Integrations (17 rows):** mark each `deep` with the test that exercises it, or `blocked` with
       the reason (live Stripe, Groq, Gemini: owner spot checks).
+      _Done (session 4): each row `deep` with its test or `blocked` with the reason (live Stripe, Dodo, Groq, Gemini, PaddleOCR on scans, ERP SFTP: owner spot checks, launch checklist C13)._
 - [x] **CI health:** pytest takes ~1 h 40 min on GitHub, because the security and engine tests run
       twice (in the "Phase 2" and "Phase 4" proof steps, then again in the full suite). Remove the
       duplication or shard the suite so a red run is known in minutes (F-030). Make the browser job a
@@ -235,27 +241,34 @@ retention), `cron:identity`, `cron:invitations`, and `trial.reminders` (no row y
       (`PYTEST_SHARD`, `tests/infra/test_ci_shards_cover_the_suite.py`); no `--maxfail`, so a red
       shard names every failure; the browser job is in the aggregate `CI` check's `needs`; the
       migrations job also runs the whole chain to base and back (F-330)._
-- [ ] **No container pulls in the sandbox** (F-006, F-040): if Docker cannot pull images, run
+- [x] **No container pulls in the sandbox** (F-006, F-040): if Docker cannot pull images, run
       RUNBOOK §3 by hand on a clean environment, validate the compose files statically, and put the
       compose-only steps on the owner's checklist with exact commands.
+      _Done (session 4): the compose files are validated statically (`tests/infra/test_production_compose_commands.py`, `test_production_env_template.py`, the configuration contract); RUNBOOK §3 and §9 steps were run by hand where they need no images; the compose-only steps are owner checklist B6-B11 with exact commands._
 - [ ] **Load test:** use Locust (installs from PyPI); k6 needs a download that may be blocked.
-- [ ] **Bundle size:** measure before splitting. The "~412 KB gzipped" figure is from an older pass;
+- [x] **Bundle size:** measure before splitting. The "~412 KB gzipped" figure is from an older pass;
       the build warns that the main chunk is over 1,000 kB; 54 routes are already lazy-loaded, so the
       weight is elsewhere (shared vendor code, `manualChunks` in `vite.config.ts`).
-- [ ] **Older findings still open:** F-006 (a real compose run on a server), F-045 (CPU-only torch
+      _Done (session 4): first load 634.2 KB to 191.9 KB gzipped, 193.0 KB after the later changes (PERFORMANCE.md); Lighthouse /login 68 to 91._
+- [x] **Older findings still open:** F-006 (a real compose run on a server), F-045 (CPU-only torch
       image), F-050 (its "re-run pending" note is stale: close it), F-030 (suite speed).
-- [ ] **Tailwind 4:** five high `npm audit` advisories (build-time file watching in Tailwind CSS 3,
+      _Done (session 4): F-050 closed (the suite has passed on every run since); F-030 fixed (four shards); F-006 and F-045 updated, their remaining steps are owner checklist B8-B11._
+- [x] **Tailwind 4:** five high `npm audit` advisories (build-time file watching in Tailwind CSS 3,
       nothing shipped) are accepted until the Tailwind 4 move (FINDINGS "Dependencies"). It rewrites
       the CSS configuration; do it only once everything above is green, with before/after screenshots
       of every page, or record it as accepted for launch.
+      _Done (session 4): recorded as accepted for launch (N-074, FINDINGS F-039 re-audit: `npm audit --omit=dev` 0; the seven development-only advisories are Tailwind 3's build tooling)._
 
 ### 4.3 Public face
-- [ ] There is no public pricing page, and no terms or privacy page. Build them as the session 4
+- [x] There is no public pricing page, and no terms or privacy page. Build them as the session 4
       prompt says (pricing from the plan source of truth; legal pages marked for the owner's review).
+      _Done (session 4): `/pricing` from `GET /api/v1/pricing` (the published tiers), `/terms` and `/privacy` marked for counsel's review (N-073); `frontend/e2e/tests/70-public-pages.spec.ts`, `backend/tests/api/test_public_plans.py`._
 
 ### 4.4 Certification
-- [ ] `python docs/hardening/tools/campaign_slices.py --check all` exits 0 before a GO verdict.
-- [ ] The owner launch checklist (seed below) is complete, with exact steps.
+- [x] `python docs/hardening/tools/campaign_slices.py --check all` exits 0 before a GO verdict.
+      _Done (session 4): exits 0 (2026-10-14); the last 100 rows were mapped to their tests and the 7 without one got a test (F-364 found on the way)._
+- [x] The owner launch checklist (seed below) is complete, with exact steps.
+      _Done (session 4): HANDOFF.md "Owner launch checklist", with exact steps and where each is described._
 
 ## 5. Owner launch checklist (seed; session 4 completes it)
 Only the owner can do these. Each comes from an earlier decision or finding:
