@@ -508,6 +508,7 @@ const RouteRow: React.FC<{
       <td className="py-3 pr-3">
         <select
           className={INPUT}
+          aria-label={`Provider for ${taskLabel}`}
           disabled={!canWrite}
           value={provider}
           onChange={(e) => {
@@ -527,6 +528,7 @@ const RouteRow: React.FC<{
           className={INPUT}
           disabled={!canWrite}
           list={`models-${taskType}`}
+          aria-label={`Model for ${taskLabel}`}
           placeholder="Model / deployment name"
           value={model}
           onChange={(e) => setModel(e.target.value)}

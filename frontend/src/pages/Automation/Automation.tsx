@@ -589,7 +589,7 @@ export const Automation: React.FC = () => {
             <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Disabled Rules
             </span>
-            <XCircle className="h-4 w-4 text-muted-foreground/60" />
+            <XCircle className="h-4 w-4 text-muted-foreground" />
           </div>
           <div>
             <h4 className="text-2xl font-semibold tracking-tight text-foreground">
@@ -658,7 +658,7 @@ export const Automation: React.FC = () => {
 
       <div className="p-4 bg-muted/20 border border-border/50 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 select-none">
         <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/60" />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <input
             type="text"
             placeholder="Search rules by name..."
@@ -680,7 +680,7 @@ export const Automation: React.FC = () => {
                 setStatusFilter(value as "ALL" | "ENABLED" | "DISABLED")
               }
             >
-              <SelectTrigger className="w-[170px] h-9 text-xs">
+              <SelectTrigger className="w-[170px] h-9 text-xs" aria-label="Filter workflows by state">
                 <SelectValue />
               </SelectTrigger>
 
@@ -698,7 +698,7 @@ export const Automation: React.FC = () => {
             </span>
 
             <Select value={eventFilter} onValueChange={setEventFilter}>
-              <SelectTrigger className="w-[190px] h-9 text-xs">
+              <SelectTrigger className="w-[190px] h-9 text-xs" aria-label="Filter workflows by trigger">
                 <SelectValue />
               </SelectTrigger>
 
@@ -719,7 +719,7 @@ export const Automation: React.FC = () => {
             </span>
 
             <Select value={sortBy} onValueChange={setSortBy}>
-              <SelectTrigger className="w-[220px] h-9 text-xs">
+              <SelectTrigger className="w-[220px] h-9 text-xs" aria-label="Sort workflows">
                 <SelectValue />
               </SelectTrigger>
 
@@ -1105,7 +1105,7 @@ export const Automation: React.FC = () => {
                     setLogStatusFilter(value as "ALL" | "SUCCESS" | "FAILED")
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs w-full">
+                  <SelectTrigger className="h-9 text-xs w-full" aria-label="Filter by status">
                     <SelectValue />
                   </SelectTrigger>
 
@@ -1117,7 +1117,7 @@ export const Automation: React.FC = () => {
                 </Select>
 
                 <Select value={logRuleFilter} onValueChange={setLogRuleFilter}>
-                  <SelectTrigger className="h-9 text-xs w-full">
+                  <SelectTrigger className="h-9 text-xs w-full" aria-label="Filter by workflow">
                     <SelectValue />
                   </SelectTrigger>
 
@@ -1140,7 +1140,7 @@ export const Automation: React.FC = () => {
                     )
                   }
                 >
-                  <SelectTrigger className="h-9 text-xs w-full">
+                  <SelectTrigger className="h-9 text-xs w-full" aria-label="Filter by date range">
                     <SelectValue />
                   </SelectTrigger>
 
@@ -1288,7 +1288,7 @@ export const Automation: React.FC = () => {
                           flex-wrap + min-w-0 keeps these from forcing
                           horizontal scroll at 375px; the parent already wraps.
                         */}
-                        <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-muted-foreground/80">
+                        <div className="flex min-w-0 flex-wrap items-center gap-2 font-mono text-muted-foreground">
                           {log.actions_executed !== null &&
                             log.actions_executed !== undefined && (
                               <span className="rounded-md bg-muted px-2 py-0.5 font-semibold">

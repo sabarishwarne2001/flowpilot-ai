@@ -200,7 +200,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
                 </div>
               ) : workItems.length === 0 ? (
                 <div className="p-6 text-center border border-dashed border-border rounded-xl bg-muted/10 select-none">
-                  <HelpCircle className="h-6 w-6 text-muted-foreground/50 mx-auto mb-1.5" />
+                  <HelpCircle className="h-6 w-6 text-muted-foreground mx-auto mb-1.5" />
                   <p className="text-xs font-semibold text-muted-foreground">
                     No Work Items found
                   </p>

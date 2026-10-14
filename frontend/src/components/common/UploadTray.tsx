@@ -332,7 +332,7 @@ export const UploadTray: React.FC<UploadTrayProps> = ({
                     ) : entry.error ? (
                       <AlertCircle className="h-5 w-5 flex-shrink-0 text-destructive" aria-hidden />
                     ) : (
-                      <FileText className="h-5 w-5 flex-shrink-0 text-primary/80" aria-hidden />
+                      <FileText className="h-5 w-5 flex-shrink-0 text-primary" aria-hidden />
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold">{entry.file.name}</p>

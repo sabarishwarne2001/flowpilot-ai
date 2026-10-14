@@ -680,7 +680,7 @@ export const ReviewHub: React.FC = () => {
                     aria-hidden="true"
                     className={`min-w-[1.25rem] rounded-full px-1.5 py-px text-center text-[10.5px] font-semibold tabular-nums ${
                       count === 0
-                        ? "bg-muted text-muted-foreground/70"
+                        ? "bg-muted text-muted-foreground"
                         : tab === entry.id
                           ? "bg-primary text-primary-foreground"
                           : "bg-primary/10 text-primary"

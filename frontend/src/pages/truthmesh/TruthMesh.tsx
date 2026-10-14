@@ -631,7 +631,7 @@ const ConflictsView: React.FC<{
                             {cell.role ? <div className="text-[10.5px] uppercase tracking-wide text-muted-foreground">{cell.role}</div> : null}
                           </>
                         ) : (
-                          <span className="text-muted-foreground/50">·</span>
+                          <span className="text-muted-foreground">·</span>
                         )}
                       </td>
                     );

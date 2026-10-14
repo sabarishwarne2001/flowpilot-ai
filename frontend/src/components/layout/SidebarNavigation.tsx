@@ -156,14 +156,14 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
             {item.gated ? (
               <span className="ml-2 flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center" aria-hidden>
                 {item.locked && (
-                  <Lock className="h-3 w-3 text-muted-foreground/70" aria-hidden data-testid="nav-lock" />
+                  <Lock className="h-3 w-3 text-muted-foreground" aria-hidden data-testid="nav-lock" />
                 )}
               </span>
             ) : null}
           </>
         ) : null}
         {collapsed && item.locked && (
-          <Lock className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-muted-foreground/80" aria-hidden data-testid="nav-lock" />
+          <Lock className="absolute bottom-0.5 right-0.5 h-2.5 w-2.5 text-muted-foreground" aria-hidden data-testid="nav-lock" />
         )}
       </>
     );
@@ -215,7 +215,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
     collapsed ? (
       first ? null : <div className="mx-auto my-2 h-px w-6 bg-border" aria-hidden />
     ) : (
-      <p className={`fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground/75 ${first ? "pt-1" : "pt-4"}`}>
+      <p className={`fp-eyebrow px-2.5 pb-1 text-[10.5px] text-muted-foreground ${first ? "pt-1" : "pt-4"}`}>
         {label}
       </p>
     );
@@ -224,7 +224,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
     collapsed ? (
       <div className="mx-auto mb-2 h-px w-6 bg-border" aria-hidden />
     ) : (
-      <p className="fp-eyebrow truncate px-2.5 pb-1 text-[10.5px] text-muted-foreground/75">{label}</p>
+      <p className="fp-eyebrow truncate px-2.5 pb-1 text-[10.5px] text-muted-foreground">{label}</p>
     );
 
   return (

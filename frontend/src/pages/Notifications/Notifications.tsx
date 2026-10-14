@@ -274,7 +274,7 @@ export const Notifications: React.FC = () => {
                         {alert.message}
                       </p>
 
-                      <span className="text-[10px] font-semibold text-muted-foreground/70 select-none block pt-0.5">
+                      <span className="text-[10px] font-semibold text-muted-foreground select-none block pt-0.5">
                         {formatDateTime(alert.created_at)}
                       </span>
                     </div>

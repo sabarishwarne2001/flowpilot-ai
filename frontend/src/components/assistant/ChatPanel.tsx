@@ -279,7 +279,9 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({
 
   return (
     <div className={`relative flex h-full min-h-[450px] w-full flex-col overflow-hidden rounded-xl border border-border/40 bg-card ${className}`}>
-      <div className="flex-1 space-y-3.5 overflow-y-auto bg-muted/10 p-3 sm:p-4 min-h-0">
+      {/* Session 4 (§A.3, axe): scrollable, so reachable by keyboard to scroll the conversation. */}
+      <div className="flex-1 space-y-3.5 overflow-y-auto bg-muted/10 p-3 sm:p-4 min-h-0" tabIndex={0} role="region"
+        aria-label="Conversation messages">
         {localMessages.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
             <MessageSquare className="mb-2 h-7 w-7 opacity-40" />

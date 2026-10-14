@@ -852,7 +852,7 @@ export const Workspace: React.FC = () => {
                     <td className="py-3.5 px-4 text-muted-foreground text-xs uppercase font-semibold">
                       {mem.role}
                       {mem.is_derived && (
-                        <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground/70">
+                        <span className="ml-2 normal-case font-medium text-[10px] text-muted-foreground">
                           via {mem.organization_role?.toLowerCase()} role
                         </span>
                       )}
