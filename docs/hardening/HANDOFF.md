@@ -331,7 +331,7 @@ session 4 sections), took decisions N-069 to N-077 (NEEDS-OWNER.md, each
 into a new Claude Code session to continue.
 
 **Build on these (all sessions):**
-- **Browser tests are the proof for screens.** The suite (`frontend/e2e/tests`, about 75 files) runs
+- **Browser tests are the proof for screens.** The suite (`frontend/e2e/tests`, 58 files, 811 tests) runs
   in CI against the production bundle with the worker on; it is a required check. New since this
   session: every page at four widths (74), every page in light and dark through axe-core (72), the
   first run (73), TruthMesh (75), batch operations (76) and document packs (77) in depth, each on a
