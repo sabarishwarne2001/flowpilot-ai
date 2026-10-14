@@ -13,8 +13,8 @@ This page is for the owner: what was checked, how, and what it means.
 |---|---|---|
 | Every engineering plan box (CAMPAIGN-MAP.md, sessions 1–4) | **All ticked** | `CAMPAIGN-MAP.md` has no open box |
 | Every endpoint, page, job, migration and integration has a proving test | **Yes** | `docs/hardening/tools/campaign_slices.py --check all` exits 0 (`COVERAGE.csv`) |
-| Backend test suite | **Passes** | about 4,400 tests; CI runs them in four shards on every push |
-| Browser test suite | **Passes** | about 75 Playwright files against the production bundle with the worker running and the production Content-Security-Policy; a required CI check |
+| Backend test suite | **Passes: 4,492 passed, 0 failed** (9 skipped) | full local run on the final code (1 h 05 min); CI runs it in four shards on every push |
+| Browser test suite | **Passes** (811 tests) | 75 Playwright files against the production bundle with the worker running and the production Content-Security-Policy enforced; a required CI check. Its first run with the policy on found two issues, both fixed (F-410, and a journey that opened a panel before the webhook existed) |
 | Types, lint, the self-checks and the build | **Pass** | the CI "Frontend" job (`tsc -b`, the browser tests' types, `npm run lint`, `npm run check:self`, `npm run build`) |
 | Database migrations | **One head; up, down to the start and up again** | the CI "Migration head & drift" job |
 | Known-vulnerable dependencies | **None** | `pip-audit` clean; `npm audit --omit=dev` 0 (7 development-only advisories accepted, N-074) |
