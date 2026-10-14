@@ -11,6 +11,7 @@
     GET  /admin/revops/promo-codes                     codes with their redemptions
     POST /admin/revops/promo-codes                     create one
     PUT  /admin/revops/promo-codes/{id}/active         switch it on or off
+    GET  /admin/revops/promo-codes/{id}/redemptions    each use: organization, state, price, discount, contract
     GET  /admin/revops/organizations?q=                organizations a contract can be drafted for (the picker)
     GET  /admin/revops/contracts                       invoiced contracts (open and overdue invoice counts)
     POST /admin/revops/contracts                       draft one
@@ -39,7 +40,8 @@ from app.models.user import User
 from app.schemas.revops import (ContractEndIn, ContractIn, ContractOut, ContractSummary, InvoicePayIn,
                                 InvoiceVoidIn, OrganizationPick, PriceBookIn, PriceBookOut, PriceBookSummary,
                                 PriceEntryIn,
-                                PromoActiveIn, PromoCodeIn, PromoCodeOut, RevenueMetricsOut, SweepOut)
+                                PromoActiveIn, PromoCodeIn, PromoCodeOut, PromoRedemptionOut, RevenueMetricsOut,
+                                SweepOut)
 from app.services.revops import contracts, metrics, price_books, promos
 
 router = APIRouter(prefix="/admin/revops", tags=["RevOps"], dependencies=[Depends(require_superadmin)])
@@ -117,6 +119,11 @@ def set_promo_active(promo_id: uuid.UUID, payload: PromoActiveIn, db: Session = 
     promo = promos.set_active(db, promo_id=promo_id, active=payload.is_active)
     db.commit()
     return PromoCodeOut(**promo)
+
+
+@router.get("/promo-codes/{promo_id}/redemptions", response_model=list[PromoRedemptionOut])
+def list_promo_redemptions(promo_id: uuid.UUID, db: Session = Depends(get_db)) -> list[PromoRedemptionOut]:
+    return [PromoRedemptionOut(**r) for r in promos.list_redemptions(db, promo_id)]
 
 
 @router.get("/organizations", response_model=list[OrganizationPick])

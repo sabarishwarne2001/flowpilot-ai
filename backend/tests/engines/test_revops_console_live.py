@@ -13,6 +13,8 @@ from __future__ import annotations
 import uuid
 from datetime import date, timedelta
 
+from sqlalchemy import text
+
 from app.services import quota_service
 from tests.engines.conftest import Engines
 from tests.engines.test_revops_organization_picker_live import _superadmin
@@ -136,3 +138,42 @@ def test_the_sweep_reports_what_it_did(engines: Engines) -> None:
     assert swept.status_code == 200, swept.text
     assert set(swept.json()) >= {"contracts_ended", "invoices_issued", "reservations_expired"}
     assert all(isinstance(value, int) and value >= 0 for value in swept.json().values())
+
+
+def test_a_promo_codes_redemptions_are_listed_with_who_and_how_much(engines: Engines) -> None:
+    """Campaign session 4 (N-074): the console showed how many times a code was used, never by whom.
+
+    GET /admin/revops/promo-codes/{id}/redemptions lists each use: the organization, its state
+    (reserved, redeemed, released, expired), the list price and the discount, and the contract it
+    came through.
+    """
+    _superadmin(engines)
+    _plans(engines)
+    code = f"RED{uuid.uuid4().hex[:6]}".upper()
+    promo = _call(engines, "POST", "/promo-codes", {"code": code, "percent_off": 10, "duration": "ONCE"})
+    assert promo.status_code == 201, promo.text
+    promo_id = promo.json()["id"]
+
+    none_yet = _call(engines, "GET", f"/promo-codes/{promo_id}/redemptions")
+    assert none_yet.status_code == 200 and none_yet.json() == [], none_yet.text
+
+    draft = _call(engines, "POST", "/contracts", _contract(engines, promo=code))
+    assert draft.status_code == 201, draft.text
+    assert _call(engines, "POST", f"/contracts/{draft.json()['id']}/activate").status_code == 200
+
+    listed = _call(engines, "GET", f"/promo-codes/{promo_id}/redemptions")
+    assert listed.status_code == 200, listed.text
+    [use] = listed.json()
+    organization = engines.db.execute(
+        text("SELECT name, slug FROM organizations WHERE id = :o"), {"o": engines.org}
+    ).one()
+    assert (use["organization_id"], use["organization_name"], use["organization_slug"]) == (
+        str(engines.org), organization.name, organization.slug)
+    assert use["status"] == "REDEEMED" and use["redeemed_at"], use
+    assert (use["tier_key"], use["billing_interval"], use["currency"]) == ("enterprise", "month", "USD")
+    assert use["discount_micros"] == use["list_amount_micros"] // 10 > 0, use
+    assert (use["contract_id"], use["contract_number"]) == (draft.json()["id"], draft.json()["contract_number"])
+
+    assert _call(engines, "GET", f"/promo-codes/{uuid.uuid4()}/redemptions").status_code == 404
+    as_tenant = engines.client.get(f"{API}/promo-codes/{promo_id}/redemptions", headers=engines.tenant.owner.headers)
+    assert as_tenant.status_code in (403, 404)
