@@ -132,6 +132,13 @@ and proposal "Reject" / "Undo"; leave organization / decline invitation; recover
 AI / email / document settings "Test connection" / "Send test"; analytics "Sync now"; sovereign
 licence "Verify and install"; the resumable upload tray (pause, resume, retry, cancel).
 
+### 4b. Test-environment oddity seen in session 4
+On a freshly rebuilt local e2e database, the first browser run's `standIn("subscribe", …)` failed with
+`UnmappableTierError: No published quota tier '…' is in force` and the next run passed (the tiers'
+`effective_from` was later than the first run's request). CI, which seeds a fresh database every run,
+never showed it. Find out where the local first run publishes the tiers (global setup,
+`backend/scripts/seed_e2e.py`, `start-stack.sh`) and make the order deterministic.
+
 ### 5. Later (not launch blockers)
 Tailwind 4 with a page-by-page visual comparison; least-privilege database roles (N-074);
 `docs/PRODUCT-NEXT.md` items when the owner chooses them.
