@@ -472,6 +472,35 @@ def _parse_sums(text: str) -> dict[str, str]:
     return out
 
 
+
+#: What reading one damaged zip entry can raise. NotImplementedError: a compression method zipfile
+#: does not know; RuntimeError: an entry flagged as encrypted. Both come from one flipped header
+#: byte, and are a changed package, not a server error (F-407).
+_UNREADABLE_ENTRY: tuple[type[BaseException], ...] = (
+    zipfile.BadZipFile, zlib.error, EOFError, OSError, NotImplementedError, RuntimeError,
+)
+
+
+def _manifest_shape_ok(manifest: Any) -> bool:
+    """The fields verify reads have the types FlowPilot writes (F-407): valid JSON of another
+    shape is not a package, not a server error."""
+    if not isinstance(manifest, dict):
+        return False
+    for key in ("format", "package_id", "name", "created_at"):
+        if manifest.get(key) is not None and not isinstance(manifest[key], str):
+            return False
+    files = manifest.get("files")
+    if files is None:
+        return True
+    if not isinstance(files, list):
+        return False
+    return all(
+        isinstance(entry, dict)
+        and isinstance(entry.get("path"), str)
+        and (entry.get("sha256") is None or isinstance(entry["sha256"], str))
+        for entry in files
+    )
+
 def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[str, Any]:
     """Check an uploaded package against its own checksums and against FlowPilot's record of it."""
     handle.seek(0)
@@ -520,8 +549,10 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
             sums = _parse_sums(_small(sums_name).decode("utf-8"))
         except OverflowError:
             return too_large
-        except (ValueError, UnicodeDecodeError, KeyError, zipfile.BadZipFile, zlib.error, EOFError, OSError):
+        except _UNREADABLE_ENTRY + (ValueError, UnicodeDecodeError, KeyError):
             return {**invalid, "message": "The package's manifest or SHA256SUMS cannot be read."}
+        if not _manifest_shape_ok(manifest):
+            return {**invalid, "message": "This is not a FlowPilot export package (its manifest is malformed)."}
         if manifest.get("format") != v.PACKAGE_FORMAT:
             return {**invalid, "message": "This is not a FlowPilot export package (unknown format)."}
 
@@ -537,8 +568,9 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
                 with archive.open(name) as stream:
                     for chunk in iter(lambda: stream.read(_CHUNK), b""):
                         digest.update(chunk)
-            except (zipfile.BadZipFile, zlib.error, EOFError, OSError):
-                # A corrupted entry (its CRC fails, or its data no longer inflates) was changed.
+            except _UNREADABLE_ENTRY:
+                # A corrupted entry (its CRC fails, its data no longer inflates, or a flipped header
+                # byte names an unknown compression method or encryption) was changed.
                 checks.append(FileCheck(path, expected, None, "MODIFIED"))
                 continue
             actual = digest.hexdigest()
