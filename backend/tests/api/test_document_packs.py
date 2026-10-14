@@ -381,3 +381,44 @@ def test_two_administrators_applying_the_same_pack_at_once_both_succeed(db_sessi
     db_session.expire_all()
     assert db_session.execute(select(func.count()).select_from(WorkspaceSchemaPreset).where(
         WorkspaceSchemaPreset.workspace_id == tenant.workspace.id)).scalar_one() == 1
+
+
+# ---------------------------------------------------------------------------
+# Unknown and foreign packs
+# ---------------------------------------------------------------------------
+
+
+def test_an_unknown_pack_is_a_404_on_apply_and_on_enable(client, tenant, packs) -> None:
+    unknown = uuid.uuid4()
+    applied = client.post(_url(tenant.workspace.id, "/apply"), json={"preset_id": str(unknown)},
+                          headers=tenant.owner.headers)
+    assert applied.status_code == 404, applied.text
+    toggled = client.post(_url(tenant.workspace.id, f"/{unknown}/enabled"), json={"enabled": True},
+                          headers=tenant.owner.headers)
+    assert toggled.status_code == 404, toggled.text
+
+
+def test_another_organizations_own_pack_is_invisible_and_a_404(client, db_session, tenant, packs) -> None:
+    theirs = DocumentSchemaPreset(
+        organization_id=tenant.foreign_workspace.organization_id, industry="LOGISTICS",
+        document_type="air_waybill", version=1, label="Beta's air waybill", description="",
+        schema={"type": "object", "properties": {"awb_number": {"type": "string"}}, "required": []},
+        assertions=[], classifier_hints=["air waybill"], redaction_profile="financial",
+    )
+    db_session.add(theirs)
+    db_session.commit()
+
+    listed = client.get(_url(tenant.workspace.id), headers=tenant.owner.headers)
+    assert str(theirs.id) not in listed.text
+    applied = client.post(_url(tenant.workspace.id, "/apply"), json={"preset_id": str(theirs.id)},
+                          headers=tenant.owner.headers)
+    assert applied.status_code == 404, applied.text
+    toggled = client.post(_url(tenant.workspace.id, f"/{theirs.id}/enabled"), json={"enabled": True},
+                          headers=tenant.owner.headers)
+    assert toggled.status_code == 404, toggled.text
+    assert _rows(db_session, tenant.workspace.id) == []
+
+    # Their own workspace sees and applies it.
+    own = client.post(_url(tenant.foreign_workspace.id, "/apply"), json={"preset_id": str(theirs.id)},
+                      headers=tenant.other_org_member.headers)
+    assert own.status_code == 200, own.text
