@@ -180,7 +180,7 @@ const SidebarNavigation: React.FC<SidebarNavigationProps> = ({
           aria-label={label}
           aria-haspopup="dialog"
           data-testid="nav-locked-row"
-          className={`group relative flex items-center rounded-md ${shape} text-[13px] font-medium ${idle} ${item.locked ? "opacity-80" : ""}`}
+          className={`group relative flex items-center rounded-md ${shape} text-[13px] font-medium ${idle} ${item.locked ? "fp-locked" : ""}`}
         >
           {content}
         </button>

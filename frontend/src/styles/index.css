@@ -358,6 +358,19 @@
 }
 
 @layer components {
+  /* Session 4 (§A.3, F-362): an inactive row (read, revoked, disabled, superseded, removed) is
+     marked by a muted surface, never by fading its text with opacity, which drops it below the
+     WCAG AA contrast its content still needs. Its status badge says which state it is in. */
+  .fp-inactive {
+    background-color: hsl(var(--muted) / 0.45);
+  }
+
+  /* A sidebar item the plan does not include: its lock icon and "Not included in your plan"
+     say so; the label keeps full contrast (it was faded to 80% and failed AA in dark mode). */
+  .fp-locked {
+    cursor: pointer;
+  }
+
   /* ---- Overlays: modals, drawers, popovers ---------------------------- */
 
   .fp-overlay {

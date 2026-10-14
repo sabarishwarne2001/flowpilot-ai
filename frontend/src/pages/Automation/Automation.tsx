@@ -808,7 +808,7 @@ export const Automation: React.FC = () => {
                     ${
                       rule.is_active
                         ? "border-border/80 shadow-md ring-1 ring-emerald-500/10"
-                        : "border-muted/40 bg-muted/10 opacity-70 filter grayscale-[15%]"
+                        : "border-dashed border-border fp-inactive"
                     }`}
                 >
                   <div className="flex justify-between items-start space-x-4">
@@ -1206,7 +1206,7 @@ export const Automation: React.FC = () => {
               </Link>
             </header>
 
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar bg-muted/5">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 scrollbar bg-muted/5" tabIndex={0} role="region" aria-label="Execution log">
               {filteredLogs.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center p-8 select-none text-muted-foreground space-y-2">
                   <Clock className="h-8 w-8 mb-1 opacity-35" />
@@ -1356,6 +1356,7 @@ export const Automation: React.FC = () => {
 
                           {isExpanded && (
                             <pre
+                              tabIndex={0}
                               className={`overflow-x-auto rounded-lg border p-3 text-[11px] font-mono leading-relaxed max-h-48 scrollbar
                                 ${
                                   isFailed

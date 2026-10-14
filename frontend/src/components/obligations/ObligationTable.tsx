@@ -38,7 +38,7 @@ export const ObligationTable: React.FC<Props> = ({ rows, orgSlug, workspaceSlug,
       </thead>
       <tbody>
         {rows.map((row) => (
-          <tr key={row.id} className={`${TABLE_ROW} ${row.superseded ? "opacity-60" : ""}`}>
+          <tr key={row.id} className={`${TABLE_ROW} ${row.superseded ? "fp-inactive" : ""}`}>
             <td className="whitespace-nowrap p-2 align-top">
               <div className="font-medium tabular-nums">{formatDay(row.due_date)}</div>
               <div className={`text-[11px] ${row.state === "OVERDUE" ? "text-destructive" : "text-muted-foreground"}`}>

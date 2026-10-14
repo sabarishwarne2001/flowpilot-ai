@@ -293,7 +293,7 @@ export const ThreadPanel: React.FC<Props> = ({ workspaceId, item, meId, isAdmin,
       ) : (
         <ul className="space-y-3" aria-label="Threads">
           {threads.map((thread) => (
-            <li key={thread.id} className={`space-y-2 rounded-lg border p-3 ${thread.status === "RESOLVED" ? "border-border/50 opacity-75" : "border-border"}`}>
+            <li key={thread.id} className={`space-y-2 rounded-lg border p-3 ${thread.status === "RESOLVED" ? "border-border/50 fp-inactive" : "border-border"}`}>
               <div className="flex items-start justify-between gap-2">
                 <AnchorLine thread={thread} />
                 {thread.status === "OPEN" ? (

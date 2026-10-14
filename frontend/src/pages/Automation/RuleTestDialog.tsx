@@ -134,7 +134,7 @@ export const RuleTestDialog: React.FC<RuleTestDialogProps> = ({
           </button>
         </header>
 
-        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar">
+        <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto scrollbar" tabIndex={0}>
           <div className="space-y-2 select-none">
             <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
               Active Target Rule

@@ -555,7 +555,7 @@ const DocumentStrip: React.FC<{ detail: CaseDetail }> = ({ detail }) => {
   return (
     <section aria-label="Documents in this case" className="grid gap-3 sm:grid-cols-3">
       {sides.map((side) => (
-        <div key={side.key} className={`${SURFACE} flex items-start gap-3 p-3.5 ${side.id ? "" : "opacity-60"}`}>
+        <div key={side.key} className={`${SURFACE} flex items-start gap-3 p-3.5 ${side.id ? "" : "fp-inactive"}`}>
           <span className="rounded-md bg-primary/10 p-2 text-primary">
             <FileText className="h-4 w-4" aria-hidden />
           </span>

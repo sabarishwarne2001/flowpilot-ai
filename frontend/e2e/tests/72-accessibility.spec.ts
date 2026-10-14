@@ -60,6 +60,17 @@ for (const scheme of ["light", "dark"] as const) {
     }
   });
 
+  test.describe(`accessibility, ${scheme} theme — a Developer workspace`, () => {
+    // Its sidebar shows the Business and Enterprise pages as locked items, which the Enterprise
+    // owner above never sees.
+    test.use({ user: "A.owner", colorScheme: scheme });
+    test("locked items in the sidebar", async ({ page }, testInfo) => {
+      await page.goto(ws("A", ""));
+      await expect(page.getByRole("button", { name: /\(not included in your plan\)$/ }).first()).toBeVisible();
+      await audit(page, testInfo, "developer dashboard");
+    });
+  });
+
   test.describe(`accessibility, ${scheme} theme — signed out`, () => {
     test.use({ colorScheme: scheme });
     for (const path of ["/login", "/register", "/forgot-password", "/pricing", "/terms", "/privacy"]) {

@@ -200,7 +200,7 @@ export const OrganizationApiKeys: React.FC = () => {
       new Date(key.previous_secret_expires_at) > new Date();
 
     return (
-      <li key={key.id} className={`p-4 ${isRevoked ? "opacity-60" : ""}`}>
+      <li key={key.id} className={`p-4 ${isRevoked ? "fp-inactive" : ""}`}>
         <div className="flex flex-wrap items-start gap-3">
           <div className="min-w-0 flex-1">
             <p className="flex flex-wrap items-center gap-2 text-sm font-medium text-foreground">
