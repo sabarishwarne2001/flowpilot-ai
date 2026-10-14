@@ -438,7 +438,9 @@ const ExportsCard: React.FC<{
         </p>
       ) : null}
 
-      <div className="mt-4 overflow-x-auto">
+      {/* relative: the screen-reader "Download" header is absolutely placed; without an anchor it
+          escaped this scroll box and the whole page scrolled sideways on a phone. */}
+      <div className="relative mt-4 overflow-x-auto">
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase text-muted-foreground">
             <tr>

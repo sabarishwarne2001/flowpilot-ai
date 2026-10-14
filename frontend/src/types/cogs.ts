@@ -71,6 +71,14 @@ export type CostBasisSource =
   | "ESTIMATED"
   | "ZERO_BYOK";
 
+/** How each cost basis source reads on the platform screens (never the raw key). */
+export const COST_BASIS_SOURCE_LABEL: Readonly<Record<CostBasisSource, string>> = {
+  SUPPLIER_RATE_CARD: "Supplier rate card",
+  MEASURED: "Measured",
+  ESTIMATED: "Estimated",
+  ZERO_BYOK: "Zero (customer's own key)",
+};
+
 export interface RateCardEntry {
   readonly event_type: string;
   readonly provider: string;
