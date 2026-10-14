@@ -1,6 +1,12 @@
 #!/usr/bin/env python
 """ARCH-07 Step 9 — re-encryption sweeper CLI.
 
+Despite its name, it re-encrypts every secret stored under EMAIL_ENCRYPTION_KEYS
+(`encryption_rotation_service.ENCRYPTED_COLUMNS`: mail passwords, two-factor
+secrets, provider keys, identity-provider secrets, webhook, warehouse and ERP
+credentials, entity identifiers, extraction memory), not only SMTP passwords
+(F-370). Drop the old key only after --verify passes.
+
 Usage:
     python scripts/reencrypt_smtp_passwords.py --dry-run
     python scripts/reencrypt_smtp_passwords.py --apply --i-have-a-verified-backup

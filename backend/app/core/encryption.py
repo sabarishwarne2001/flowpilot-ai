@@ -190,7 +190,13 @@ def decrypting_key_index(ciphertext: str) -> Optional[int]:
     return None
 
 
-def rotate_ciphertext(ciphertext: str) -> str:
+def rotate_ciphertext(ciphertext: str, *, bounded: bool = True) -> str:
+    """Re-encrypt under the head key.
+
+    `bounded` (the default) refuses a token longer than MAX_CIPHERTEXT_LENGTH, the
+    width of the String(512) password columns; a Text column (`encrypt_secret`'s)
+    has no such bound (F-370).
+    """
     multi, _ = _get()
     try:
         rotated = multi.rotate(ciphertext.encode("ascii")).decode("ascii")
@@ -199,7 +205,7 @@ def rotate_ciphertext(ciphertext: str) -> str:
             "Ciphertext could not be rotated: no configured key decrypts it."
         ) from exc
 
-    if len(rotated) > MAX_CIPHERTEXT_LENGTH:
+    if bounded and len(rotated) > MAX_CIPHERTEXT_LENGTH:
         raise CiphertextTooLongError(
             f"Rotated ciphertext exceeds {MAX_CIPHERTEXT_LENGTH} characters."
         )
