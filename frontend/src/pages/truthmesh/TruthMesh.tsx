@@ -12,7 +12,7 @@
  * so every screen can be linked to. Contributors decide conflicts and links and run simulations;
  * viewers read.
  */
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import {
@@ -147,10 +147,15 @@ export const TruthMesh: React.FC = () => {
     onError: (error) => toast.error(errorMessage(error, "The rebuild could not be started.")),
   });
 
-  // A workspace that has never been built is built on the first visit by someone who may.
+  // A workspace that has never been built is built on the first visit by someone who may: once
+  // per visit. A build that finds no documents leaves the state EMPTY again, which re-asked for a
+  // rebuild every poll (a job and an audit row each time) while the page stayed open.
   const status = overview.data?.state.status;
+  const autoBuilt = useRef<string | null>(null);
   useEffect(() => {
-    if (status === "EMPTY" && canDecide && !rebuild.isPending && (overview.data?.documents ?? 0) === 0) {
+    if (status === "EMPTY" && canDecide && !rebuild.isPending && (overview.data?.documents ?? 0) === 0
+        && autoBuilt.current !== workspaceId) {
+      autoBuilt.current = workspaceId;
       rebuild.mutate();
     }
     // Only when the state first reads EMPTY.

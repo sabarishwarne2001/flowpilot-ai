@@ -85,9 +85,16 @@ test.describe("TruthMesh in depth — a tenant of its own", () => {
     await settle(page);
     await expect(page.getByRole("heading", { name: "TruthMesh", level: 1 })).toBeVisible();
 
+    // The first visit may already have started a build (an unbuilt mesh is built on sight);
+    // Rebuild is offered again once that one is done.
+    const rebuild = page.getByRole("button", { name: "Rebuild" });
+    await expect(rebuild).toBeEnabled({ timeout: 120_000 });
     const started = Date.now();
-    await page.getByRole("button", { name: "Rebuild" }).click();
-    await expect(page.getByText("Rebuilding the mesh")).toBeVisible();
+    const accepted = page.waitForResponse((r) => /\/truthmesh\/rebuild$/.test(r.url()) && r.request().method() === "POST");
+    await rebuild.click();
+    expect((await accepted).status()).toBe(202);
+    await expect.poll(async () => new Date((await overview()).state.last_built_at ?? 0).getTime(), { timeout: 120_000 })
+      .toBeGreaterThanOrEqual(started - 5_000);
     await expect(page.getByTestId("mesh-state")).toContainText(/^\s*Built/, { timeout: 120_000 });
     const built = await overview();
     expect(built.state.status).toBe("READY");
@@ -296,5 +303,23 @@ test.describe("TruthMesh in depth — a tenant of its own", () => {
     const rivalGraph = await api<Graph>(rival, "GET", `${own}/graph`);
     const theirs = new Set(graph.body.nodes.map((n) => n.work_item_id));
     expect(rivalGraph.body.nodes.filter((n) => theirs.has(n.work_item_id))).toEqual([]);
+  });
+});
+
+test.describe("TruthMesh — an empty workspace", () => {
+  test("is built once on the first visit, not over and over while the page is open", async ({ page }) => {
+    const empty = await newCustomer("mesh-empty", "Empty Mesh Ltd");
+    standIn("subscribe", empty.orgSlug, "--plan", "enterprise", "--seats", "1");
+    let rebuilds = 0;
+    page.on("request", (request) => {
+      if (request.method() === "POST" && /\/truthmesh\/rebuild$/.test(request.url())) rebuilds += 1;
+    });
+    await signInAs(page, empty.email);
+    await page.goto(empty.ws("truthmesh"));
+    await expect(page.getByRole("heading", { name: "TruthMesh", level: 1 })).toBeVisible();
+    // Long enough for several build-and-poll rounds (the page polls every 2 s while building).
+    await page.waitForTimeout(15_000);
+    expect(rebuilds, "rebuild requests from one visit to an empty workspace").toBeLessThanOrEqual(1);
+    await expectHealthyPage(page);
   });
 });
