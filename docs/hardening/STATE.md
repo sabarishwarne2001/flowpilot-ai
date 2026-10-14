@@ -1,8 +1,42 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-14 (pre-launch campaign, session 4 of 4 complete; what is left is in `docs/hardening/NEXT-SESSION-PROMPT.md`)_
+_Last updated: 2026-10-14 (flagship session: Helm, in progress)_
 
-## Current phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
+## Current phase — Flagship session: Helm, the flagship engine
+Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
+(PR #23, campaign session 4, is merged). Draft PR titled `Helm: the flagship engine`. The owner gave
+full founder authority: decisions are built and recorded in NEEDS-OWNER.md as
+`DECIDED (flagship session)`; the brief's own decisions as `DECIDED (owner and planning chat,
+2026-10-15)`. The design is `docs/helm/ARCHITECTURE.md`. **If this session is cut off, paste the same
+prompt again: continue on this branch and its open pull request, from the first unticked box
+below. Never restart.**
+
+**Build checklist (the brief's §12 order; each defect proven by a failing test first):**
+- [x] 0. Start-up: docs read, engines studied, live stack up (Postgres 16 + pgvector 0.8.0 on
+  :5433 for e2e and :5434 for backend tests, Redis, API, worker `--loop all --profile all`, model
+  stand-in), `docs/helm/ARCHITECTURE.md` written, draft PR opened.
+- [ ] 1. Skeleton: migration `h1a1_helm`; payables ledger, settlement and cash; mandates 1, 2, 5, 7;
+  the MILP and the Guard with certificates; `helm.plan`; mode switch, minimal cockpit, approving one
+  action; one browser test. Push, checkpoint here, whole backend suite.
+- [ ] 2. Widen the ledger: receivables, POs and deliveries, discounts, notices, compliance
+  documents, MSME detection, counterparty behaviour.
+- [ ] 3. The rest of the library (3, 4, 6, 8–12) and the simulation.
+- [ ] 4. Time machine (backtest, forecast, value held) and the sample company
+  (`backend/scripts/helm_demo_company.py`).
+- [ ] 5. Sentence drafting, readback, the validator, the gallery, autonomy and caps, approvals.
+- [ ] 6. Experience: full cockpit and visual identity, first run, Monday briefing email, preview and
+  upsell, the Overview card.
+- [ ] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
+  API scopes.
+- [ ] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
+  worker gates, performance budget, accessibility and widths, logs clean.
+- [ ] 9. Finish (§13): full backend and browser suites, frontend checks, one Alembic head with
+  up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
+  `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
+
+**Progress:** _start-up done; skeleton next._
+
+## Previous phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
 Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
 (PR #22, session 3, is merged; HANDOFF.md has "Session 3 → later sessions"). Draft PR titled
 `Campaign session 4: experience, operations and launch certification`. Owner delegated founder

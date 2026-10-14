@@ -1332,3 +1332,73 @@ All **DECIDED (campaign session 4)**; each is listed in `NEXT-SESSION-PROMPT.md`
   and suspended organizations more accurately (only support can lift a suspension).
 - **The PAN card pack** gets a second recognising phrase ("income tax department") so a real PAN card
   is matched.
+
+## Helm, the flagship engine (flagship session, 2026-10-14 onwards)
+
+The brief for the flagship session took eight decisions with the owner before it started; they are
+recorded here as given and are not reopened. Decisions taken during the build follow them, each
+marked `DECIDED (flagship session)`.
+
+## N-078 — What Helm is (DECIDED (owner and planning chat, 2026-10-15))
+
+Workflows say "when X happens, do Y". Helm replaces that with **outcome control**: the company
+states outcomes and hard limits, called **mandates** ("never pay above the agreed price", "keep
+cash above ₹10 lakh", "pay micro and small suppliers within the legal limit"), and Helm keeps the
+business inside them all the time, like a thermostat or a fund manager under a written mandate
+with pre-trade compliance. Its five parts are always named the **Promise ledger**, **Mandates**,
+the **Planner**, the **Guard** and the **Time machine**.
+
+## N-079 — The deterministic core decides; AI only assists (DECIDED (owner and planning chat, 2026-10-15))
+
+Every decision, check, plan and number comes from deterministic code (ledger rules, the optimiser,
+the simulation, the Guard). AI, through the platform's existing models and metered as today, only
+turns a sentence into a mandate draft, which deterministic code then validates. Explanations are
+deterministic templates. Helm works fully with AI switched off or the model stand-in.
+
+## N-080 — Zero external cost (DECIDED (owner and planning chat, 2026-10-15))
+
+Only existing dependencies: `scipy.optimize.milp` (HiGHS, inside SciPy) for the optimiser, NumPy
+for the simulation, reportlab for PDFs. No new paid service and no external data feeds. No
+currency conversion: each currency is planned on its own.
+
+## N-081 — Money never moves inside Helm (DECIDED (owner and planning chat, 2026-10-15))
+
+Helm decides, prepares, holds, schedules, reminds, requests and proves. Paying happens in the
+customer's bank or accounting system, through a payment run list a person executes (or the
+existing ERP posting where the customer uses it). No bank payment files in this version: they would
+carry full account numbers and are a fraud target.
+
+## N-082 — Which plans get Helm (DECIDED (owner and planning chat, 2026-10-15))
+
+- **Business:** Helm with the library mandates, Propose and Act modes, a 6-month backtest, a
+  90-day forecast and up to 15 active mandates.
+- **Enterprise:** adds unlimited mandates, custom condition mandates, approval chains, planning
+  across all workspaces, a 24-month backtest, API access and webhooks.
+- **Trial and Developer:** **Helm preview**: the sample company, one backtest a week on their own
+  documents of up to 3 months, and an upgrade path. Read-only apart from that backtest and opening
+  the sample company.
+- Prices do not change. New capability `capability.helm` and `limit.*` rows through the existing
+  seeds, plan cards and `TENANCY-AND-PLANS.md`.
+
+## N-083 — Who Helm is for first (DECIDED (owner and planning chat, 2026-10-15))
+
+Mid-sized companies that buy from many suppliers (distributors and wholesalers, manufacturers,
+logistics and transport, construction and contracting, multi-branch retail, restaurants and
+clinics; typically 50–1,000 people with a small finance team), and accounting and bookkeeping firms
+that run payables for such clients, with one workspace per client. India first (INR, GST invoices,
+the MSMED Act payment limits, income-tax section 43B(h)); global-ready (any currency and locale;
+India-specific rules sit in an "India" mandate pack). Not the first target: tiny shops with no
+purchase orders or contracts, and large enterprises with long security reviews.
+
+## N-084 — Safety defaults (DECIDED (owner and planning chat, 2026-10-15))
+
+New mandates start in Propose mode. Act mode runs actions only up to an amount cap an organization
+owner or admin sets per mandate; the default cap is 0, so payments always ask. The Guard re-checks
+every action at execution time. Every action and decision is in the audit log. Helm shows how much
+of the business it can see (a visibility meter) and never presents a guess as a fact.
+
+## N-085 — Truthful claims (DECIDED (owner and planning chat, 2026-10-15))
+
+"Value held" counts only outcomes backed by evidence; projections are labelled "potential". Helm
+gives recommendations, not financial or tax advice; the MSMED / 43B(h) mandate links to the law and
+says so.
