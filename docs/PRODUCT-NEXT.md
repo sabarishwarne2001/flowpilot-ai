@@ -120,6 +120,18 @@ records who changed what; this would record the same, from the viewer.
 **Build:** about 4 days: the viewer already draws each field's box (F-092); the save reuses the
 review's resolve rules (who may change a value, the audit entry, re-running automations).
 
+## 10. Document packs that do everything they recommend
+
+**What:** enabling a pack proposes its suggested checks in Clause assertions (one click to accept
+each), and starting a redaction of that document type pre-selects the pack's redaction profile
+(N-075). Today only the field list is applied; the card says so (F-408).
+
+**Why:** the packs are the quickest way for a new HR, healthcare, legal, logistics or KYC customer to
+get value; a pack that also sets up the checks and the redaction is a one-click setup.
+
+**Build:** about 3 days: the checks map onto the existing clause-assertion model (sentence and
+severity), and the redaction dialog already takes a profile key.
+
 ---
 
 **Recommendation:** build 2 and 3 first. Together they take about three days, earn money from the

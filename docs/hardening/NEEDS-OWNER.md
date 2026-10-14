@@ -1300,3 +1300,35 @@ All **DECIDED (campaign session 4)** under the founder authority given for this 
 - **First run:** every new workspace shows "Get started with FlowPilot" with a built-in sample invoice
   (§A.4); it hides itself when done or when the person hides it.
 
+
+## N-075 — What a Document pack does today (DECIDED, campaign session 4)
+
+**DECIDED (campaign session 4):** the Document packs card tells the truth now (F-408): enabling a pack
+makes new documents that mention at least two of its phrases be read with its field list. Its
+suggested checks and redaction profile are shown as **recommendations**: nothing creates the checks
+and redaction never uses the profile. Wiring them in (enable a pack → its checks are proposed in
+Clause assertions; a redaction of that document type pre-selects the pack's profile) is a product
+item in `docs/PRODUCT-NEXT.md`, not a launch blocker. Nothing for you to do.
+
+## N-076 — Extra files in an export package (DECIDED, campaign session 4; build in a later session)
+
+A package with an extra file outside its folder, or two copies under one name, still verifies.
+**DECIDED:** any extra file is "Tampered", except the two things macOS adds when someone re-zips a
+folder (`__MACOSX/…` and `.DS_Store`), which are ignored. To build next session (the batch audit
+reproduced it; no committed test yet).
+
+## N-077 — Small product rules settled in campaign session 4 (build in a later session)
+
+All **DECIDED (campaign session 4)**; each is listed in `NEXT-SESSION-PROMPT.md`:
+- **Conversation retention counts from the last message,** not from when the conversation started
+  (today a conversation still in use can be deleted by the nightly purge).
+- **Safe Harbor wording:** the notice names what the HIPAA profile actually removes (names, dates
+  of birth, SSN, card numbers, email, phone) and says the other Safe Harbor identifiers (for example
+  medical record numbers and admission dates) need a manual pass; it still never says "HIPAA
+  compliant".
+- **Dispatch tags are history:** switching tagging off keeps the tags already written; the batch
+  page says so next to the switch.
+- **`/no-access` goes away:** it redirects to the workspace picker, which already explains archived
+  and suspended organizations more accurately (only support can lift a suspension).
+- **The PAN card pack** gets a second recognising phrase ("income tax department") so a real PAN card
+  is matched.
