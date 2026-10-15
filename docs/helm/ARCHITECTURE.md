@@ -120,7 +120,10 @@ settlements, identities) to promise rows, each with a deterministic `source_key`
   promises and its counterparties' settlement links;
 - **fully**: nightly (`helm.ledger_build` with `{"full": true}` in `DEFAULT_SCHEDULE`).
 A test proves the nightly full rebuild produces exactly the rows the incremental updates did.
-Reads use one REPEATABLE READ transaction (`helm/snapshot.py`), so a plan never sees half a rebuild.
+Reads take a shared hold on each workspace's ledger lock, so a plan never sees half a rebuild. An
+invoice's payment state is the one exception to "read the projection": the snapshot takes the
+`helm_settlements` row whenever its version is newer than the promise's copy, so a payment approved
+seconds ago is already scheduled for the next plan and the next bank import (F-427).
 
 ## 5. Mandates
 
