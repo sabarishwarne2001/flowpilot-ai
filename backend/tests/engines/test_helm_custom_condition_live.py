@@ -66,6 +66,8 @@ def test_a_business_book_cannot_create_preview_or_backtest_a_custom_condition(cl
     library = client.get(_url(tenant, "/library"), headers=headers).json()
     card = next(t for t in library["templates"] if t["key"] == "custom_condition")
     assert card["available"] is False and card["plan"] == "enterprise" and card["editor"]["max_conditions"] == 8
+    assert card["repeatable"] is True
+    assert not [t["key"] for t in library["templates"] if t["repeatable"] and t["key"] != "custom_condition"]
 
 
 def test_enterprise_holds_a_matching_invoice_and_the_guard_refuses_paying_it(client, db_session, tenant,
@@ -103,6 +105,13 @@ def test_enterprise_holds_a_matching_invoice_and_the_guard_refuses_paying_it(cli
                                                "is new; release it once that is no longer true.")
     paying = client.post(url, json={"template": "pay_on_time", "activate": True}, headers=headers)
     assert paying.status_code == 201, paying.text
+    # Another rule is a mandate of its own (kept a draft here); the same rule a second time is refused.
+    overdue = {**RULE, "name": "Overdue bills", "conditions": [{"field": "days_until_due", "op": "<", "value": 0}]}
+    other = client.post(url, json={"template": "custom_condition", "params": overdue}, headers=headers)
+    assert other.status_code == 201 and other.json()["title"] == "Overdue bills", other.text
+    same = client.post(url, json={"template": "custom_condition", "params": RULE}, headers=headers)
+    assert same.status_code == 422, same.text
+    assert same.json()["message"] == 'This is the same as the active mandate "Large invoices from new suppliers".'
 
     planned = client.post(_url(tenant, f"/books/{book['id']}/plan"), headers=headers)
     assert planned.status_code == 200, planned.text

@@ -263,6 +263,9 @@ class Template:
     title_from: Optional[Callable[[Any], str]] = None
     #: What the editor needs beyond the readback's chips (the custom condition's fields and operators).
     editor: Optional[dict[str, Any]] = None
+    #: Several mandates may use it, each with its own rule (the custom condition); the gallery keeps
+    #: offering it after the first. An identical one is still refused as a duplicate.
+    repeatable: bool = False
 
 
 def hold_code_of(template: Template, mandate: ActiveMandate) -> Optional[str]:

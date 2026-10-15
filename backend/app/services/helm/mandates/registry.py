@@ -201,7 +201,7 @@ def library(*, enterprise: bool = True) -> list[dict[str, Any]]:
                     "available": enterprise or found.plan != "enterprise", "defaults": defaults, "readback": rb,
                     "is_limit": found.is_limit, "law_links": list(found.law_links), "disclaimer": found.disclaimer,
                     "recommended_for": list(found.recommended_for), "required": required_params(found.key),
-                    **({"editor": found.editor} if found.editor else {})})
+                    "repeatable": found.repeatable, **({"editor": found.editor} if found.editor else {})})
     return out
 
 

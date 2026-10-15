@@ -643,6 +643,6 @@ TEMPLATE = base.Template(
     summary="Your own rule over an invoice's facts: hold it, ask a person before paying it, or be told.",
     Params=Params, readback=_readback, evaluate=_evaluate, propose=_propose, guard_checks=_guard,
     optimizer=_optimizer, backtest=_backtest, validate=_validate, plan="enterprise", is_limit=True, hold_code=CODE,
-    hold_code_for=code_of, still_holds=_still_holds, title_from=_title, editor=_editor(),
+    hold_code_for=code_of, still_holds=_still_holds, title_from=_title, editor=_editor(), repeatable=True,
     keywords=("custom", "condition", "my own rule", "any invoice where", "whenever an invoice"),
 )
