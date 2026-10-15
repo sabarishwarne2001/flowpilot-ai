@@ -62,6 +62,7 @@ class Viewer:
 
 
 def viewer(db: Session, *, organization_id: uuid.UUID, user_id: uuid.UUID, role: Any) -> Viewer:
+    gate.assert_api_access(db, organization_id)
     role = str(getattr(role, "value", role)).upper()
     if not gate.can_view(role):
         raise HelmForbidden("Helm is for organization owners, admins and the billing role. Your Helm tasks are in "

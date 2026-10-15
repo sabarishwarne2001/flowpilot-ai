@@ -65,6 +65,27 @@ def api_held(db: Session, organization_id: uuid.UUID) -> bool:
     return _has(db, organization_id, entitlements.HELM_API_CAPABILITY)
 
 
+def through_api_key() -> bool:
+    """Whether this request authenticated with an API key (the principal `get_current_user` set)."""
+    from app.core.principal import PrincipalKind, get_current_principal
+
+    principal = get_current_principal()
+    return principal is not None and principal.kind == PrincipalKind.API_KEY
+
+
+def assert_api_access(db: Session, organization_id: uuid.UUID) -> None:
+    """An API key reaches Helm only on a plan with `capability.helm_api` (Enterprise). Its scope
+    (`helm:read` for reading, `helm:write` for changing) was checked before the route ran; a person
+    signed in is not affected. Not audited: a refused key is refused on every call it makes."""
+    if not through_api_key() or api_held(db, organization_id):
+        return
+    raise CapabilityRequiredError(
+        "Helm through API keys and webhooks is part of the Enterprise plan. Sign in to use Helm on your plan, "
+        "or upgrade to Enterprise to reach Helm from your own systems.",
+        details={"reason": "capability_required", "capability": entitlements.HELM_API_CAPABILITY,
+                 "remedy": "UPGRADE_PLAN"})
+
+
 def require(db: Session, context: Any, key: str, operation: str) -> None:
     """402 CAPABILITY_REQUIRED (audited) unless the plan carries `key`."""
     from app.api import capability_gate
@@ -165,6 +186,7 @@ def readable_workspaces(db: Session, *, organization_id: uuid.UUID, user_id: uui
 
 
 __all__ = ["HELM_DECIDER_ROLES", "HELM_VIEWER_ROLES", "PREVIEW_BACKTEST_MONTHS", "active_mandate_count",
-           "all_workspaces_held", "api_held", "approval_chains_held", "assert_mandate_room",
+           "all_workspaces_held", "api_held", "approval_chains_held", "assert_api_access", "assert_mandate_room",
            "backtest_months_limit", "can_approve", "can_decide", "can_view", "custom_held", "helm_held",
-           "mandates_limit", "preview_backtest_allowed", "preview_error", "readable_workspaces", "require"]
+           "mandates_limit", "preview_backtest_allowed", "preview_error", "readable_workspaces", "require",
+           "through_api_key"]
