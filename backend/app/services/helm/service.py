@@ -878,7 +878,7 @@ def ledger_view(db: Session, who: Viewer, book: HelmBook, *, kind: Optional[str]
         query = query.where(HelmPromise.status.in_((v.STATUS_BROKEN, v.STATUS_PARTIAL)) |
                             ((HelmPromise.status == v.STATUS_OPEN) & (HelmPromise.due_date <= func.current_date() + 7)))
     total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
-    rows = db.execute(query.order_by(HelmPromise.due_date.nulls_last(), HelmPromise.source_key)
+    rows = db.execute(query.order_by(HelmPromise.due_date.nulls_last(), HelmPromise.source_key, HelmPromise.id)
                       .limit(min(500, max(1, limit))).offset(max(0, offset))).scalars().all()
     names = {w.id: w.workspace_name for w in db.execute(
         select(Workspace).where(Workspace.organization_id == who.organization_id)).scalars()}
