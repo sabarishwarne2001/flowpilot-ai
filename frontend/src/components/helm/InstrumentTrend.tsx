@@ -1,6 +1,6 @@
 import React from "react";
 
-import { formatCalendarDate } from "@/utils/displayTime";
+import { formatCalendarDate, formatNumber } from "@/utils/displayTime";
 import type { TrendPoint } from "@/types/helm";
 
 /**
@@ -40,7 +40,7 @@ export const InstrumentTrend: React.FC<{ readonly points: readonly TrendPoint[];
       <circle cx={x(points.length - 1)} cy={y(last.value)} r={4} className="helm-trend-end" />
       {points.map((p, i) => (
         <rect key={p.on} x={x(i) - (W - 2 * PAD) / (2 * (points.length - 1))} y={0} width={(W - 2 * PAD) / (points.length - 1)} height={H} fill="transparent">
-          <title>{`${formatCalendarDate(p.on)}: ${p.value.toLocaleString()}`}</title>
+          <title>{`${formatCalendarDate(p.on)}: ${formatNumber(p.value)}`}</title>
         </rect>
       ))}
     </svg>
