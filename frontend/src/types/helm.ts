@@ -287,6 +287,8 @@ export interface LibraryTemplate {
   law_links: { title: string; url: string }[];
   disclaimer: string | null;
   recommended_for: string[];
+  /** Parameters with no default: the value shown is an example the person must set before adding. */
+  required: string[];
 }
 
 export interface HelmLibrary {
@@ -299,6 +301,28 @@ export interface MandatePreview {
   problems: string[];
   spec: Record<string, unknown> | null;
   readback: Readback | null;
+  /** A drafted spec's required parameters the sentence did not state (the example shown is not theirs). */
+  unstated?: string[];
+}
+
+export interface DraftCard {
+  template: string;
+  title: string;
+  summary: string;
+  group: string;
+}
+
+/** POST …/mandates/draft: a sentence read by the model and checked by the validator (brief §5.3). */
+export interface HelmDraft {
+  sentence: string;
+  source: "model" | "gallery";
+  reason: "NO_MODEL" | "MODEL_UNAVAILABLE" | "NOT_UNDERSTOOD" | "NO_TEMPLATE" | null;
+  message: string | null;
+  draft: MandatePreview | null;
+  template: DraftCard | null;
+  alternatives: DraftCard[];
+  unknown_counterparties: string[];
+  backtest: { months: number } | null;
 }
 
 export interface HelmIdentity {

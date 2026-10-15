@@ -1,13 +1,22 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ExternalLink, Lock, Pause, Play, Plus, Trash2 } from "lucide-react";
+import { ExternalLink, Lock, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
+import { MandateComposer } from "@/components/helm/MandateComposer";
+import { MandateEditor, type EditorStart } from "@/components/helm/MandateEditor";
 import { ReadbackSentence } from "@/components/helm/ReadbackSentence";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { errorMessage } from "@/services/api/errors";
-import { createHelmMandate, getHelmLibrary, helmKeys, listHelmMandates, setHelmMandateStatus } from "@/services/api/helm";
+import {
+  createHelmMandate,
+  getHelmLibrary,
+  helmKeys,
+  listHelmMandates,
+  previewHelmMandate,
+  setHelmMandateStatus,
+} from "@/services/api/helm";
 import type { HelmMandate, LibraryTemplate } from "@/types/helm";
 
 const STATUS_WORDS: Record<HelmMandate["status"], string> = {
@@ -40,7 +49,7 @@ const LawLinks: React.FC<{ readonly links: { title: string; url: string }[]; rea
   ) : null;
 
 export const HelmMandates: React.FC = () => {
-  const { organizationId, overview, canDecide } = useHelm();
+  const { organizationId, orgSlug, overview, canDecide } = useHelm();
   const book = useHelmBook();
   const queryClient = useQueryClient();
   const library = useQuery({ queryKey: helmKeys.library(organizationId), queryFn: () => getHelmLibrary(organizationId) });
@@ -49,11 +58,26 @@ export const HelmMandates: React.FC = () => {
     queryFn: () => listHelmMandates(organizationId, book.id),
   });
   const writable = canDecide && !book.read_only;
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [fromGallery, setFromGallery] = useState<EditorStart | null>(null);
 
   const refresh = (): void => {
     void queryClient.invalidateQueries({ queryKey: helmKeys.book(organizationId, book.id) });
     void queryClient.invalidateQueries({ queryKey: helmKeys.overview(organizationId) });
   };
+
+  // A template whose value has no default ("Keep cash above a floor") opens the editor: the gallery's
+  // value is an example, and Helm saves the person's own.
+  const open = useMutation({
+    mutationFn: async (template: LibraryTemplate): Promise<EditorStart> => ({
+      template: template.key,
+      title: template.title,
+      preview: await previewHelmMandate(organizationId, book.id, { template: template.key }),
+      unstated: template.required,
+    }),
+    onSuccess: (start) => setFromGallery(start),
+    onError: (error) => toast.error(errorMessage(error, "Helm could not open this mandate.")),
+  });
 
   const add = useMutation({
     mutationFn: (template: LibraryTemplate) =>
@@ -98,6 +122,17 @@ export const HelmMandates: React.FC = () => {
         ) : null}
       </div>
 
+      {writable ? (
+        <MandateComposer
+          organizationId={organizationId}
+          orgSlug={orgSlug}
+          bookId={book.id}
+          library={library.data?.templates ?? []}
+          backtestMonths={overview.limits.backtest_months}
+          onSaved={refresh}
+        />
+      ) : null}
+
       <section aria-labelledby="helm-mandates-yours">
         <h2 id="helm-mandates-yours" className="helm-label mb-2">
           Yours
@@ -110,7 +145,26 @@ export const HelmMandates: React.FC = () => {
           <p className="helm-panel p-4 text-sm">None yet. Pick from the library below.</p>
         ) : (
           <ul className="space-y-2">
-            {(mandates.data ?? []).map((mandate) => (
+            {(mandates.data ?? []).map((mandate) =>
+              editingId === mandate.id ? (
+                <li key={mandate.id}>
+                  <MandateEditor
+                    organizationId={organizationId}
+                    bookId={book.id}
+                    mandate={mandate}
+                    start={{
+                      template: mandate.template,
+                      title: mandate.title,
+                      preview: { valid: true, problems: [], spec: mandate.spec, readback: mandate.readback },
+                    }}
+                    onCancel={() => setEditingId(null)}
+                    onDone={() => {
+                      setEditingId(null);
+                      refresh();
+                    }}
+                  />
+                </li>
+              ) : (
               <li key={mandate.id} className="helm-panel p-4" data-testid="helm-mandate">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
@@ -124,7 +178,18 @@ export const HelmMandates: React.FC = () => {
                     <LawLinks links={mandate.law_links} disclaimer={mandate.disclaimer} />
                   </div>
                   {writable ? (
-                    <div className="flex shrink-0 gap-2">
+                    <div className="flex shrink-0 flex-wrap gap-2">
+                      {mandate.status !== "ARCHIVED" ? (
+                        <button
+                          type="button"
+                          className="helm-btn"
+                          onClick={() => setEditingId(mandate.id)}
+                          aria-label={`Edit ${mandate.title}`}
+                        >
+                          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                          Edit
+                        </button>
+                      ) : null}
                       {mandate.status === "ACTIVE" ? (
                         <button
                           type="button"
@@ -160,7 +225,8 @@ export const HelmMandates: React.FC = () => {
                   ) : null}
                 </div>
               </li>
-            ))}
+              ),
+            )}
           </ul>
         )}
       </section>
@@ -169,6 +235,21 @@ export const HelmMandates: React.FC = () => {
         <h2 id="helm-library" className="helm-label mb-2">
           Library
         </h2>
+        {fromGallery ? (
+          <div className="mb-4">
+            <MandateEditor
+              key={fromGallery.template}
+              organizationId={organizationId}
+              bookId={book.id}
+              start={fromGallery}
+              onCancel={() => setFromGallery(null)}
+              onDone={() => {
+                setFromGallery(null);
+                refresh();
+              }}
+            />
+          </div>
+        ) : null}
         {library.isLoading ? (
           <p className="helm-muted text-sm" role="status">
             Loading…
@@ -207,12 +288,18 @@ export const HelmMandates: React.FC = () => {
                               <button
                                 type="button"
                                 className="helm-btn"
-                                disabled={used || !template.available || add.isPending}
-                                onClick={() => add.mutate(template)}
+                                disabled={used || !template.available || add.isPending || open.isPending}
+                                onClick={() => (template.required.length > 0 ? open.mutate(template) : add.mutate(template))}
                                 aria-label={used ? `${template.title}: already yours` : `Add ${template.title}`}
                               >
                                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
-                                {used ? "Already yours" : !template.available ? "On Enterprise" : "Add in Propose mode"}
+                                {used
+                                  ? "Already yours"
+                                  : !template.available
+                                    ? "On Enterprise"
+                                    : template.required.length > 0
+                                      ? "Set it up"
+                                      : "Add in Propose mode"}
                               </button>
                             </div>
                           ) : null}

@@ -24,7 +24,7 @@
  * Prompts recognised (by their fixed opening lines in app/services/llm_service.py
  * and friends): classification, entity extraction, summary, verification agents
  * (three framings), the assistant's RAG synthesis (streamed or not), clause
- * assertions. Anything else gets a short neutral answer.
+ * assertions, Helm's mandate drafter. Anything else gets a short neutral answer.
  *
  * One deliberate disagreement: the cautious verification agent ("return null
  * instead of guessing") refuses to read a bank account on a document that says
@@ -288,6 +288,53 @@ function assertionAnswer(prompt) {
   return JSON.stringify({ verdict: "PASS", quote: best.sentence, value: money(best.sentence), reasoning: "The excerpt states the requirement." });
 }
 
+/* ---------------------------------------------------- Helm's mandate drafter */
+
+/** "5 lakh" -> "500000", "2 crore" -> "20000000", "25,000" -> "25000"; null when no amount is written. */
+function amountIn(sentence) {
+  const match = /(\d[\d,]*(?:\.\d+)?)\s*(lakh|lac|crore|k)?\b/i.exec(sentence);
+  if (!match) return null;
+  const base = Number(match[1].replace(/,/g, ""));
+  const scale = { lakh: 1e5, lac: 1e5, crore: 1e7, k: 1e3 }[(match[2] ?? "").toLowerCase()] ?? 1;
+  return String(base * scale);
+}
+
+function currencyIn(sentence) {
+  if (/₹|rupee|\binr\b|lakh|crore/i.test(sentence)) return "INR";
+  if (/\$|dollar|\busd\b/i.test(sentence)) return "USD";
+  if (/€|euro|\beur\b/i.test(sentence)) return "EUR";
+  return "INR";
+}
+
+/**
+ * The drafting prompt (app/services/helm/drafting.py) ends with the sentence between <<< and >>>.
+ * A careful model's answer for the test sentences: the template the words point at and only the
+ * values the sentence states. Anything it does not recognise gets {"template": null}.
+ */
+function helmDraft(prompt) {
+  const sentence = (/<<<([\s\S]*)>>>\s*$/.exec(prompt) || [])[1] ?? "";
+  const s = sentence.toLowerCase();
+  const answer = (template, params = {}, alternatives = []) =>
+    JSON.stringify({ template, params, counterparties: [], alternatives });
+  if (/duplicate|twice|same (bill|invoice)/.test(s)) return answer("never_pay_duplicate");
+  if (/agreed price|overcharg|more than the (agreed|po) price/.test(s)) return answer("never_pay_above_agreed_price");
+  if (/bank (account|details)/.test(s)) return answer("never_pay_changed_bank_account");
+  if (/cash|in the bank|balance/.test(s)) {
+    const amount = amountIn(sentence);
+    return answer("keep_cash_above", amount ? { floor: { amount, currency: currencyIn(sentence) } } : {}, ["pay_on_time"]);
+  }
+  if (/remind|chase|late/.test(s) && /customer/.test(s)) {
+    const days = (s.match(/\d+/g) ?? []).map(Number).filter((d) => d > 0 && d < 120).slice(0, 3);
+    return answer("chase_overdue_customers", days.length ? { days } : {});
+  }
+  if (/on time|due date/.test(s)) return answer("pay_on_time");
+  if (/purchase order|\bpo\b/.test(s)) {
+    const amount = amountIn(sentence);
+    return answer("po_required_above", amount ? { threshold: { amount, currency: currencyIn(sentence) } } : {});
+  }
+  return answer(null);
+}
+
 /* --------------------------------------------------------------- router */
 
 function respond(prompt) {
@@ -309,6 +356,9 @@ function respond(prompt) {
   }
   if (prompt.includes("User Question") && prompt.includes("Document Context")) {
     return answerQuestion(prompt);
+  }
+  if (prompt.includes("You are Helm's mandate drafter.")) {
+    return helmDraft(prompt);
   }
   return "OK";
 }

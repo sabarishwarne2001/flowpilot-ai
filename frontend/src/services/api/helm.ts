@@ -15,6 +15,7 @@ import type {
   HelmOverview,
   HelmSettings,
   MandatePreview,
+  HelmDraft,
   PaymentRun,
 } from "@/types/helm";
 
@@ -106,9 +107,12 @@ export const createHelmMandate = async (
 export const previewHelmMandate = async (
   organizationId: string,
   bookId: string,
-  body: MandateBody,
+  body: MandateBody & { mandate_id?: string },
 ): Promise<MandatePreview> =>
   (await apiClient.post<MandatePreview>(`${book(organizationId, bookId)}/mandates/preview`, body)).data;
+
+export const draftHelmMandate = async (organizationId: string, bookId: string, sentence: string): Promise<HelmDraft> =>
+  (await apiClient.post<HelmDraft>(`${book(organizationId, bookId)}/mandates/draft`, { sentence })).data;
 
 export const updateHelmMandate = async (
   organizationId: string,
@@ -225,7 +229,14 @@ export const deleteHelmSample = async (organizationId: string): Promise<HelmSamp
 
 export const requestHelmBacktest = async (
   organizationId: string,
-  body: { book_id?: string; workspace_id?: string; months: number; templates?: string[] },
+  body: {
+    book_id?: string;
+    workspace_id?: string;
+    months: number;
+    templates?: string[];
+    /** Full draft specs: a drafted mandate replayed with its own numbers before it is saved. */
+    mandates?: { template: string; params?: Record<string, unknown> | null; scope?: Record<string, unknown> | null }[];
+  },
 ): Promise<HelmBacktest> => (await apiClient.post<HelmBacktest>(`${base(organizationId)}/backtests`, body)).data;
 
 export const listHelmBacktests = async (organizationId: string, bookId: string): Promise<HelmBacktest[]> =>
