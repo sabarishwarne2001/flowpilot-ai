@@ -28,6 +28,7 @@ from app.templates.emails.organization_invitation import render_organization_inv
 from app.templates.emails.password_reset import render_password_reset
 from app.templates.emails.trial_notice import render_trial_notice
 from app.templates.emails.verify_email import render_verify_email
+from app.templates.emails.helm import render_briefing, render_dispute, render_document_request, render_reminder
 
 NOW = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
 LINK = "https://app.example.com/action#token=abc123"
@@ -59,7 +60,26 @@ EMAILS = {
     "operator": lambda: render_operator_alert(subject="Dead jobs", body="3 jobs failed for good.", occurrences=3,
                                               first_seen_at=NOW, last_seen_at=NOW, console_url=LINK,
                                               brand_name="FlowPilot"),
+    # Flagship session: Helm's emails (the Monday briefing, and what its hands send to suppliers and customers).
+    "helm-briefing": lambda: render_briefing(
+        brand_name="Example Cloud", organization_name="Meridian Wholesale", book_name="Main", week_of="19 Oct 2026",
+        plan_lines=["Pay Konkan Packaging ₹1.2 lakh on Tue 20 Oct", "Remind Sahyadri Foods about INV-2041"],
+        risk_lines=["Cash may fall below ₹10 lakh on 3 Nov (30% chance)"], value_line="₹4.9 lakh confirmed",
+        waiting=3, cockpit_url=LINK, preferences_url="https://app.example.com/prefs"),
+    "helm-document-request": lambda: render_document_request(
+        organization_name="Meridian Wholesale", supplier_name="Deccan Freight", document_title="insurance certificate",
+        valid_until="31 Oct 2026", upload_url=LINK),
+    "helm-dispute": lambda: render_dispute(
+        organization_name="Meridian Wholesale", supplier_name="Konkan Packaging", invoice_number="KP-1182",
+        currency="INR", lines=[{"description": "Corrugated boxes", "po_number": "PO-77", "agreed_micros": 42_000_000,
+                                "billed_micros": 46_000_000}], overcharge_micros=400_000_000),
+    "helm-reminder": lambda: render_reminder(
+        organization_name="Meridian Wholesale", customer_name="Sahyadri Foods", invoice_number="INV-2041",
+        currency="INR", amount_micros=180_000 * 1_000_000, due_date="5 Oct 2026", days_overdue=10, level=2),
 }
+
+#: Emails a supplier or customer receives about one invoice: no link to follow, so no button.
+LINKLESS = {"helm-dispute", "helm-reminder"}
 
 
 @pytest.mark.parametrize("name", sorted(EMAILS))
@@ -82,4 +102,7 @@ def test_the_email_suits_every_mail_client(name: str) -> None:
     assert len(cells) == len(buttons), f"{len(buttons)} buttons, {len(cells)} drawn as a table cell"
 
     assert text_body.strip(), "no plain-text part"
+    if name in LINKLESS:
+        assert not buttons, "an email with nothing to follow has no button"
+        return
     assert LINK.split("#")[0] in text_body, "the plain-text part lacks the link"

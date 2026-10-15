@@ -129,7 +129,8 @@ def render_briefing(*, brand_name: str, organization_name: str, book_name: str, 
                f"<p><strong>Risks</strong></p><ul>{risk_html}</ul>"
                f"<p><strong>Value held:</strong> {esc(value_line)}<br><strong>Waiting for approval:</strong> "
                f"{waiting}</p><div class=\"button-container\"><a href=\"{esc_attr(cockpit_url)}\" class=\"button\">"
-               "Open the cockpit</a></div>")
+               "Open the cockpit</a></div>"
+               f"<p><a href=\"{esc_attr(preferences_url)}\">Turn this briefing off</a></p>")
     footer = (f"You receive the Monday briefing as an owner or admin of {organization_name}. Turn it off in your "
               "notification preferences.")
     return subject, _wrap(subject, brand_name, content, footer), text

@@ -10,7 +10,7 @@ workers or a retried job never send it twice). Never for the sample company.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
@@ -86,11 +86,13 @@ def send(db: Session, book: HelmBook, *, week: str) -> int:
     org = db.get(Organization, book.organization_id)
     data = content(db, book)
     base = app_settings.FRONTEND_URL.rstrip("/")
-    cockpit = f"{base}/{org.slug}/helm/cockpit?book={book.id}"
-    preferences = f"{base}/organizations/{org.slug}/notifications"
+    # The cockpit is /:org/helm; "turn it off" is the person's own notification preferences.
+    cockpit = f"{base}/{org.slug}/helm?book={book.id}"
+    preferences = f"{base}/settings?section=notifications"
+    year, number = (int(part) for part in week.split("-W"))
     subject, html, text = templates.render_briefing(
         brand_name=app_settings.PROJECT_NAME, organization_name=org.legal_name or org.name, book_name=book.name,
-        week_of=week, plan_lines=data["plan_lines"], risk_lines=data["risk_lines"], value_line=data["value_line"],
+        week_of=money.day(date.fromisocalendar(year, number, 1)), plan_lines=data["plan_lines"], risk_lines=data["risk_lines"], value_line=data["value_line"],
         waiting=data["waiting"], cockpit_url=cockpit, preferences_url=preferences)
     sent = 0
     for user_id, email in db.execute(
