@@ -177,6 +177,12 @@ def _and(words: list[str], joiner: str = "and") -> str:
     return words[0] if len(words) == 1 else ", ".join(words[:-1]) + f" {joiner} " + words[-1]
 
 
+NAME_WORDS = "Give the condition a short name, for example \"Large invoices from new suppliers\"."
+LIST_WORDS = f"List the conditions, one to {MAX_CONDITIONS} of them."
+MATCH_WORDS = "Choose whether all the conditions must be true, or any one of them."
+OUTCOME_WORDS = "Choose what Helm does: hold the invoice, ask a person before paying it, or tell you."
+
+
 class Params(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -187,18 +193,32 @@ class Params(BaseModel):
     conditions: list[Any]
     outcome: str = HOLD
 
+    @model_validator(mode="before")
+    @classmethod
+    def _kinds(cls, raw: Any) -> Any:
+        """A setting of the wrong kind (a name that is not text, conditions that are not a list), in
+        words before Pydantic would say it in its own."""
+        if not isinstance(raw, dict):
+            return raw
+        kinds = (("name", str, NAME_WORDS), ("conditions", list, LIST_WORDS), ("match", str, MATCH_WORDS),
+                 ("outcome", str, OUTCOME_WORDS))
+        problems = [words for key, kind, words in kinds if key in raw and not isinstance(raw[key], kind)]
+        if problems:
+            raise base.Problems(problems)
+        return raw
+
     @model_validator(mode="after")
     def _plain(self) -> "Params":
         problems: list[str] = []
         self.name = re.sub(r"\s+", " ", self.name).strip()
         if not self.name:
-            problems.append("Give the condition a short name, for example \"Large invoices from new suppliers\".")
+            problems.append(NAME_WORDS)
         elif len(self.name) > MAX_NAME:
             problems.append(f"Keep the name under {MAX_NAME} characters.")
         if self.match not in MATCHES:
-            problems.append("Choose whether all the conditions must be true, or any one of them.")
+            problems.append(MATCH_WORDS)
         if self.outcome not in OUTCOMES:
-            problems.append("Choose what Helm does: hold the invoice, ask a person before paying it, or tell you.")
+            problems.append(OUTCOME_WORDS)
         if not self.conditions:
             problems.append("Add at least one condition.")
         elif len(self.conditions) > MAX_CONDITIONS:

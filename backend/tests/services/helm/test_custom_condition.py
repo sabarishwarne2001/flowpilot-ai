@@ -154,6 +154,17 @@ def test_unknown_fields_wrong_operators_and_bad_values_are_refused_in_words():
         assert "{" not in p and "Input should" not in p and "Value error" not in p, p
 
 
+def test_settings_of_the_wrong_kind_are_refused_in_words_too():
+    found = problems({"name": None, "conditions": "amount above 5 lakh", "match": 1, "outcome": None})
+    assert found == [
+        'Give the condition a short name, for example "Large invoices from new suppliers".',
+        "List the conditions, one to 8 of them.",
+        "Choose whether all the conditions must be true, or any one of them.",
+        "Choose what Helm does: hold the invoice, ask a person before paying it, or tell you."]
+    assert problems({"conditions": [rule("amount", ">", money(5 * LAKH))]}) == ["The name is needed."]
+    assert problems({"name": "Big"}) == ["The list of conditions is needed."]
+
+
 def test_the_rule_as_a_whole_is_checked_in_words():
     assert problems(params(name="  ")) == [
         'Give the condition a short name, for example "Large invoices from new suppliers".',
