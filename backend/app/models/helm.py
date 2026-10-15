@@ -360,7 +360,7 @@ class HelmPlan(Base):
     engine_version: Mapped[str] = mapped_column(String(16), nullable=False)
     horizon_days: Mapped[int] = mapped_column(SmallInteger, nullable=False)
     solver_status: Mapped[str] = mapped_column(String(12), nullable=False)
-    conflict: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    conflict: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
     summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
     mandate_versions: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     triggered_by: Mapped[str] = mapped_column(String(10), nullable=False)
