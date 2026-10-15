@@ -317,6 +317,48 @@ def _counterparty(doc: DocumentFacts, *, receivable: bool) -> tuple[Optional[str
     return key, party.name
 
 
+# Two kinds of STATEMENT document. The role classifier gives both the same role ("statement of
+# account" names either), but only a bank's statement is evidence of money paid and of cash held. A
+# supplier's statement lists what they billed us and the balance they say we owe: it is kept for
+# reconciliation and never read as payments or as cash (owner addition B).
+STATEMENT_BANK = "BANK"
+STATEMENT_SUPPLIER = "SUPPLIER"
+CLASSIFICATION_KEYS = ("document_classification", "document_type", "document_title", "statement_type")
+#: Words that make a statement a counterparty's (a supplier's, or ours to a customer).
+COUNTERPARTY_STATEMENT_WORDS = ("statement of account", "supplier statement", "vendor statement",
+                                "customer statement", "creditor statement", "account confirmation",
+                                "balance confirmation", "ledger statement", "ledger account")
+_BANK_WORD = re.compile(r"\bbank(?:ing)?\b", re.IGNORECASE)
+#: The header lines of a bank statement name the bank; a supplier's may name their bank at the foot.
+HEADER_LINES = 4
+
+
+def statement_kind(doc: DocumentFacts, identities: Optional[ident.Identities] = None) -> str:
+    """STATEMENT_BANK or STATEMENT_SUPPLIER, from what the document says of itself and who issued it.
+
+    In order: a classification naming a bank; an issuer that is a bank; an issuer that is someone else
+    (not us: an extractor may put the account holder there); a bank named in the header; words that
+    only a counterparty's statement uses. A statement nothing identifies stays a bank statement, as
+    before this distinction existed.
+    """
+    classification = " ".join(filter(None, [doc.classification, *(
+        _text(doc.entities.get(k)) for k in CLASSIFICATION_KEYS)])).lower()
+    if _BANK_WORD.search(classification):
+        return STATEMENT_BANK
+    issuer = ident.seller(doc.entities)
+    if issuer.name and _BANK_WORD.search(issuer.name):
+        return STATEMENT_BANK
+    if (issuer.name or issuer.tax_id) and not (identities is not None and identities.is_us(issuer)):
+        return STATEMENT_SUPPLIER
+    lines = [line.strip() for line in (doc.text_head or "").splitlines() if line.strip()]
+    if any(_BANK_WORD.search(line) for line in lines[:HEADER_LINES]):
+        return STATEMENT_BANK
+    said = " ".join([classification, *lines[:HEADER_LINES]]).lower()
+    if any(word in said for word in COUNTERPARTY_STATEMENT_WORDS):
+        return STATEMENT_SUPPLIER
+    return STATEMENT_BANK
+
+
 @dataclass(frozen=True)
 class StatementLine:
     statement_work_item_id: uuid.UUID
@@ -358,8 +400,12 @@ def statement_lines(doc: DocumentFacts, date_format: Optional[str]) -> list[Stat
     return out
 
 
-def statement_balance(doc: DocumentFacts, date_format: Optional[str]) -> Optional[tuple[str, int, date]]:
-    """(currency, closing balance, as-of date) from a STATEMENT document, or None."""
+def statement_balance(doc: DocumentFacts, date_format: Optional[str],
+                      identities: Optional[ident.Identities] = None) -> Optional[tuple[str, int, date]]:
+    """(currency, closing balance, as-of date) from a bank's STATEMENT document, or None. A supplier's
+    statement gives none: its balance is what they say we owe, not our cash."""
+    if statement_kind(doc, identities) != STATEMENT_BANK:
+        return None
     currency = doc.currency or nz.currency_code(_text(doc.entities.get("currency")) or "")
     amount = read_money(_first(doc.entities, CLOSING_BALANCE_KEYS), currency)
     on = read_date(_first(doc.entities, STATEMENT_DATE_KEYS), date_format) or doc.document_date
@@ -414,7 +460,7 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
             ref = _first(doc.entities, CREDIT_REFERENCE_KEYS)
             if ref:
                 credits_by_invoice.setdefault((doc.workspace_id, nz_number(ref)), []).append(doc)
-        elif doc.role == ROLE_STATEMENT:
+        elif doc.role == ROLE_STATEMENT and statement_kind(doc, inputs.identities) == STATEMENT_BANK:
             statements.append(doc)
     lines_by_workspace: dict[uuid.UUID, list[StatementLine]] = {}
     for doc in statements:
@@ -825,5 +871,6 @@ __all__ = [
     "sha256",
     "source_key",
     "statement_balance",
+    "statement_kind",
     "statement_lines",
 ]

@@ -24,11 +24,12 @@ from app.models.radar import AnomalyFinding
 from app.models.truthmesh import MeshConflict
 from app.models.work_item import WorkItem
 from app.models.document_role import DocumentRole
+from app.services.helm import identity as ident
 from app.services.helm import ledger, msme
 from app.services.helm import snapshot as snap
 from app.services.helm import terms as terms_parser
 from app.services.helm import vocabulary as v
-from app.services.helm.ledger_store import book_workspace_ids
+from app.services.helm.ledger_store import TEXT_HEAD_CHARS, book_workspace_ids
 
 STRONG_DUPLICATE_LAYERS = ("L0", "L1", "L2")
 
@@ -96,17 +97,23 @@ def cash_history(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as
     if workspace_ids:
         statements = db.execute(
             select(WorkItem.id, WorkItem.workspace_id, WorkItem.original_filename, WorkItem.created_at,
-                   WorkItem.extracted_entities, DocumentRole.currency, DocumentRole.document_date)
+                   WorkItem.extracted_entities, DocumentRole.currency, DocumentRole.document_date,
+                   func.substring(WorkItem.extracted_text, 1, TEXT_HEAD_CHARS).label("text_head"))
             .join(DocumentRole, DocumentRole.work_item_id == WorkItem.id)
             .where(DocumentRole.role == "STATEMENT", WorkItem.workspace_id.in_(workspace_ids))
         ).all()
+        # Only a bank's statement is cash; a supplier's balance is what they say we owe (ledger.statement_kind).
+        settings = db.get(HelmSettings, book.id)
+        identities = ident.Identities.of((settings.identities if settings is not None else None) or [])
         for row in statements:
+            entities = row.extracted_entities if isinstance(row.extracted_entities, dict) else {}
+            classification = entities.get("document_classification") or entities.get("document_type")
             facts = ledger.DocumentFacts(
                 work_item_id=row.id, workspace_id=row.workspace_id, organization_id=book.organization_id,
                 filename=row.original_filename, role="STATEMENT", received_on=row.created_at.date(),
-                entities=row.extracted_entities if isinstance(row.extracted_entities, dict) else {},
-                currency=row.currency, document_date=row.document_date)
-            found = ledger.statement_balance(facts, None)
+                entities=entities, currency=row.currency, document_date=row.document_date,
+                text_head=row.text_head or "", classification=str(classification) if classification else None)
+            found = ledger.statement_balance(facts, None, identities)
             if found is None:
                 continue
             currency, amount, on = found
