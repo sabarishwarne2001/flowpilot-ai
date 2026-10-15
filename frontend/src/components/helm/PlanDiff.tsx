@@ -234,11 +234,11 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
               {approveLabel(action)}
             </button>
           ) : waiting ? (
-            <span className="helm-muted text-xs" data-testid="helm-approval-waiting">
+            <span className="helm-muted max-w-[16rem] text-xs" data-testid="helm-approval-waiting">
               You approved. Waiting for someone else to add the {ORDINALS[action.approvals_given + 1] ?? "next"} approval.
             </span>
           ) : notYourRole ? (
-            <span className="helm-muted text-xs">Approved by {rolesWords(action.approver_roles)} only.</span>
+            <span className="helm-muted max-w-[16rem] text-xs">Approved by {rolesWords(action.approver_roles)} only.</span>
           ) : null}
           {rejectable ? (
             <button
