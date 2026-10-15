@@ -655,7 +655,8 @@ def replan(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
     from app.services.helm import plan_store
 
     require_helm(who, book)
-    for wid in ledger_store.book_workspace_ids(db, book):
+    # In the same order as a snapshot takes the ledger locks (snapshot_store.take).
+    for wid in sorted(ledger_store.book_workspace_ids(db, book), key=str):
         ledger_store.rebuild_workspace(db, workspace_id=wid)
     plan = plan_store.run(db, book, triggered_by=v.TRIGGER_PERSON, force=True)
     if plan is None:

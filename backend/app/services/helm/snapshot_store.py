@@ -12,7 +12,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Iterable, Optional
 
-from sqlalchemy import select, text
+from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.corroboration import CorroborationDocument, CorroborationRun
@@ -160,6 +160,12 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
         status = msme.MsmeStatus(registered=bool(row.udyam_number) or row.msme_category in (
             v.MSME_MICRO, v.MSME_SMALL, v.MSME_MEDIUM), category=row.msme_category,
             confirmed=row.msme_source == v.MSME_SOURCE_PERSON, udyam_number=row.udyam_number)
+    # Reads are a consistent snapshot (brief §4.2): a shared hold on each workspace's ledger lock (the
+    # one `ledger_store.rebuild_workspace` takes exclusively) waits for a rebuild being written and
+    # keeps new ones out until this transaction ends, so a plan never reads half of a rebuild. Taken
+    # in one order everywhere; the session's own rebuild lock does not block it.
+    for workspace_id in sorted(workspace_ids, key=str):
+        db.execute(select(func.pg_advisory_xact_lock_shared(func.hashtextextended(f"helm-ledger:{workspace_id}", 0))))
         counterparties[row.key] = snap.Counterparty(key=row.key, name=row.display_name, role=row.role, msme=status,
                                                     contact_email=row.contact_email, behaviour=row.behaviour or {})
 

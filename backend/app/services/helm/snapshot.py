@@ -1,8 +1,9 @@
 """A consistent snapshot of one book: everything the Planner and the Guard decide from.
 
-`Snapshot` is plain frozen data. `take(db, book)` reads it in one REPEATABLE READ transaction (the
-caller's session is put in that isolation level before the first query), so a plan never sees half
-of a ledger rebuild. `digest` is the SHA-256 of the canonical inputs: an unchanged digest means an
+`Snapshot` is plain frozen data. `take(db, book)` first takes a shared hold on the ledger lock of
+every workspace it reads (`rebuild_workspace` holds it exclusively), so it waits for a rebuild being
+written and no rebuild can change the ledger until the plan's transaction ends: a plan never sees
+half of a ledger rebuild. `digest` is the SHA-256 of the canonical inputs: an unchanged digest means an
 unchanged plan (the Planner reuses the current one).
 """
 
