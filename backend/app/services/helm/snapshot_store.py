@@ -1,0 +1,324 @@
+"""Read one book's snapshot from the database (see `snapshot.py` for the shape).
+
+Every query is bounded by the book's workspace ids or its id. Flags come from the engines that
+own them: the radar's open duplicate findings (`anomaly_findings`) and bank-account changes
+(`payment_risk_flags`), TruthMesh's open conflicts (`mesh_conflicts`) and the corroborator's open
+material discrepancies (`corroboration_runs` / `corroboration_documents`).
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import date, datetime, timezone
+from typing import Any, Iterable, Optional
+
+from sqlalchemy import func, select, text
+from sqlalchemy.orm import Session
+
+from app.models.corroboration import CorroborationDocument, CorroborationRun
+from app.models.helm import HelmAction, HelmBook, HelmCashPosition, HelmCounterparty, HelmPromise, HelmSettings
+from app.models.obligations import HolidayCalendar
+from app.models.payment_risk import PaymentRiskFlag
+from app.models.procurement import ProcurementCase
+from app.models.radar import AnomalyFinding
+from app.models.truthmesh import MeshConflict
+from app.models.work_item import WorkItem
+from app.models.document_role import DocumentRole
+from app.services.helm import ledger, msme
+from app.services.helm import snapshot as snap
+from app.services.helm import terms as terms_parser
+from app.services.helm import vocabulary as v
+from app.services.helm.ledger_store import book_workspace_ids
+
+STRONG_DUPLICATE_LAYERS = ("L0", "L1", "L2")
+
+
+def _date(value: Any) -> Optional[date]:
+    if value is None or isinstance(value, date):
+        return value
+    try:
+        return date.fromisoformat(str(value)[:10])
+    except ValueError:
+        return None
+
+
+def settings_for(db: Session, book: HelmBook) -> HelmSettings:
+    settings = db.get(HelmSettings, book.id)
+    if settings is None:
+        settings = HelmSettings(book_id=book.id, organization_id=book.organization_id, identities=[],
+                                run_weekdays=[2, 5], horizon_days=30, cost_of_capital_bps=1200,
+                                default_autonomy=v.AUTONOMY_PROPOSE, briefing_enabled=True, first_run_step=0,
+                                preferences={})
+        db.add(settings)
+        db.flush()
+    return settings
+
+
+def holidays_for(db: Session, workspace_ids: Iterable[uuid.UUID]) -> list[date]:
+    out: set[date] = set()
+    for row in db.execute(
+        select(HolidayCalendar.holidays).where(HolidayCalendar.workspace_id.in_(list(workspace_ids)),
+                                               HolidayCalendar.is_default.is_(True))
+    ).scalars():
+        out.update(row or [])
+    return sorted(out)
+
+
+def account_state(db: Session, organization_id: uuid.UUID) -> tuple[bool, Optional[str]]:
+    from app.workers.tenant_gate import inactive_reason, unpaid_reason
+
+    reason = inactive_reason(db, organization_id=organization_id) or unpaid_reason(db,
+                                                                                    organization_id=organization_id)
+    return reason is None, reason
+
+
+def cash_positions(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as_of: date) -> dict[str, snap.Cash]:
+    """Per currency, the newest of: an admin's typed figure, a STATEMENT's closing balance."""
+    candidates: list[snap.Cash] = []
+    for row in db.execute(
+        select(HelmCashPosition).where(HelmCashPosition.book_id == book.id).order_by(HelmCashPosition.as_of)
+    ).scalars():
+        candidates.append(snap.Cash(currency=row.currency, amount_micros=row.amount_micros, as_of=row.as_of,
+                                    source=row.source, age_days=max(0, (as_of - row.as_of).days),
+                                    evidence={"cash_position_id": str(row.id), "note": row.note,
+                                              "entered_by_user_id": str(row.entered_by_user_id)
+                                              if row.entered_by_user_id else None}))
+    if workspace_ids:
+        statements = db.execute(
+            select(WorkItem.id, WorkItem.workspace_id, WorkItem.original_filename, WorkItem.created_at,
+                   WorkItem.extracted_entities, DocumentRole.currency, DocumentRole.document_date)
+            .join(DocumentRole, DocumentRole.work_item_id == WorkItem.id)
+            .where(DocumentRole.role == "STATEMENT", WorkItem.workspace_id.in_(workspace_ids))
+        ).all()
+        for row in statements:
+            facts = ledger.DocumentFacts(
+                work_item_id=row.id, workspace_id=row.workspace_id, organization_id=book.organization_id,
+                filename=row.original_filename, role="STATEMENT", received_on=row.created_at.date(),
+                entities=row.extracted_entities if isinstance(row.extracted_entities, dict) else {},
+                currency=row.currency, document_date=row.document_date)
+            found = ledger.statement_balance(facts, None)
+            if found is None:
+                continue
+            currency, amount, on = found
+            candidates.append(snap.Cash(currency=currency, amount_micros=amount, as_of=on,
+                                        source=v.CASH_SOURCE_STATEMENT, age_days=max(0, (as_of - on).days),
+                                        evidence={"work_item_id": str(row.id), "document": row.original_filename}))
+    best: dict[str, snap.Cash] = {}
+    for cash in sorted(candidates, key=lambda c: (c.as_of, c.source == v.CASH_SOURCE_MANUAL)):
+        best[cash.currency] = cash  # newest wins; on the same day a typed figure wins over a statement
+    return best
+
+
+def _flags(db: Session, workspace_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[snap.Flag]]:
+    flags: dict[uuid.UUID, list[snap.Flag]] = {}
+    if not workspace_ids:
+        return flags
+    for row in db.execute(
+        select(AnomalyFinding.id, AnomalyFinding.subject_work_item_id, AnomalyFinding.layer, AnomalyFinding.headline,
+               AnomalyFinding.severity)
+        .where(AnomalyFinding.workspace_id.in_(workspace_ids), AnomalyFinding.status == "OPEN",
+               AnomalyFinding.kind == "DUPLICATE_DOCUMENT")
+    ).all():
+        flags.setdefault(row.subject_work_item_id, []).append(snap.Flag(
+            kind="DUPLICATE", id=str(row.id), summary=row.headline, severity=row.severity,
+            strong=row.layer in STRONG_DUPLICATE_LAYERS))
+    for row in db.execute(
+        select(PaymentRiskFlag.id, PaymentRiskFlag.work_item_id, PaymentRiskFlag.summary, PaymentRiskFlag.severity)
+        .where(PaymentRiskFlag.workspace_id.in_(workspace_ids), PaymentRiskFlag.status == "OPEN",
+               PaymentRiskFlag.kind == "BANK_ACCOUNT_CHANGED")
+    ).all():
+        flags.setdefault(row.work_item_id, []).append(snap.Flag(
+            kind="BANK_ACCOUNT_CHANGED", id=str(row.id), summary=row.summary, severity=row.severity))
+    for row in db.execute(
+        select(MeshConflict.id, MeshConflict.work_item_ids, MeshConflict.title, MeshConflict.severity)
+        .where(MeshConflict.workspace_id.in_(workspace_ids), MeshConflict.status == "OPEN")
+    ).all():
+        for work_item_id in row.work_item_ids or []:
+            flags.setdefault(work_item_id, []).append(snap.Flag(
+                kind="CONFLICT", id=f"mesh:{row.id}", summary=row.title, severity=row.severity))
+    for row in db.execute(
+        select(CorroborationRun.id, CorroborationDocument.work_item_id, CorroborationRun.open_material_count)
+        .join(CorroborationDocument, CorroborationDocument.run_id == CorroborationRun.id)
+        .where(CorroborationRun.workspace_id.in_(workspace_ids), CorroborationRun.status == "COMPLETED",
+               CorroborationRun.open_material_count > 0)
+    ).all():
+        flags.setdefault(row.work_item_id, []).append(snap.Flag(
+            kind="CONFLICT", id=f"corroboration:{row.id}",
+            summary=f"{row.open_material_count} open material difference(s) with other documents",
+            severity="MEDIUM"))
+    return flags
+
+
+def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.Snapshot:
+    as_of = as_of or datetime.now(timezone.utc).date()
+    settings = settings_for(db, book)
+    workspace_ids = book_workspace_ids(db, book)
+    flags = _flags(db, workspace_ids)
+
+    counterparties: dict[str, snap.Counterparty] = {}
+    for row in db.execute(select(HelmCounterparty).where(HelmCounterparty.book_id == book.id)).scalars():
+        status = msme.MsmeStatus(registered=bool(row.udyam_number) or row.msme_category in (
+            v.MSME_MICRO, v.MSME_SMALL, v.MSME_MEDIUM), category=row.msme_category,
+            confirmed=row.msme_source == v.MSME_SOURCE_PERSON, udyam_number=row.udyam_number)
+        counterparties[row.key] = snap.Counterparty(key=row.key, name=row.display_name, role=row.role, msme=status,
+                                                    contact_email=row.contact_email, behaviour=row.behaviour or {})
+
+    matched_po = set(db.execute(
+        select(ProcurementCase.invoice_work_item_id).where(
+            ProcurementCase.workspace_id.in_(workspace_ids or [uuid.uuid4()]),
+            ProcurementCase.status != "SUPERSEDED", ProcurementCase.po_work_item_id.is_not(None),
+            ProcurementCase.invoice_work_item_id.is_not(None))
+    ).scalars())
+
+    promises = db.execute(
+        select(HelmPromise).where(HelmPromise.workspace_id.in_(workspace_ids or [uuid.uuid4()]))
+        .order_by(HelmPromise.source_key)
+    ).scalars().all()
+
+    breaches: dict[str, list[snap.PriceBreach]] = {}
+    for promise in promises:
+        if promise.kind != v.KIND_PRICE_AGREED:
+            continue
+        for fulfilment in promise.fulfilments or []:
+            if fulfilment.get("outcome") != "BROKEN" or not fulfilment.get("work_item_id"):
+                continue
+            breaches.setdefault(fulfilment["work_item_id"], []).append(snap.PriceBreach(
+                promise_id=str(promise.id), description=(promise.details or {}).get("description") or promise.title,
+                agreed_micros=int(promise.amount_micros or 0), billed_micros=int(fulfilment.get("unit_price_micros")
+                                                                                 or 0),
+                above_micros=int(fulfilment.get("above_micros") or 0),
+                overcharge_micros=int(fulfilment.get("overcharge_micros") or 0),
+                tolerance_bps=int((promise.details or {}).get("tolerance_bps") or 0),
+                po_number=(promise.details or {}).get("po_number")))
+
+    payables: list[snap.Payable] = []
+    receivables: list[snap.Receivable] = []
+    notices: list[snap.Notice] = []
+    compliance: list[snap.ComplianceDoc] = []
+    counts: dict[str, int] = {}
+    for promise in promises:
+        counts[promise.kind] = counts.get(promise.kind, 0) + 1
+        details = promise.details or {}
+        if promise.kind == v.KIND_PAYMENT_DUE:
+            settlement = details.get("settlement") or {}
+            deadline = details.get("msme_deadline") or None
+            cp = counterparties.get(promise.counterparty_key or "")
+            protected = cp.msme.protected if cp else bool(details.get("udyam_number"))
+            payables.append(snap.Payable(
+                promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
+                workspace_id=str(promise.workspace_id),
+                document=(promise.evidence or [{}])[0].get("document") or "document",
+                document_number=details.get("document_number"), counterparty_key=promise.counterparty_key,
+                counterparty_name=promise.counterparty_name, currency=promise.currency,
+                amount_micros=int(promise.amount_micros or 0), gross_micros=details.get("gross_micros"),
+                invoice_date=_date(details.get("invoice_date")), due_date=promise.due_date,
+                received_on=_date(details.get("received_on")),
+                terms=terms_parser.Terms.from_json(promise.terms), settlement_state=settlement.get("state")
+                or v.SETTLEMENT_UNPAID, settlement_source=settlement.get("source"),
+                run_date=_date(settlement.get("run_date")), paid_on=_date(settlement.get("paid_on")),
+                hold_reason=settlement.get("hold_reason"), settlement_version=int(settlement.get("version") or 0),
+                confidence=promise.confidence, status=promise.status, bank_account=details.get("bank_account"),
+                po_reference=details.get("po_reference"),
+                has_matched_po=promise.work_item_id in matched_po,
+                flags=tuple(flags.get(promise.work_item_id, [])) if promise.work_item_id else (),
+                price_breaches=tuple(breaches.get(str(promise.work_item_id), [])),
+                udyam_number=details.get("udyam_number"),
+                msme_deadline=_date(deadline.get("due")) if deadline and protected else None,
+                msme_explanation=deadline.get("explanation") if deadline and protected else None,
+            ))
+        elif promise.kind == v.KIND_PAYMENT_EXPECTED:
+            settlement = details.get("settlement") or {}
+            receivables.append(snap.Receivable(
+                promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
+                workspace_id=str(promise.workspace_id),
+                document=(promise.evidence or [{}])[0].get("document") or "document",
+                document_number=details.get("document_number"), counterparty_key=promise.counterparty_key,
+                counterparty_name=promise.counterparty_name, currency=promise.currency,
+                amount_micros=int(promise.amount_micros or 0), invoice_date=_date(details.get("invoice_date")),
+                due_date=promise.due_date, status=promise.status, paid_on=_date(settlement.get("paid_on")),
+                confidence=promise.confidence))
+        elif promise.kind == v.KIND_NOTICE_DEADLINE:
+            notices.append(snap.Notice(
+                promise_id=str(promise.id), obligation_id=str(promise.obligation_id),
+                work_item_id=str(promise.work_item_id) if promise.work_item_id else None,
+                workspace_id=str(promise.workspace_id), title=promise.title, due_date=promise.due_date,
+                status=promise.status, counterparty_name=promise.counterparty_name))
+        elif promise.kind == v.KIND_DOCUMENT_VALID_UNTIL:
+            compliance.append(snap.ComplianceDoc(
+                promise_id=str(promise.id), obligation_id=str(promise.obligation_id),
+                work_item_id=str(promise.work_item_id) if promise.work_item_id else None,
+                workspace_id=str(promise.workspace_id), title=promise.title, valid_until=promise.due_date,
+                status=promise.status, counterparty_key=promise.counterparty_key,
+                counterparty_name=promise.counterparty_name))
+
+    settled_keys: set[str] = set()
+    reminders: dict[str, list[int]] = {}
+    for key, state, kind, promise_id, params in db.execute(
+        select(HelmAction.idempotency_key, HelmAction.state, HelmAction.kind, HelmAction.promise_id,
+               HelmAction.params).where(HelmAction.book_id == book.id,
+                                        HelmAction.state.in_(v.SETTLED_ACTION_STATES))
+    ).all():
+        settled_keys.add(key)
+        if kind == v.ACTION_SEND_REMINDER and state == v.ACTION_EXECUTED and promise_id:
+            reminders.setdefault(str(promise_id), []).append(int((params or {}).get("level") or 1))
+
+    review_items: list[snap.ReviewFacts] = []
+    if workspace_ids:
+        rows = db.execute(text(
+            "SELECT kind, item_id, workspace_id, headline, created_at FROM review_queue_items "
+            "WHERE workspace_id = ANY(:ids) AND status = 'OPEN' AND kind <> 'HELM'"
+        ), {"ids": workspace_ids}).all()
+        now = datetime.now(timezone.utc)
+        for row in rows:
+            created = row.created_at if row.created_at.tzinfo else row.created_at.replace(tzinfo=timezone.utc)
+            review_items.append(snap.ReviewFacts(kind=row.kind, item_id=str(row.item_id),
+                                                 workspace_id=str(row.workspace_id), headline=row.headline,
+                                                 age_days=max(0, (now - created).days)))
+
+    writable, reason = account_state(db, book.organization_id)
+    days = snap.run_days(start=as_of, horizon_days=int(settings.horizon_days), weekdays=settings.run_weekdays or [2, 5],
+                         holidays=holidays_for(db, workspace_ids))
+    visibility = _visibility(payables, promises)
+    result = snap.Snapshot(
+        book_id=str(book.id), organization_id=str(book.organization_id), as_of=as_of,
+        horizon_days=int(settings.horizon_days), run_days=days, cost_of_capital_bps=int(settings.cost_of_capital_bps),
+        payables=tuple(payables), receivables=tuple(receivables), notices=tuple(notices),
+        compliance=tuple(compliance), review_items=tuple(sorted(review_items, key=lambda r: (r.kind, r.item_id))),
+        cash=cash_positions(db, book, workspace_ids, as_of), counterparties=counterparties,
+        workspace_ids=tuple(str(w) for w in workspace_ids), settled_action_keys=frozenset(settled_keys),
+        reminders_sent={k: tuple(sorted(val)) for k, val in reminders.items()}, account_writable=writable,
+        account_reason=reason, promise_counts=counts, visibility=visibility,
+    )
+    return result.with_digest()
+
+
+def _visibility(payables: list[snap.Payable], promises: list[HelmPromise]) -> dict[str, Any]:
+    """How much of the business Helm can actually see: the share of payables, contracts and suppliers
+    whose key facts it has. Shown as a meter; never presented as more than it is."""
+    open_payables = [p for p in payables if p.open]
+    with_facts = [p for p in open_payables if p.due_date and p.currency and p.counterparty_key and p.amount_micros]
+    trusted = [p for p in open_payables if p.confidence in v.TRUSTED_CONFIDENCES]
+    suppliers = {p.counterparty_key for p in payables if p.counterparty_key}
+    suppliers_with_terms = {p.counterparty_key for p in payables if p.counterparty_key and p.terms.parsed}
+    contracts = [p for p in promises if p.kind in (v.KIND_NOTICE_DEADLINE, v.KIND_DOCUMENT_VALID_UNTIL,
+                                                    v.KIND_OBLIGATION)]
+    contracts_dated = [p for p in contracts if p.due_date]
+
+    def share(part: int, whole: int) -> Optional[float]:
+        return round(part / whole, 3) if whole else None
+
+    parts = {
+        "payables": {"seen": len(open_payables), "with_key_facts": len(with_facts),
+                     "share": share(len(with_facts), len(open_payables)),
+                     "verified_share": share(len(trusted), len(open_payables))},
+        "suppliers": {"seen": len(suppliers), "with_terms": len(suppliers_with_terms),
+                      "share": share(len(suppliers_with_terms), len(suppliers))},
+        "contracts": {"seen": len(contracts), "dated": len(contracts_dated),
+                      "share": share(len(contracts_dated), len(contracts))},
+    }
+    shares = [p["share"] for p in parts.values() if p["share"] is not None]
+    parts["overall"] = round(sum(shares) / len(shares), 3) if shares else None
+    return parts
+
+
+__all__ = ["account_state", "cash_positions", "holidays_for", "settings_for", "take"]
