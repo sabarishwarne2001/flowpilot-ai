@@ -85,8 +85,10 @@ FIELDS: dict[str, Fact] = {f.key: f for f in (
     Fact("days_since_invoice", "Days since the invoice date", "the invoice's age", NUMBER, COMPARE, unit="days"),
     Fact("has_matched_po", "Has a matching purchase order", "a matching purchase order", BOOL, ("=", "!="),
           yes_no=("it has a matching purchase order", "it has no matching purchase order")),
-    Fact("msme_supplier", "MSME supplier", "an MSME supplier", BOOL, ("=", "!="),
-          yes_no=("the supplier is an MSME", "the supplier is not an MSME")),
+    # The India pack's reading (msme.MsmeStatus.protected): micro or small, or registered with its
+    # category not confirmed yet (treated as micro or small, to be safe); a medium enterprise is not.
+    Fact("msme_supplier", "MSME supplier (micro or small)", "a micro or small supplier", BOOL, ("=", "!="),
+          yes_no=("the supplier is a micro or small enterprise", "the supplier is not a micro or small enterprise")),
     Fact("new_supplier", "New supplier (first invoice from them)", "a new supplier", BOOL, ("=", "!="),
           yes_no=("the supplier is new", "the supplier is not new")),
     Fact("confidence", "How sure the facts are", "its facts", CHOICE, ("=", "!=", "in"),
@@ -219,7 +221,7 @@ class Params(BaseModel):
                 continue
             value, problem = _clean_value(found, op, raw.get("value"))
             if problem:
-                problems.append(f"{where} ({_low(found.label)}): {problem}")
+                problems.append(f"{where}, {_low(found.label)}: {problem}")
                 continue
             cleaned.append({"field": found.key, "op": op, "value": value})
         if problems:

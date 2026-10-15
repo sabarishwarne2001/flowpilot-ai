@@ -177,3 +177,39 @@ def test_enterprise_approval_rule_asks_a_person_before_paying(client, db_session
     assert checks["autonomy"] == "pass"
     assert checks[f"limit:custom_condition:{created.json()['id']}"] == "needs_approval"
     assert pay["guard_passed"] and pay["needs_approval"]
+
+
+def test_after_a_move_to_business_a_custom_condition_is_paused_or_archived_but_never_changed(
+        client, db_session, tenant, test_sessions):
+    """Made on Enterprise, then the plan moves to Business: the rule keeps protecting until a person
+    pauses or archives it, and it can be neither edited nor switched back on (decision in the hand-over)."""
+    book = _book(client, db_session, tenant, "enterprise")
+    item = factories.invoice(db_session, workspace=tenant.workspace, organization_id=tenant.organization.id,
+                             number="ZM-9", supplier="Zenith Metals", amount=700_000,
+                             on=date.today() - timedelta(days=3), terms="Net 30")
+    db_session.commit()
+    url, headers = _url(tenant, f"/books/{book['id']}/mandates"), tenant.owner.headers
+    created = client.post(url, json={"template": "custom_condition", "params": RULE, "activate": True},
+                          headers=headers)
+    assert created.status_code == 201, created.text
+    mandate = created.json()
+    put_on_plan(db_session, tenant.organization, "business")
+    db_session.commit()
+
+    listed = client.get(url, headers=headers).json()["mandates"]
+    assert [(m["id"], m["status"]) for m in listed] == [(mandate["id"], "ACTIVE")]
+    planned = client.post(_url(tenant, f"/books/{book['id']}/plan"), headers=headers)
+    assert planned.status_code == 200, planned.text
+    assert [a["mandate_id"] for a in planned.json()["actions"]
+            if a["kind"] == "hold_payment" and a["work_item_id"] == str(item.id)] == [mandate["id"]]
+    edited = client.patch(f"{url}/{mandate['id']}", json={"params": {**RULE, "name": "Bigger"}}, headers=headers)
+    assert edited.status_code == 422, edited.text
+    assert edited.json()["message"] == '"Custom condition" is part of the Enterprise plan.'
+    paused = client.post(f"{url}/{mandate['id']}/pause", headers=headers)
+    assert paused.status_code == 200 and paused.json()["status"] == "PAUSED", paused.text
+    again = client.post(f"{url}/{mandate['id']}/activate", headers=headers)
+    assert again.status_code == 422, again.text
+    assert again.json()["message"] == '"Custom condition" is part of the Enterprise plan.'
+    archived = client.post(f"{url}/{mandate['id']}/archive", headers=headers)
+    assert archived.status_code == 200 and archived.json()["status"] == "ARCHIVED", archived.text
+    assert client.get(url, headers=headers).json()["mandates"] == []

@@ -80,6 +80,10 @@ def test_it_reads_back_in_plain_words_for_each_outcome():
                            rule("days_since_invoice", ">=", 1), outcome="notify")) == (
         "Tell owners and admins about any invoice where it has no matching purchase order, the currency is one of "
         "USD or EUR and the invoice is at least 1 day old.")
+    assert sentence(params(rule("msme_supplier", "=", True), rule("bank_account_changed", "!=", False),
+                           outcome="approval")) == (
+        "Ask a person before paying any invoice where the supplier is a micro or small enterprise and its bank "
+        "account changed.")
     m = custom(BIG_AND_NEW)
     parts = registry.template(KEY).readback(m.spec, m.params).parts
     assert [p.get("kind") for p in parts if "chip" in p] == ["choice", "condition", "condition"]
@@ -116,15 +120,15 @@ def test_unknown_fields_wrong_operators_and_bad_values_are_refused_in_words():
                             rule("new_supplier", "=", "yes"), rule("confidence", "=", "SURE")))
     assert found[0].startswith('Condition 1: Helm cannot test "vendor_score". Choose one of: amount, currency, '
                                "supplier name, days until due")
-    assert "MSME supplier" in found[0]
+    assert "MSME supplier (micro or small)" in found[0]
     assert found[1:] == [
         'Condition 2: the amount cannot be compared with "contains"; use "is above", "is at least", "is below", '
         '"is at most", "is" or "is not".',
-        "Condition 3 (days until due): write the number of days as a whole number between -3650 and 3650.",
-        "Condition 4 (supplier name): list one to 20 values, separated by commas.",
-        "Condition 5 (amount): write the amount and its currency, for example 500000 INR.",
-        "Condition 6 (new supplier (first invoice from them)): choose yes or no.",
-        "Condition 7 (how sure the facts are): choose checked by a person, checked automatically or read by the "
+        "Condition 3, days until due: write the number of days as a whole number between -3650 and 3650.",
+        "Condition 4, supplier name: list one to 20 values, separated by commas.",
+        "Condition 5, amount: write the amount and its currency, for example 500000 INR.",
+        "Condition 6, new supplier (first invoice from them): choose yes or no.",
+        "Condition 7, how sure the facts are: choose checked by a person, checked automatically or read by the "
         "model and not checked.",
     ]
     for p in found:
@@ -205,11 +209,16 @@ def test_each_fact_reads_the_invoice_as_the_ledger_holds_it():
     assert _hits(params(rule("has_matched_po", "=", False)), s, "p1")
     assert _hits(params(rule("msme_supplier", "=", True)), s, "p3")
     assert _hits(params(rule("msme_supplier", "=", True)), s, "p1") is None
-    # A confirmed category on the counterparty outranks the document.
-    medium = snap.Counterparty(key="name:acme", name="Acme Steel", role="SUPPLIER", msme=msme_rules.MsmeStatus(
-        registered=True, category=v.MSME_SMALL, confirmed=True, udyam_number="UDYAM-MH-00-0000002"))
-    with_cp = full_book(payables=[first], counterparties={"name:acme": medium})
-    assert _hits(params(rule("msme_supplier", "=", True)), with_cp, "p1")
+    # A confirmed category on the counterparty outranks the document: micro or small is, medium is not.
+    def acme(category: str) -> snap.Snapshot:
+        status = msme_rules.MsmeStatus(registered=True, category=category, confirmed=True,
+                                       udyam_number="UDYAM-MH-00-0000002")
+        cp = snap.Counterparty(key="name:acme", name="Acme Steel", role="SUPPLIER", msme=status)
+        return full_book(payables=[first], counterparties={"name:acme": cp})
+
+    assert _hits(params(rule("msme_supplier", "=", True)), acme(v.MSME_SMALL), "p1")
+    assert _hits(params(rule("msme_supplier", "=", True)), acme(v.MSME_MEDIUM), "p1") is None
+    assert _hits(params(rule("msme_supplier", "!=", True)), acme(v.MSME_MEDIUM), "p1")
     # "any" needs one; "all" needs every one, and names the ones that held.
     both = params(rule("amount", ">", money(5 * LAKH)), rule("new_supplier", "=", True), match="any")
     assert [r.field for r in _hits(both, s, "p2")] == ["amount"]
