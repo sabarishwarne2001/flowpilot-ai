@@ -60,7 +60,10 @@ export type MeterKey =
   | "limit.seats"
   | "limit.workspaces"
   | "limit.file_size_mb"
-  | "limit.pages_per_document";
+  | "limit.pages_per_document"
+  // Flagship session: Helm's plan limits.
+  | "limit.helm_mandates"
+  | "limit.helm_backtest_months";
 import { formatNumber } from "@/utils/displayTime";
 
 interface MeterDisplay {
@@ -149,6 +152,16 @@ export const KNOWN_METERS: Record<MeterKey, MeterDisplay> = {
     label: "Pages per document",
     unit: "pages",
     staticLimit: (value) => `Documents up to ${formatNumber(value)} pages`,
+  },
+  "limit.helm_mandates": {
+    label: "Helm mandates",
+    unit: "count",
+    staticLimit: (value) => `Up to ${formatNumber(value)} active Helm ${value === 1 ? "mandate" : "mandates"}`,
+  },
+  "limit.helm_backtest_months": {
+    label: "Helm Time machine",
+    unit: "count",
+    staticLimit: (value) => `Helm replays up to ${formatNumber(value)} ${value === 1 ? "month" : "months"} of history`,
   },
   "addon.custom_domain": {
     label: "Custom vanity domain",
@@ -348,6 +361,8 @@ export const ENTITLEMENT_ORDER: readonly string[] = [
   "limit.workspaces",
   "limit.file_size_mb",
   "limit.pages_per_document",
+  "limit.helm_mandates",
+  "limit.helm_backtest_months",
   "storage.gb_month",
   "llm.platform_key",
   "llm.input_token",
