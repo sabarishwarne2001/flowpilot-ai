@@ -502,3 +502,122 @@ export interface HelmBacktest {
   finished_at: string | null;
   result: BacktestResult | null;
 }
+
+// ---------------------------------------------------------------------------
+// Bank statements (owner addition A)
+// ---------------------------------------------------------------------------
+
+export interface BankMapping {
+  date: string | null;
+  description?: string | null;
+  reference?: string | null;
+  amount?: string | null;
+  debit?: string | null;
+  credit?: string | null;
+  drcr?: string | null;
+  balance?: string | null;
+  /** A Dr/Cr column for the balance itself (overdraft accounts): "Dr" means overdrawn. */
+  balance_drcr?: string | null;
+  date_format: "DMY" | "MDY" | "YMD";
+  outflow_negative?: boolean;
+}
+
+export interface HelmBankAccount {
+  id: string;
+  name: string;
+  last4: string | null;
+  label: string;
+  currency: string;
+  mapping: BankMapping | null;
+  waiting: number;
+  balance: { amount_micros: number; as_of: string } | null;
+}
+
+export interface BankSampleLine {
+  line_no: number;
+  on: string;
+  description: string;
+  reference: string;
+  amount_micros: number;
+  balance_micros: number | null;
+}
+
+export interface BankPreview {
+  columns: string[];
+  header_row: number;
+  rows: number;
+  raw: string[][];
+  mapping: BankMapping;
+  saved: boolean;
+  sample: BankSampleLine[];
+  problems: { line_no: number | null; problem: string }[];
+}
+
+export interface BankImport {
+  id: string;
+  account_id: string;
+  filename: string;
+  lines_read: number;
+  lines_new: number;
+  lines_skipped: number;
+  lines_matched: number;
+  lines_waiting: number;
+  problems: { line_no: number | null; problem: string }[];
+  period_start: string | null;
+  period_end: string | null;
+  closing_balance_micros: number | null;
+  closing_on: string | null;
+  created_at: string | null;
+}
+
+export interface BankSuggestion {
+  work_item_id: string | null;
+  workspace_id?: string | null;
+  kind: "PAYABLE" | "RECEIVABLE";
+  document: string | null;
+  number: string | null;
+  counterparty: string | null;
+  amount_micros: number;
+  currency: string | null;
+  reasons: string[];
+  held: boolean;
+  readable?: boolean;
+}
+
+export type BankLineStatus = "UNMATCHED" | "SUGGESTED" | "MATCHED" | "IGNORED";
+
+export interface BankLine {
+  id: string;
+  account: string | null;
+  account_id: string;
+  import_id: string;
+  line_no: number;
+  on: string;
+  description: string;
+  reference: string;
+  amount_micros: number;
+  currency: string;
+  balance_micros: number | null;
+  status: BankLineStatus;
+  work_item_id: string | null;
+  workspace_id: string | null;
+  readable: boolean;
+  match: {
+    by?: "HELM" | "PERSON";
+    kind?: "PAYABLE" | "RECEIVABLE";
+    document?: string | null;
+    number?: string | null;
+    counterparty?: string | null;
+    reasons?: string[];
+    suggestions?: BankSuggestion[];
+    warning?: string | null;
+  };
+  note: string | null;
+  action: { id: string; state: ActionState; certificate_id: string | null } | null;
+  decided_at: string | null;
+}
+
+export interface BankLines {
+  lines: BankLine[];
+  counts: Record<BankLineStatus, number>;
+}

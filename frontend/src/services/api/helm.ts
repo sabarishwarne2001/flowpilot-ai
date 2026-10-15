@@ -15,6 +15,12 @@ import type {
   HelmOverview,
   HelmSettings,
   MandatePreview,
+  BankImport,
+  BankLine,
+  BankLines,
+  BankMapping,
+  BankPreview,
+  HelmBankAccount,
   HelmDraft,
   PaymentRun,
 } from "@/types/helm";
@@ -46,6 +52,12 @@ export const helmKeys = {
   action: (organizationId: string, actionId: string) => ["helm", organizationId, "action", actionId] as const,
   backtests: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId, "backtests"] as const,
   backtest: (organizationId: string, backtestId: string) => ["helm", organizationId, "backtest", backtestId] as const,
+  bankAccounts: (organizationId: string, bookId: string) =>
+    ["helm", organizationId, "book", bookId, "bank-accounts"] as const,
+  bankLines: (organizationId: string, bookId: string, status: string) =>
+    ["helm", organizationId, "book", bookId, "bank-lines", status] as const,
+  bankImports: (organizationId: string, bookId: string) =>
+    ["helm", organizationId, "book", bookId, "bank-imports"] as const,
 };
 
 export const getHelmOverview = async (organizationId: string): Promise<HelmOverview> =>
@@ -256,3 +268,76 @@ export const listHelmBacktests = async (organizationId: string, bookId: string):
 
 export const getHelmBacktest = async (organizationId: string, backtestId: string): Promise<HelmBacktest> =>
   (await apiClient.get<HelmBacktest>(`${base(organizationId)}/backtests/${encodeURIComponent(backtestId)}`)).data;
+
+// Bank statements (owner addition A). Uploads are FormData: the client sets the multipart boundary.
+const UPLOAD_TIMEOUT_MS = 300_000;
+
+export const listHelmBankAccounts = async (organizationId: string, bookId: string): Promise<HelmBankAccount[]> =>
+  (await apiClient.get<{ accounts: HelmBankAccount[] }>(`${book(organizationId, bookId)}/bank-accounts`)).data.accounts;
+
+export const createHelmBankAccount = async (
+  organizationId: string,
+  bookId: string,
+  body: { name: string; number?: string | null; currency: string },
+): Promise<HelmBankAccount> =>
+  (await apiClient.post<HelmBankAccount>(`${book(organizationId, bookId)}/bank-accounts`, body)).data;
+
+const statementForm = (file: File, fields: Record<string, string | undefined>): FormData => {
+  const form = new FormData();
+  form.append("file", file);
+  for (const [key, value] of Object.entries(fields)) {
+    if (value !== undefined) {
+      form.append(key, value);
+    }
+  }
+  return form;
+};
+
+export const previewHelmBankStatement = async (
+  organizationId: string,
+  bookId: string,
+  file: File,
+  accountId?: string,
+  mapping?: BankMapping,
+): Promise<BankPreview> =>
+  (
+    await apiClient.post<BankPreview>(
+      `${book(organizationId, bookId)}/bank-statements/preview`,
+      statementForm(file, { account_id: accountId, mapping: mapping ? JSON.stringify(mapping) : undefined }),
+      { timeout: UPLOAD_TIMEOUT_MS },
+    )
+  ).data;
+
+export const importHelmBankStatement = async (
+  organizationId: string,
+  bookId: string,
+  file: File,
+  accountId: string,
+  mapping: BankMapping,
+): Promise<BankImport> =>
+  (
+    await apiClient.post<BankImport>(
+      `${book(organizationId, bookId)}/bank-statements`,
+      statementForm(file, { account_id: accountId, mapping: JSON.stringify(mapping), save_mapping: "true" }),
+      { timeout: UPLOAD_TIMEOUT_MS },
+    )
+  ).data;
+
+export const listHelmBankImports = async (organizationId: string, bookId: string): Promise<BankImport[]> =>
+  (await apiClient.get<{ imports: BankImport[] }>(`${book(organizationId, bookId)}/bank-imports`)).data.imports;
+
+export const listHelmBankLines = async (organizationId: string, bookId: string, status: string): Promise<BankLines> =>
+  (await apiClient.get<BankLines>(`${book(organizationId, bookId)}/bank-lines`, { params: { status } })).data;
+
+export const matchHelmBankLine = async (organizationId: string, lineId: string, workItemId: string): Promise<BankLine> =>
+  (
+    await apiClient.post<BankLine>(`${base(organizationId)}/bank-lines/${encodeURIComponent(lineId)}/match`, {
+      work_item_id: workItemId,
+    })
+  ).data;
+
+export const ignoreHelmBankLine = async (organizationId: string, lineId: string, note: string): Promise<BankLine> =>
+  (await apiClient.post<BankLine>(`${base(organizationId)}/bank-lines/${encodeURIComponent(lineId)}/ignore`, { note })).data;
+
+export const reopenHelmBankLine = async (organizationId: string, lineId: string): Promise<BankLine> =>
+  (await apiClient.post<BankLine>(`${base(organizationId)}/bank-lines/${encodeURIComponent(lineId)}/reopen`)).data;

@@ -160,7 +160,11 @@ const Cash: React.FC<{ readonly settings: Settings; readonly canEnter: boolean }
               <Money micros={position.amount_micros} currency={position.currency} className="font-semibold" />
               <span className="helm-muted text-xs">
                 on {formatCalendarDate(position.as_of)} ·{" "}
-                {position.source === "STATEMENT" ? "from a bank statement" : "typed by a person"}
+                {position.source === "STATEMENT"
+                  ? "from a bank statement"
+                  : position.source === "BANK"
+                    ? "from imported bank statements"
+                    : "typed by a person"}
                 {position.age_days > 7 ? ` · ${position.age_days} days old` : ""}
               </span>
             </li>

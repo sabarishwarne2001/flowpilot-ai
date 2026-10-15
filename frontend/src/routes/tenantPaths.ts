@@ -139,6 +139,7 @@ export const ROUTE_PATTERNS = {
   helmMandates: "mandates",
   helmLedger: "ledger",
   helmTimeMachine: "time-machine",
+  helmBank: "bank",
   helmCertificates: "certificates",
   helmCertificate: "certificates/:certificateId",
   helmSettings: "settings",
@@ -214,6 +215,7 @@ export type HelmPage =
   | "mandates"
   | "ledger"
   | "time-machine"
+  | "bank"
   | "certificates"
   | "settings"
   | "start"
@@ -739,6 +741,7 @@ export const runTenantPathSelfCheck = (): string[] => {
     helm?.orgSlug === "acme" && helm?.workspaceSlug === "" && helm?.rest === "",
   );
   expect("helm paths build under the organization", helmPath("acme", "ledger") === "/acme/helm/ledger");
+  expect("helm's bank page is under the organization", helmPath("acme", "bank") === "/acme/helm/bank");
   expect("a helm path is recognised", isHelmPath("/acme/helm") && !isHelmPath("/acme/engineering"));
   expect(
     "switching workspace from Helm lands on the workspace root",
