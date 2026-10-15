@@ -27,8 +27,18 @@ below. Never restart.**
   (`backend/scripts/helm_demo_company.py`): its backtest finds exactly what was planted, to the paisa.
 - [x] 5. Sentence drafting, readback, the validator, the gallery, autonomy and caps, approvals
   (`POST …/mandates/draft`, the Mandates composer and editor, spec 79; the Time machine page too).
-- [ ] 6. Experience: full cockpit and visual identity, first run, Monday briefing email, preview and
-  upsell, the Overview card.
+- [x] 6. Experience: full cockpit and visual identity, first run, Monday briefing email, preview and
+  upsell, the Overview card (instrument trends, the flight path scrubbing into a replay's past,
+  `/helm/setup`, the sample company button, the Overview card, plan-card limits; specs 78–80).
+- Owner additions (2026-10-15, after box 6), built before box 7:
+  - [ ] A. Bank statement import: CSV or Excel with a column mapping saved per bank account; cash
+    positions; automatic matching of payments to scheduled or approved invoices (amount, date
+    window, reference or payee) so "paid" and "value held" rest on evidence; unmatched lines listed.
+  - [ ] B. Supplier statement reconciliation mandate: monthly, every supplier statement against the
+    Promise ledger, differences with evidence, a drafted reconciliation email.
+  - [ ] C. A guided Helm tour on the sample company (instruments, plan, Guard certificate, Time
+    machine) for demos and first-time users.
+  - [ ] D. If time remains: more hardening tests and a performance run at 10,000 documents.
 - [ ] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
   API scopes.
 - [ ] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
@@ -37,7 +47,7 @@ below. Never restart.**
   up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
   `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
 
-**Progress (2026-10-15, after box 5):** boxes 1–5 done and pushed. Fixed, each proven by a
+**Progress (2026-10-15, after box 6):** boxes 1–6 done and pushed; CI green on c2b87d3. Fixed, each proven by a
 failing test first: a plan could read half of a ledger rebuild; a failing hand left its action
 stuck EXECUTING; undo lost a settlement's evidence; Helm's notice switches were shown to members and
 the briefing could not be turned off; `helm_plans.conflict` stored JSON null; the dispute email
@@ -47,10 +57,9 @@ by name only (two suppliers with one name merged); the sample workspace counted 
 radar marks (it depends on which the worker reads last): the spec now checks both orders.
 Box 5 also fixed, each proven by a failing test first: a gallery mandate with no default (cash
 floor, PO threshold) was saved and backtested with the gallery's example as if the owner had chosen
-it; editing an active mandate was called a duplicate of itself. **Next:** box 6: the full cockpit
-(instrument trends, the flight path scrubbing into a backtest's past), the four-step first run, the
-"Explore Helm with a sample company" button with preview and upsell, the Monday briefing email
-(mail-client tests), the workspace Overview card, plan cards.
+it; editing an active mandate was called a duplicate of itself. Box 6 fixed the Monday briefing's
+links (no such page /helm/cockpit; "turn it off" went to the organization's page; the HTML had no
+opt-out link). **Next:** owner addition A (bank statement import), then B, C, then box 7.
 The full backend suite takes ~45 min on this sandbox; never edit backend code while it runs
 (lazily imported modules load mid-run). Restart the e2e stack (`E2E_LLM=1
 frontend/e2e/scripts/start-stack.sh`) after backend changes, and run browser specs with
@@ -596,3 +605,10 @@ The exact spend is not visible from inside the session; check your usage page.
   https://console.groq.com/docs/deprecations before adding a model to `app/core/ai_models.py`.
 - Sessions live in the `sessions` table; a refresh that fails revokes the family, so a script that
   ages a session and refreshes loses its access token too.
+- **The sandbox's databases live in memory** (`/dev/shm/pgdata` :5433 for e2e, `/dev/shm/pgdata2`
+  :5434 for backend tests): a container restart wipes them. Recreate both clusters with
+  `initdb --encoding=UTF8 --locale=C.UTF-8` (the container's POSIX locale otherwise gives
+  SQL_ASCII and the tests fail on the first non-ASCII character), the `vector` extension, the
+  `flowpilot` role and the `flowpilot_test` / `flowpilot_e2e` databases, and start Redis; then
+  `start-stack.sh` migrates. On a fresh e2e database the very first browser run can fail with
+  `UnmappableTierError` (the seed publishes the plans at that instant); the next run passes.
