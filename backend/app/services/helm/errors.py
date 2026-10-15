@@ -37,4 +37,11 @@ class HelmInvalid(HelmError):
     code = "HELM_INVALID"
 
 
-__all__ = ["HelmError", "HelmForbidden", "HelmInvalid", "HelmNotFound"]
+class HelmQuota(HelmError):
+    """The organization's AI usage limit refuses a model call (drafting a mandate from a sentence)."""
+
+    status_code = 402
+    code = "AI_LIMIT_REACHED"
+
+
+__all__ = ["HelmError", "HelmForbidden", "HelmInvalid", "HelmNotFound", "HelmQuota"]

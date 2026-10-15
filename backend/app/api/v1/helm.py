@@ -16,6 +16,7 @@
     GET    /organizations/{oid}/helm/books/{bid}/mandates
     POST   /organizations/{oid}/helm/books/{bid}/mandates             create (from the gallery or a draft)
     POST   /organizations/{oid}/helm/books/{bid}/mandates/preview     validate and read back without saving
+    POST   /organizations/{oid}/helm/books/{bid}/mandates/draft       a sentence to a draft (metered model call)
     PATCH  /organizations/{oid}/helm/books/{bid}/mandates/{mid}       edit: a new immutable version
     POST   /organizations/{oid}/helm/books/{bid}/mandates/{mid}/activate | pause | archive
     GET    /organizations/{oid}/helm/books/{bid}/ledger               the Promise ledger, filtered
@@ -129,6 +130,12 @@ class MandatePatch(BaseModel):
     scope: Optional[dict[str, Any]] = None
     autonomy: Optional[dict[str, Any]] = None
     title: Optional[str] = Field(default=None, max_length=200)
+
+
+class DraftIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    sentence: str = Field(..., min_length=1, max_length=500)
 
 
 class RejectIn(BaseModel):
@@ -311,6 +318,20 @@ def helm_preview_mandate(organization_id: uuid.UUID, book_id: uuid.UUID, payload
                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
     who = _viewer(db, context)
     return service.preview_spec(db, who, service.book_for(db, who, book_id), payload.model_dump(exclude={"activate"}))
+
+
+@router.post(f"{P}/books/{{book_id}}/mandates/draft")
+def helm_draft_mandate(organization_id: uuid.UUID, book_id: uuid.UUID, payload: DraftIn,
+                       db: Session = Depends(get_db),
+                       context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """A sentence to a mandate draft: one metered model call, then the validator and the readback.
+    Nothing is saved; the gallery answers when the model cannot."""
+    from app.services.helm import drafting
+
+    who = _viewer(db, context)
+    result = drafting.draft(db, who, service.book_for(db, who, book_id), payload.sentence)
+    db.commit()  # the call's metering
+    return result
 
 
 @router.patch(f"{P}/books/{{book_id}}/mandates/{{mandate_id}}")
