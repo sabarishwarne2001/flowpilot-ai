@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.models.helm import HelmAction, HelmBook, HelmCertificate, HelmMandate, HelmMandateVersion, HelmPlan
 from app.services.helm import certificate as certs
-from app.services.helm import counterparties, ledger, planner, snapshot_store
+from app.services.helm import approvals, counterparties, ledger, planner, snapshot_store
 from app.services.helm import vocabulary as v
 from app.services.helm.guard import SYSTEM
 from app.services.helm.mandates import base, registry
@@ -58,9 +58,14 @@ def current_plan(db: Session, book_id: uuid.UUID) -> Optional[HelmPlan]:
     ).scalar_one_or_none()
 
 
-def plan_digest(snapshot_digest: str, mandates: list[base.ActiveMandate]) -> str:
-    return ledger.sha256({"snapshot": snapshot_digest, "engine": v.ENGINE_VERSION,
-                          "mandates": sorted((m.id, m.version, m.status, m.mode) for m in mandates)})
+def plan_digest(snapshot_digest: str, mandates: list[base.ActiveMandate], *, chain: tuple = ()) -> str:
+    """The plan's inputs. An approval chain is one (it decides what may run alone and what waits for whom);
+    a book without one keeps the digest it always had."""
+    content = {"snapshot": snapshot_digest, "engine": v.ENGINE_VERSION,
+               "mandates": sorted((m.id, m.version, m.status, m.mode) for m in mandates)}
+    if chain:
+        content["approval_chain"] = [t.as_json() for t in chain]
+    return ledger.sha256(content)
 
 
 def _try_lock(db: Session, organization_id: uuid.UUID) -> bool:
@@ -86,7 +91,8 @@ def run(db: Session, book: HelmBook, *, triggered_by: str = v.TRIGGER_SCHEDULE, 
     counterparties.sync(db, book, as_of=as_of)
     snapshot = snapshot_store.take(db, book, as_of=as_of)
     mandates = active_mandates(db, book.id)
-    digest = plan_digest(snapshot.digest, mandates)
+    chain = approvals.chain_for(db, book)
+    digest = plan_digest(snapshot.digest, mandates, chain=chain)
     current = current_plan(db, book.id)
     if current is not None and current.inputs_digest == digest and not force:
         return current
@@ -113,19 +119,31 @@ def run(db: Session, book: HelmBook, *, triggered_by: str = v.TRIGGER_SCHEDULE, 
 
     keep: set[str] = set()
     auto_run: list[HelmAction] = []
+    chain_waits = 0
     for proposal in composition.proposals:
+        candidate = proposal.candidate
+        need = approvals.requirement(chain, kind=candidate.kind, amount_micros=candidate.amount_micros,
+                                     currency=candidate.currency)
+        if need.approvals > 1 and proposal.result.passed and not proposal.result.needs_approval:
+            chain_waits += 1  # the Guard would let it run alone; the chain makes it wait for people
         action = _persist(db, book=book, plan=plan, proposal=proposal, snapshot=composition.snapshot,
-                          mandates=composition.mandates, now=now)
+                          mandates=composition.mandates, now=now, need=need)
         if action is None:
             continue
         keep.add(action.idempotency_key)
-        mandate = proposal.candidate.mandate
-        if (action.state == v.ACTION_PROPOSED and proposal.result.can_run_alone and mandate is not None
-                and mandate.mode == v.AUTONOMY_ACT and capability and not book.kind == v.BOOK_SAMPLE):
+        mandate = candidate.mandate
+        # An action an approval chain covers waits for its people, whatever the act cap says.
+        if (action.state == v.ACTION_PROPOSED and proposal.result.can_run_alone and need.approvals <= 1
+                and mandate is not None and mandate.mode == v.AUTONOMY_ACT and capability
+                and not book.kind == v.BOOK_SAMPLE):
             action.state = v.ACTION_APPROVED
             action.decided_at = now
             action.approvals = [{"by": "helm", "at": now.isoformat(), "reason": "Act mode, within the act cap"}]
             auto_run.append(action)
+    if chain_waits:
+        counts = dict((plan.summary or {}).get("counts") or {})
+        counts["needs_approval"] = int(counts.get("needs_approval") or 0) + chain_waits
+        plan.summary = {**(plan.summary or {}), "counts": counts}
     db.execute(
         update(HelmAction)
         .where(HelmAction.book_id == book.id, HelmAction.state.in_((v.ACTION_PROPOSED, v.ACTION_BLOCKED)),
@@ -147,7 +165,10 @@ def run(db: Session, book: HelmBook, *, triggered_by: str = v.TRIGGER_SCHEDULE, 
 
 
 def _persist(db: Session, *, book: HelmBook, plan: HelmPlan, proposal: planner.Proposal, snapshot, mandates,
-             now: datetime) -> Optional[HelmAction]:
+             now: datetime, need: Optional[approvals.Requirement] = None) -> Optional[HelmAction]:
+    """Create the action, or refresh the one the plan proposes again. `need` is the approval chain's
+    requirement for it: how many people approve it (stored, so the cockpit says "1 of 2 approvals")."""
+    need = need or approvals.Requirement()
     candidate = proposal.candidate
     key = candidate.idempotency_key
     existing = db.execute(select(HelmAction).where(HelmAction.idempotency_key == key)).scalar_one_or_none()
@@ -164,9 +185,10 @@ def _persist(db: Session, *, book: HelmBook, plan: HelmPlan, proposal: planner.P
         existing.value_micros = candidate.value_micros
         existing.params = json.loads(ledger.canonical(candidate.params))
         existing.guard_passed = proposal.result.passed
-        existing.needs_approval = proposal.result.needs_approval
+        existing.needs_approval = proposal.result.needs_approval or need.approvals > 1
         if existing.state in (v.ACTION_PROPOSED, v.ACTION_BLOCKED, v.ACTION_SUPERSEDED):
             existing.state = v.ACTION_PROPOSED if proposal.result.passed else v.ACTION_BLOCKED
+            existing.required_approvals = need.approvals
         if changed:
             existing.guard = guard_json
             existing.certificate_id = _certificate(db, book, existing, proposal, snapshot, mandates, plan, now).id
@@ -180,12 +202,13 @@ def _persist(db: Session, *, book: HelmBook, plan: HelmPlan, proposal: planner.P
         mandate_id=uuid.UUID(mandate.id) if mandate else None, mandate_version=mandate.version if mandate else None,
         kind=candidate.kind, idempotency_key=key,
         state=v.ACTION_PROPOSED if proposal.result.passed else v.ACTION_BLOCKED,
-        autonomy=mandate.mode if mandate else v.AUTONOMY_PROPOSE, needs_approval=proposal.result.needs_approval,
+        autonomy=mandate.mode if mandate else v.AUTONOMY_PROPOSE,
+        needs_approval=proposal.result.needs_approval or need.approvals > 1,
         guard_passed=proposal.result.passed, guard=guard_json, amount_micros=candidate.amount_micros,
         currency=candidate.currency, run_date=candidate.run_date, counterparty_key=candidate.counterparty_key,
         title=candidate.title, explanation=candidate.explanation, value_micros=candidate.value_micros,
         params=json.loads(ledger.canonical(candidate.params)),
-        undoable=candidate.kind not in v.IRREVERSIBLE_ACTIONS, required_approvals=1,
+        undoable=candidate.kind not in v.IRREVERSIBLE_ACTIONS, required_approvals=need.approvals,
     )
     db.add(action)
     db.flush()
