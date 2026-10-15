@@ -17,7 +17,8 @@ from sqlalchemy.orm import Session
 
 from app.core import normalize as nz
 from app.models.corroboration import CorroborationDocument, CorroborationRun
-from app.models.helm import HelmAction, HelmBook, HelmCashPosition, HelmCounterparty, HelmPromise, HelmSettings
+from app.models.helm import (HelmAction, HelmBook, HelmCashPosition, HelmCounterparty, HelmPromise,
+                              HelmSettings, HelmSettlement)
 from app.models.obligations import HolidayCalendar
 from app.models.payment_risk import PaymentRiskFlag
 from app.models.procurement import ProcurementCase
@@ -336,6 +337,25 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 tolerance_bps=int((promise.details or {}).get("tolerance_bps") or 0),
                 po_number=(promise.details or {}).get("po_number")))
 
+    # An invoice's payment state as it is now: the settlement row is the truth, and the ledger's copy
+    # (`details.settlement`) is only as new as the last rebuild, which is debounced after a change. A
+    # payment approved a few seconds ago must already be scheduled here (a bank import made then
+    # matches it; a plan made then does not schedule it twice).
+    current = {row.work_item_id: row for row in db.execute(
+        select(HelmSettlement).where(HelmSettlement.workspace_id.in_(workspace_ids or [uuid.uuid4()]))).scalars()}
+
+    def _settlement(promise: HelmPromise) -> dict[str, Any]:
+        copied = dict((promise.details or {}).get("settlement") or {})
+        row = current.get(promise.work_item_id) if promise.work_item_id else None
+        if row is None or int(row.version or 0) <= int(copied.get("version") or 0):
+            return copied
+        held = row.state in (v.SETTLEMENT_HELD, v.SETTLEMENT_DISPUTED)
+        return {**copied, "state": row.state, "source": row.source, "run_date": row.run_date,
+                "paid_on": row.paid_on if row.state == v.SETTLEMENT_PAID else None,
+                "hold_reason": row.hold_reason if held else None,
+                "hold_code": (row.evidence or {}).get("reason") if held else None,
+                "waived": sorted((row.evidence or {}).get("waived") or ()), "version": row.version}
+
     payables: list[snap.Payable] = []
     receivables: list[snap.Receivable] = []
     notices: list[snap.Notice] = []
@@ -345,7 +365,7 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
         counts[promise.kind] = counts.get(promise.kind, 0) + 1
         details = promise.details or {}
         if promise.kind == v.KIND_PAYMENT_DUE:
-            settlement = details.get("settlement") or {}
+            settlement = _settlement(promise)
             deadline = details.get("msme_deadline") or None
             cp = counterparties.get(promise.counterparty_key or "")
             protected = cp.msme.protected if cp else bool(details.get("udyam_number"))
@@ -378,7 +398,7 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                                 or None) if payment else None,
             ))
         elif promise.kind == v.KIND_PAYMENT_EXPECTED:
-            settlement = details.get("settlement") or {}
+            settlement = _settlement(promise)
             receivables.append(snap.Receivable(
                 promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
                 workspace_id=str(promise.workspace_id),
