@@ -22,6 +22,8 @@ import type {
   BankPreview,
   HelmBankAccount,
   HelmDraft,
+  HelmWhatIf,
+  HelmWhatIfInput,
   PaymentRun,
 } from "@/types/helm";
 
@@ -86,6 +88,10 @@ export const getHelmCockpit = async (organizationId: string, bookId: string): Pr
 
 export const replanHelmBook = async (organizationId: string, bookId: string): Promise<HelmCockpit> =>
   (await apiClient.post<HelmCockpit>(`${book(organizationId, bookId)}/plan`)).data;
+
+/** Today's plan beside a scenario's (cash change, customers paying later, invoices held). Saves nothing. */
+export const runHelmWhatIf = async (organizationId: string, bookId: string, body: HelmWhatIfInput): Promise<HelmWhatIf> =>
+  (await apiClient.post<HelmWhatIf>(`${book(organizationId, bookId)}/what-if`, body)).data;
 
 export const approveAllHelmActions = async (
   organizationId: string,

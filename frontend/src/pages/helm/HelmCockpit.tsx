@@ -10,13 +10,16 @@ import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { StartTour } from "@/components/helm/HelmTour";
 import { InstrumentRing, MoneyByCurrency, StateBadge, VisibilityMeter } from "@/components/helm/HelmBits";
 import { PlanDiff } from "@/components/helm/PlanDiff";
+import { WhatIfPanel, type Holdable } from "@/components/helm/WhatIfPanel";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { helmPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { getHelmBacktest, getHelmCockpit, helmKeys, listHelmBacktests, replanHelmBook } from "@/services/api/helm";
-import { formatCalendarDate } from "@/utils/displayTime";
+import { formatCalendarDate, formatNumber } from "@/utils/displayTime";
 import { formatRelativeTime } from "@/utils/formatters";
-import type { HelmCockpit as Cockpit, HelmMandate } from "@/types/helm";
+import type { CashPoint, HelmCockpit as Cockpit, HelmMandate, HelmWhatIf } from "@/types/helm";
+
+const NO_SCENARIO: Record<string, CashPoint[]> = {};
 
 const MODE_WORDS = { watch: "Watch", propose: "Propose", act: "Act" } as const;
 
@@ -50,6 +53,19 @@ const pinsOf = (cockpit: Cockpit): Record<string, FlightPin[]> => {
     }
   }
   return pins;
+};
+
+/** The plan's payments a what-if may hold (the ones this person can read), once each. */
+const holdableOf = (cockpit: Cockpit): Holdable[] => {
+  const seen = new Set<string>();
+  const out: Holdable[] = [];
+  for (const action of cockpit.actions) {
+    if (action.kind === "schedule_payment" && action.readable && action.promise_id && !seen.has(action.promise_id)) {
+      seen.add(action.promise_id);
+      out.push({ promiseId: action.promise_id, label: action.title });
+    }
+  }
+  return out;
 };
 
 export const HelmCockpit: React.FC = () => {
@@ -115,6 +131,10 @@ export const HelmCockpit: React.FC = () => {
 
   const floors = useMemo(() => floorsOf(cockpit.data?.mandates ?? []), [cockpit.data]);
   const pins = useMemo(() => (cockpit.data ? pinsOf(cockpit.data) : {}), [cockpit.data]);
+  const holdable = useMemo(() => (cockpit.data ? holdableOf(cockpit.data) : []), [cockpit.data]);
+  // A what-if belongs to the book it was asked about; switching books drops it.
+  const [whatIf, setWhatIf] = useState<{ bookId: string; result: HelmWhatIf } | null>(null);
+  const shownWhatIf = whatIf?.bookId === book.id ? whatIf.result : null;
 
   if (cockpit.isLoading) {
     return (
@@ -132,6 +152,10 @@ export const HelmCockpit: React.FC = () => {
   const active = mandates.filter((m) => m.status === "ACTIVE");
   const forecast = summary.forecast ?? summary.simulation ?? null;
   const readOnly = book.read_only;
+  // With a what-if, both lines come from the same fresh simulation, so they differ only by the change.
+  const flightPaths = shownWhatIf ? shownWhatIf.baseline.cash_paths : forecast?.cash_paths ?? {};
+  const flightDays = Object.values(flightPaths)[0]?.length ?? 0;
+  const cashCurrencies = Object.keys(summary.cash ?? {}).sort();
 
   return (
     <div className="mx-auto max-w-6xl space-y-5">
@@ -232,17 +256,27 @@ export const HelmCockpit: React.FC = () => {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <section aria-labelledby="helm-flight" className="helm-panel p-4 lg:col-span-2" data-tour="flight">
-          <h2 id="helm-flight" className="helm-label mb-2">
-            Flight path · next {forecast?.cash_paths ? Object.values(forecast.cash_paths)[0]?.length ?? 0 : 0} days of cash
-          </h2>
+          <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 id="helm-flight" className="helm-label">
+              Flight path · next {formatNumber(flightDays)} days of cash
+            </h2>
+            {shownWhatIf ? <span className="helm-chip helm-chip-accent">Showing a what-if</span> : null}
+          </div>
           <FlightPath
-            paths={forecast?.cash_paths ?? {}}
+            paths={flightPaths}
             floors={floors}
             pins={pins}
             past={past}
             today={summary.as_of}
-            floorProbability={forecast?.floor_probability ?? {}}
+            floorProbability={shownWhatIf ? shownWhatIf.baseline.floor_probability : forecast?.floor_probability ?? {}}
+            scenario={shownWhatIf?.scenario.cash_paths ?? NO_SCENARIO}
           />
+          {shownWhatIf ? (
+            <p className="helm-muted mt-1 text-xs">
+              The solid line is today&apos;s plan and the dashed line the what-if, both simulated just now with the same
+              futures. Nothing has changed in the real plan.
+            </p>
+          ) : null}
           {pastDays > 0 ? (
             <div className="mt-3 space-y-2" data-testid="helm-scrub">
               <label className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:gap-3">
@@ -278,7 +312,18 @@ export const HelmCockpit: React.FC = () => {
             </div>
           ) : null}
         </section>
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
+          {!readOnly ? (
+            <WhatIfPanel
+              key={book.id}
+              organizationId={organizationId}
+              bookId={book.id}
+              currencies={cashCurrencies}
+              holdable={holdable}
+              result={shownWhatIf}
+              onResult={(result) => setWhatIf(result ? { bookId: book.id, result } : null)}
+            />
+          ) : null}
           <section aria-labelledby="helm-value" className="helm-panel p-4">
             <h2 id="helm-value" className="helm-label">
               Value held
