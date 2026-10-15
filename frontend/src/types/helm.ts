@@ -298,6 +298,8 @@ export interface LibraryTemplate {
   recommended_for: string[];
   /** Parameters with no default: the value shown is an example the person must set before adding. */
   required: string[];
+  /** Several mandates may use it, each with its own rule (the custom condition): never "Already yours". */
+  repeatable: boolean;
   /** The custom condition's rows editor: the facts it may test, their comparisons and the outcomes. */
   editor?: ConditionEditorSpec;
 }

@@ -1,11 +1,10 @@
 import React, { useId, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link } from "react-router-dom";
-import { Lock, Plus, X } from "lucide-react";
+import { Plus, X } from "lucide-react";
 
 import { fromMicros, toMicros } from "@/components/helm/EditableReadback";
+import { EnterpriseNote } from "@/components/helm/EnterpriseNote";
 import { useHelm } from "@/components/helm/HelmContext";
-import { organizationBillingPath } from "@/routes/tenantPaths";
 import { getHelmLibrary, helmKeys } from "@/services/api/helm";
 import type { ConditionEditorSpec, ConditionField, ConditionOp, CustomCondition } from "@/types/helm";
 
@@ -321,7 +320,7 @@ const ConditionsForm: React.FC<EditorProps & { readonly spec: ConditionEditorSpe
   disabled = false,
   spec,
 }) => {
-  const { orgSlug, access, role } = useHelm();
+  const { access } = useHelm();
   const id = useId();
   const fieldOf = (key: string): ConditionField | undefined => spec.fields.find((f) => f.key === key);
   const stored = Array.isArray(params.conditions) ? (params.conditions as CustomCondition[]) : [];
@@ -365,19 +364,7 @@ const ConditionsForm: React.FC<EditorProps & { readonly spec: ConditionEditorSpe
 
   return (
     <div className="helm-panel-raised mt-3 space-y-3 p-3" data-testid="helm-conditions-editor">
-      {locked ? (
-        <p className="flex flex-wrap items-center gap-2 text-sm" data-testid="helm-upgrade-note">
-          <Lock className="h-3.5 w-3.5" aria-hidden="true" />
-          Custom conditions are part of the Enterprise plan.
-          {role === "OWNER" || role === "BILLING" ? (
-            <Link to={organizationBillingPath(orgSlug)} className="helm-accent hover:underline">
-              See plans
-            </Link>
-          ) : (
-            <span className="helm-muted">Ask your organization&apos;s owner about upgrading.</span>
-          )}
-        </p>
-      ) : null}
+      {locked ? <EnterpriseNote what="Custom conditions are" className="text-sm" /> : null}
       <label className="block text-xs" htmlFor={`${id}-name`}>
         <span className="helm-label block">Name</span>
       </label>
