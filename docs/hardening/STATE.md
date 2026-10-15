@@ -23,8 +23,8 @@ below. Never restart.**
   documents, MSME detection, counterparty behaviour (built with the skeleton; consistent snapshot
   reads proven live).
 - [x] 3. The rest of the library (3, 4, 6, 8–12) and the simulation; hold releases and waivers.
-- [ ] 4. Time machine (backtest, forecast, value held) and the sample company
-  (`backend/scripts/helm_demo_company.py`).
+- [x] 4. Time machine (backtest, forecast, value held) and the sample company
+  (`backend/scripts/helm_demo_company.py`): its backtest finds exactly what was planted, to the paisa.
 - [ ] 5. Sentence drafting, readback, the validator, the gallery, autonomy and caps, approvals.
 - [ ] 6. Experience: full cockpit and visual identity, first run, Monday briefing email, preview and
   upsell, the Overview card.
@@ -36,16 +36,21 @@ below. Never restart.**
   up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
   `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
 
-**Progress (checkpoint 1, 2026-10-15):** boxes 1–3 done and pushed. Fixed, each proven by a
+**Progress (2026-10-15, after box 4):** boxes 1–4 done and pushed. Fixed, each proven by a
 failing test first: a plan could read half of a ledger rebuild; a failing hand left its action
 stuck EXECUTING; undo lost a settlement's evidence; Helm's notice switches were shown to members and
 the briefing could not be turned off; `helm_plans.conflict` stored JSON null; the dispute email
-crashed the escape contract; the ledger paged on a non-unique key. **Next:** box 4 (the backtest
-in `app/services/helm/backtest.py` + `history.py` and the sample company in
-`app/services/helm/sample_company.py` are written but not yet committed or tested: run the sample
-build on the e2e database, reconcile `Planted` with the backtest's findings, then write the
-backtest tests and `backend/scripts/helm_demo_company.py`). The full backend suite takes ~45 min
-on this sandbox; never edit backend code while it runs (lazily imported modules load mid-run).
+crashed the escape contract; the ledger paged on a non-unique key; the ledger keyed counterparties
+by name only (two suppliers with one name merged); the sample workspace counted against
+`limit.workspaces`. CI run 260's browser failure was spec 78 assuming which of two invoices the
+radar marks (it depends on which the worker reads last): the spec now checks both orders.
+**Next:** box 5: `POST …/helm/mandates/draft` (a sentence to a mandate draft through `llm_service`,
+strict JSON, metered, falling back to the gallery; the e2e model stand-in learns it), readback chip
+editing, the validator in the UI, autonomy and the act cap (owners and admins only), approvals UI.
+The full backend suite takes ~45 min on this sandbox; never edit backend code while it runs
+(lazily imported modules load mid-run). Restart the e2e stack (`E2E_LLM=1
+frontend/e2e/scripts/start-stack.sh`) after backend changes, and run browser specs with
+`npx playwright test -c e2e/playwright.config.ts <spec>` from `frontend/`.
 
 ## Previous phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
 Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`

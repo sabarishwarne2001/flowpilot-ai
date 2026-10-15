@@ -60,7 +60,7 @@ could forget.
 | `helm_tasks` | the decision and verification tasks Helm opens; they appear in the review hub as kind `HELM` | source |
 
 `workspaces.is_sample` marks the sample workspace: it is labelled in the workspace picker, it does
-not count towards `limit.workspaces`, and deleting it removes the sample book.
+not count towards `limit.workspaces`, and deleting it archives the workspace and its sample book.
 
 ## 4. The Promise ledger
 
@@ -263,8 +263,9 @@ the workspace name, and an "Ask for access" button; approving needs read access.
 | `helm.backtest` | on request (first run, the Time machine, preview once a week) | LIGHT |
 | `helm.execute` | after an approval, or an Act-mode action within its cap | LIGHT |
 | `helm.briefing` | hourly; sends Monday 09:00 in the organization's time zone | LIGHT |
+| `helm.sample` | "Explore Helm with a sample company" (§15) | ENRICH |
 
-All five are in `TENANT_ACTIVITY_JOB_TYPES` and `BILLING_GATED_JOB_TYPES`, gated on
+All six are in `TENANT_ACTIVITY_JOB_TYPES` and `BILLING_GATED_JOB_TYPES`, gated on
 `capability.helm` (preview backtests and the sample book excepted), idempotent, and visible on the
 platform jobs page with the dead-letter queue.
 
@@ -292,3 +293,44 @@ capability or preview gate as its first statement. Enterprise API keys get `helm
 | 1,000 futures | ≤ 3 s | _pending_ |
 | Incremental ledger update | ≤ 1 s per document | _pending_ |
 | Event loop | no database work on the loop (threadpool rule) | _pending_ |
+
+## 14. The Time machine (`helm/backtest.py`, `helm/history.py`)
+
+**What it answers:** "what would Helm have done over the last N months, and what would it have
+held?" It never executes anything; draft mandates may be backtested.
+
+1. `POST …/helm/backtests` checks the plan's months (preview 3, Business 6, Enterprise 24; the
+   sample company may always be replayed whole) and, for Helm preview, one run a week. It stores a
+   QUEUED `helm_backtests` row and queues `helm.backtest`.
+2. The job rebuilds the ledger first, so the past is read from today's evidence, then builds a
+   `History`: the book as of today with every promise (kept and broken), every radar finding
+   whatever became of it (open, confirmed, dismissed) with the day it was raised, and every cash
+   observation, oldest first. `History` is frozen data, like `Snapshot`.
+3. Each mandate's pure `backtest(history, mandate)` replays the period. The day a document arrived
+   is the day Helm would have seen it. Each finding names the documents it stands on.
+4. Value is counted in three **honesty classes** that are never added together: **confirmed**
+   (evidence shows it happened: a later credit note, a reviewer's confirmation, a second payment of
+   the same bill, an evidenced payment date), **likely** (the rule fired and the facts are there,
+   but nothing confirms the loss), **potential** (facts are missing). The summary is a
+   deterministic sentence built from those numbers; no model writes it.
+5. The result keeps per-mandate findings (up to 200 each; counts and totals cover all), totals by
+   class and currency, value by category, a timeline and the cash history the flight path scrubs.
+
+## 15. The sample company (`helm/sample_company.py`)
+
+Meridian Wholesale Pvt Ltd, an invented Pune distributor (INR, Asia/Kolkata), so that every plan
+can see Helm work on a full set of books. Nine months of purchase orders, goods receipts,
+invoices, credit notes, sales invoices, contracts, supplier certificates and bank statements,
+rendered as PDFs with reportlab. Planted in them: overcharges against agreed prices, one duplicate
+paid twice, a bank-account change, MSME suppliers paid late, missed early-payment discounts, a
+missed renewal, an expired certificate, late-paying customers and a cash dip.
+
+- The documents are read by the platform's own engines, called directly with no plan gate: the
+  role classifier, the radar's bank-account check and duplicate sweep, three-way matching and the
+  obligations reader. So the sample shows what Helm does with what the platform really extracts.
+- `POST …/helm/sample` queues `helm.sample` (ENRICH profile, because the duplicate sweep needs
+  embeddings); `DELETE …/helm/sample` archives the workspace and its book. The sample workspace is
+  marked `is_sample`, labelled, and never counts against `limit.workspaces`.
+- `Planted` lists exactly what was planted; the backtest of the sample must find exactly that (a
+  live test checks it to the paisa). `scripts/helm_demo_company.py --org <slug> [--rebuild]
+  [--print]` builds it from the command line and refuses to run against production.
