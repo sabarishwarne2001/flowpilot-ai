@@ -95,6 +95,8 @@ class ReviewResolveRequest(BaseModel):
     #: ARCH47-S1:posting-verdict. POSTING reviews: RETRY, ACCEPT (with the target's reference) or CANCEL.
     posting_verdict: Optional[str] = None
     posting_reference: Optional[str] = Field(default=None, max_length=200)
+    #: Flagship session. HELM reviews (Helm's tasks): VERIFIED, NOT_VERIFIED, RENEW, CANCEL, RENEGOTIATE or DONE.
+    helm_verdict: Optional[str] = Field(default=None, max_length=16)
     #: ARCH48-S1:expected-version. The version the reviewer read (ReviewItemResponse.version).
     expected_version: Optional[int] = Field(default=None, ge=0)
 

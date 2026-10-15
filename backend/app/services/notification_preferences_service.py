@@ -29,6 +29,10 @@ SECURITY = "security"
 BILLING = "billing"
 USAGE = "usage"
 WORKFLOW = "workflow"
+#: Flagship session: Helm's notices (a breached mandate, a conflict in the plan, an action that
+#: needs approval) and its Monday briefing, each with its own switch.
+HELM = "helm"
+HELM_BRIEFING = "helm_briefing"
 
 
 @dataclass(frozen=True)
@@ -51,6 +55,12 @@ CATEGORIES: tuple[Category, ...] = (
              essential=False),
     Category(WORKFLOW, "Documents and automations",
              "A document that could not be processed, an automation that failed or needs attention.",
+             essential=False),
+    Category(HELM, "Helm",
+             "A mandate breached or drifting, a conflict in the plan, a payment action waiting for approval.",
+             essential=False),
+    Category(HELM_BRIEFING, "Helm Monday briefing",
+             "Every Monday at 09:00: this week's plan, the risks Helm sees and the value it held.",
              essential=False),
 )
 _BY_KEY = {category.key: category for category in CATEGORIES}

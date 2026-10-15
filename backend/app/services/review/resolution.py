@@ -180,6 +180,9 @@ class ResolvePayload:
     #: (the target has it: posting_reference is its id there) or CANCEL.
     posting_verdict: Optional[str] = None
     posting_reference: Optional[str] = None
+    #: Flagship session. HELM -- the task's verdict (helm/tasks.py VERDICTS): VERIFIED or
+    #: NOT_VERIFIED for a bank-account check, RENEW / CANCEL / RENEGOTIATE for a renewal, DONE or CANCEL.
+    helm_verdict: Optional[str] = None
 
 
 @dataclass
@@ -691,6 +694,21 @@ def _resolve_posting(
     return verdict
 
 
+def _resolve_helm(
+    db: Session, *, item: ReviewItem, actor_user_id: uuid.UUID, payload: ResolvePayload
+) -> str:
+    """Flagship session. A person settles a task Helm opened (verify a bank account, decide a renewal)."""
+    from app.services.helm import tasks as helm_tasks
+
+    try:
+        task = helm_tasks.resolve(db, task_id=item.item_id, workspace_id=item.workspace_id,
+                                  verdict=payload.helm_verdict or "", note=payload.note,
+                                  actor_user_id=actor_user_id)
+    except helm_tasks.TaskError as exc:
+        raise ReviewResolutionError(str(exc)) from exc
+    return task.decision or "DONE"
+
+
 _DISPATCH = {
     vocab.KIND_EXTRACTION: _resolve_extraction,
     vocab.KIND_ASSERTION: _resolve_assertion,
@@ -701,6 +719,7 @@ _DISPATCH = {
     vocab.KIND_CORROBORATION: _resolve_corroboration,  # ARCH45-S1:resolve-corroboration
     vocab.KIND_OBLIGATION: _resolve_obligation,  # ARCH46-S1:resolve-obligation
     vocab.KIND_POSTING: _resolve_posting,  # ARCH47-S1:resolve-posting
+    vocab.KIND_HELM: _resolve_helm,  # flagship session: Helm's tasks
 }
 
 

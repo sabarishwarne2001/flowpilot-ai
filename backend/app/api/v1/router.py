@@ -178,6 +178,11 @@ api_router.include_router(batches_api.router)
 from app.api.v1 import truthmesh as truthmesh_api  # noqa: E402
 
 api_router.include_router(truthmesh_api.router)
+# Flagship session: Helm. Reads need an owner, admin or billing role; writes need capability.helm
+# (the sample company excepted); docs/helm/ARCHITECTURE.md §11.
+from app.api.v1 import helm as helm_api  # noqa: E402
+
+api_router.include_router(helm_api.router)
 # ARCH45-S1:corroboration-router. Every route is gated on capability.universal_corroborator.
 api_router.include_router(corroboration.router)
 # ARCH46-S1:obligations-router. Every route is gated on capability.obligations;

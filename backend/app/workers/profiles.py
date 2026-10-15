@@ -195,6 +195,15 @@ LIGHT = WorkerProfile(
             # bookkeeping (see above).
             "truthmesh.index_document",
             "truthmesh.rebuild_workspace",
+            # Flagship session: Helm. The ledger is SQL and deterministic rules; the plan is
+            # scipy.optimize.milp (HiGHS, inside SciPy) and NumPy; execution writes rows and sends mail
+            # through the existing services; the backtest replays stored facts; the briefing is SMTP.
+            # No model, OCR or PDF engine. Not optional bookkeeping (see above).
+            "helm.ledger_build",
+            "helm.plan",
+            "helm.backtest",
+            "helm.execute",
+            "helm.briefing",
         }
     ),
     allow_heavy=frozenset(),
