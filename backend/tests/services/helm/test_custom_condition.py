@@ -108,6 +108,25 @@ def test_the_gallery_example_must_be_replaced_and_is_locked_below_enterprise():
     assert "custom_condition" not in drafting.prompt_for("hold big invoices", enterprise=False)
 
 
+def test_the_drafting_model_is_told_each_fact_and_its_written_amounts_become_micros():
+    prompt = drafting.prompt_for("hold any invoice above 5 lakh from a new supplier", enterprise=True)
+    assert "- custom_condition: \"Custom condition\"." in prompt
+    assert ('      amount (Amount): money {"amount": "<number as written>", "currency": "<ISO 4217 code>"}; '
+            "comparisons > >= < <= = !=") in prompt
+    assert ('      confidence (How sure the facts are): one of the codes; with "in", a list of them (VERIFIED, '
+            "CALIBRATED, EXTRACTED); comparisons = != in") in prompt
+    assert '    - match: "all" or "any"; outcome: "hold", "approval" or "notify"' in prompt
+    # The model writes the amount as the sentence does; Helm converts it, inside each condition too.
+    answer = {"name": "Big first invoices", "conditions": [
+        rule("amount", ">", {"amount": "5,00,000", "currency": "inr"}), rule("new_supplier", "=", True),
+        rule("amount", "<", {"amount": "five", "currency": "INR"})]}
+    converted = drafting._money_params(registry.template(KEY), answer)
+    assert converted["conditions"][:2] == [rule("amount", ">", money(5 * LAKH)), rule("new_supplier", "=", True)]
+    assert converted["conditions"][2] == answer["conditions"][2]  # not a number: left for the validator to say
+    assert problems(params(*converted["conditions"][:2], name=converted["name"])) == []
+    assert problems(params(*converted["conditions"], name=converted["name"]))[0].startswith("Condition 3, amount:")
+
+
 def test_a_business_book_is_refused_in_words():
     assert problems(BIG_AND_NEW, enterprise=False) == ['"Custom condition" is part of the Enterprise plan.']
     assert problems(BIG_AND_NEW, enterprise=True) == []

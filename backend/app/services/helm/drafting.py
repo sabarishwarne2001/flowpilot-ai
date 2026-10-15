@@ -98,6 +98,35 @@ def _parameter_lines(found: base.Template) -> list[str]:
                 kind += f" ({', '.join(bounds)})"
         default = f"; default {json.dumps(field['default'])}" if "default" in field else "; required"
         out.append(f"    - {name}: {kind}{default}")
+    return out + (_editor_lines(found.editor) if found.editor else [])
+
+
+_MONEY_WRITTEN = '{"amount": "<number as written>", "currency": "<ISO 4217 code>"}'
+#: How each kind of fact's value is written in a custom condition (mandates/library/custom_condition.py).
+_VALUE_WORDS = {
+    "money": f"money {_MONEY_WRITTEN}",
+    "number": "a whole number of days",
+    "bool": "true or false",
+    "text": 'text; with "in", a list of texts',
+    "choice": 'one of the codes; with "in", a list of them',
+}
+
+
+def _editor_lines(editor: dict[str, Any]) -> list[str]:
+    """A rule built from conditions (the custom condition): the facts it may test, each with its
+    comparisons, how its value is written, and the choices for the rule as a whole."""
+    out = ['    - each condition is {"field": "<a fact below>", "op": "<one of its comparisons>", '
+           '"value": <written as the fact says>}; the facts:']
+    for fact in editor.get("fields", []):
+        ops = " ".join(o["op"] for o in fact.get("ops", []))
+        codes = ", ".join(c["value"] for c in fact.get("choices", []))
+        out.append(f"      {fact['key']} ({fact['label']}): {_VALUE_WORDS.get(fact['type'], 'a value')}"
+                   + (f" ({codes})" if codes else "") + f"; comparisons {ops}")
+    def either(options: list[dict[str, Any]]) -> str:
+        words = [json.dumps(o["value"]) for o in options]
+        return "".join(words) if len(words) < 2 else ", ".join(words[:-1]) + " or " + words[-1]
+
+    out.append(f"    - match: {either(editor.get('matches', []))}; outcome: {either(editor.get('outcomes', []))}")
     return out
 
 
@@ -137,20 +166,32 @@ def parse_answer(raw: str) -> Optional[_Answer]:
         return None
 
 
+def _written_money(value: Any) -> Optional[dict[str, Any]]:
+    """{"amount": "500000", "currency": "inr"} as the model wrote it, in micros; None when it is not."""
+    if not isinstance(value, dict) or "amount_micros" in value:
+        return None
+    try:
+        amount = Decimal(str(value.get("amount")).replace(",", "").strip())
+    except (InvalidOperation, AttributeError):
+        return None
+    return {"amount_micros": money.to_micros(amount), "currency": str(value.get("currency") or "").upper()}
+
+
 def _money_params(found: base.Template, params: dict[str, Any]) -> dict[str, Any]:
-    """Amounts as written ("5 lakh" is not a number: the model writes 500000) become micros here."""
+    """Amounts as written ("5 lakh" is not a number: the model writes 500000) become micros here,
+    and so do the amounts inside a custom condition's conditions."""
     schema = found.Params.model_json_schema()
     defs = schema.get("$defs", {})
     out = dict(params)
     for name, field in schema.get("properties", {}).items():
-        value = out.get(name)
-        if not isinstance(value, dict) or not _is_money(field, defs) or "amount_micros" in value:
-            continue
-        try:
-            amount = Decimal(str(value.get("amount")).replace(",", "").strip())
-        except (InvalidOperation, AttributeError):
-            continue
-        out[name] = {"amount_micros": money.to_micros(amount), "currency": str(value.get("currency") or "").upper()}
+        converted = _written_money(out.get(name)) if _is_money(field, defs) else None
+        if converted is not None:
+            out[name] = converted
+    money_facts = {f["key"] for f in (found.editor or {}).get("fields", []) if f.get("type") == "money"}
+    if money_facts and isinstance(out.get("conditions"), list):
+        out["conditions"] = [
+            {**c, "value": _written_money(c.get("value")) or c.get("value")}
+            if isinstance(c, dict) and c.get("field") in money_facts else c for c in out["conditions"]]
     return out
 
 
