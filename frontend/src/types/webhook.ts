@@ -1,5 +1,7 @@
 /**
- * Mirrors app/core/webhook_events.py::WEBHOOK_EVENT_TYPES.
+ * Mirrors app/core/webhook_events.py::WEBHOOK_EVENT_TYPES, less `workflow.triggered` (a workflow
+ * rule names the endpoint it posts to; nothing subscribes to it). The backend test
+ * tests/core/test_webhook_event_list_mirrors_backend.py keeps the two lists equal.
  */
 export const WEBHOOK_EVENT_TYPES = [
   "organization.updated",
@@ -24,6 +26,10 @@ export const WEBHOOK_EVENT_TYPES = [
   "document.processing",
   "document.completed",
   "document.failed",
+  "procurement.completed",
+  "procurement.approved",
+  "procurement.disputed",
+  "anomaly.detected",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
