@@ -171,17 +171,18 @@ def _claim(db: Session, action_id: uuid.UUID) -> Optional[HelmAction]:
 
 
 def _destination(db: Session, action: HelmAction, snapshot) -> tuple[Optional[bool], str]:
-    """Whether the email the action sends may leave: a known contact, and egress allows mail."""
+    """Whether what the action sends may leave: for an email a known contact and egress allows mail;
+    for a webhook Enterprise, an endpoint listening for its event and egress allows that endpoint."""
     if action.kind not in (v.ACTION_SEND_REMINDER, *v.DRAFT_ACTIONS, v.ACTION_REQUEST_DOCUMENT,
                            v.ACTION_WEBHOOK):
         return None, ""
     if action.kind in v.DRAFT_ACTIONS and action.autonomy != v.AUTONOMY_ACT:
         return True, "A draft only: nothing is sent."
     if action.kind == v.ACTION_WEBHOOK:
-        from app.services.helm import hands
+        from app.services.helm import hands, webhooks
 
-        return hands.webhook_destination(db, organization_id=action.organization_id) \
-            if hasattr(hands, "webhook_destination") else (False, "Webhooks are not available yet.")
+        return hands.webhook_destination(db, organization_id=action.organization_id,
+                                         event=webhooks.action_event(action))
     counterparty = snapshot.counterparties.get(action.counterparty_key or "")
     contact = (action.params or {}).get("to") or (counterparty.contact_email if counterparty else None)
     from app.services.helm import hands
@@ -272,6 +273,9 @@ def execute(db: Session, *, action_id: uuid.UUID, actor: Actor = SYSTEM) -> Opti
     db.flush()
     _audit(db, action, "EXECUTED", actor_user_id=action.executed_by_user_id,
            details={"certificate_sha256": cert.sha256})
+    from app.services.helm import webhooks
+
+    webhooks.after_execution(db, action=action, book=book, certificate=cert)
     if action.workspace_id:
         from app.services.helm import ledger_store
 

@@ -141,6 +141,9 @@ def run(db: Session, book: HelmBook, *, triggered_by: str = v.TRIGGER_SCHEDULE, 
         executor.enqueue(db, action)
     _audit_plan(db, book, plan, composition)
     _notify(db, book, plan, composition, previous_states)
+    from app.services.helm import webhooks
+
+    webhooks.after_plan(db, book=book, plan=plan, previous=previous_states)
     logger.info("helm.planned", extra={"book_id": str(book.id), "version": version, "status": composition.status,
                                        "actions": len(composition.proposals), "ms": plan.duration_ms})
     return plan
