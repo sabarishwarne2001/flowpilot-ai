@@ -254,6 +254,10 @@ def correct_fields(
         payload={"work_item_id": str(work_item.id), "fields_corrected": sorted(changed),
                  "source": "field_correction"},
     )
+    from app.services.helm import hooks as helm_hooks
+
+    helm_hooks.document_changed(db, workspace_id=work_item.workspace_id, organization_id=organization_id,
+                                reason="fields corrected")
     logger.info(
         "work_item.fields_corrected",
         extra={"work_item_id": str(work_item.id), "fields": sorted(changed),
