@@ -77,6 +77,9 @@ class Payable:
     hold_code: Optional[str] = None
     #: Hold reasons a person waived for it (e.g. "NO_MATCHED_PO": pay without a PO).
     waived: tuple[str, ...] = ()
+    #: What was paid and its reference, from the ledger's payment fulfilment (reconciliation evidence).
+    paid_amount_micros: Optional[int] = None
+    paid_reference: Optional[str] = None
 
     @property
     def open(self) -> bool:
@@ -179,6 +182,39 @@ class Cash:
 
 
 @dataclass(frozen=True)
+class StatementEntry:
+    """One line of a supplier's statement of account, as they wrote it: a debit is an invoice they
+    billed us, a credit a payment or credit note they applied."""
+
+    line_no: int
+    on: Optional[date]
+    description: str
+    reference: str
+    debit_micros: Optional[int]
+    credit_micros: Optional[int]
+
+
+@dataclass(frozen=True)
+class SupplierStatement:
+    """A supplier's statement of account (a STATEMENT document that `ledger.statement_kind` reads as
+    a supplier's): kept for reconciliation, never read as payments or as cash (owner addition B)."""
+
+    work_item_id: str
+    workspace_id: str
+    document: str
+    counterparty_key: Optional[str]
+    counterparty_name: Optional[str]
+    currency: Optional[str]
+    statement_date: Optional[date]
+    period_start: Optional[date]
+    opening_balance_micros: Optional[int]
+    closing_balance_micros: Optional[int]
+    entries: tuple[StatementEntry, ...]
+    confidence: str
+    received_on: Optional[date] = None
+
+
+@dataclass(frozen=True)
 class Counterparty:
     key: str
     name: str
@@ -201,6 +237,7 @@ class Snapshot:
     notices: tuple[Notice, ...] = ()
     compliance: tuple[ComplianceDoc, ...] = ()
     review_items: tuple[ReviewFacts, ...] = ()
+    supplier_statements: tuple[SupplierStatement, ...] = ()
     cash: dict[str, Cash] = field(default_factory=dict)
     counterparties: dict[str, Counterparty] = field(default_factory=dict)
     workspace_ids: tuple[str, ...] = ()
@@ -237,7 +274,9 @@ def digest_content(snapshot: Snapshot) -> dict[str, Any]:
         return [p.promise_id, p.currency, p.amount_micros, p.due_date, p.invoice_date, p.settlement_state,
                 p.run_date, p.settlement_version, p.confidence, p.terms.as_json(), p.counterparty_key,
                 [f.id for f in p.flags], [(b.promise_id, b.above_micros) for b in p.price_breaches],
-                p.has_matched_po, p.msme_deadline, p.hold_code, list(p.waived)]
+                p.has_matched_po, p.msme_deadline, p.hold_code, list(p.waived), p.paid_on, p.paid_amount_micros,
+                p.document_number, p.counterparty_name, p.gross_micros, p.paid_reference, p.settlement_source,
+                p.workspace_id]
 
     return {
         "book": snapshot.book_id, "as_of": snapshot.as_of, "horizon": snapshot.horizon_days,
@@ -248,6 +287,10 @@ def digest_content(snapshot: Snapshot) -> dict[str, Any]:
         "notices": [[n.promise_id, n.due_date, n.status] for n in snapshot.notices],
         "compliance": [[c.promise_id, c.valid_until, c.status] for c in snapshot.compliance],
         "review": [[r.kind, r.item_id, r.age_days] for r in snapshot.review_items],
+        "supplier_statements": [[st.work_item_id, st.counterparty_key, st.currency, st.statement_date,
+                                 st.closing_balance_micros, st.confidence,
+                                 [[e.on, e.reference, e.debit_micros, e.credit_micros] for e in st.entries]]
+                                for st in snapshot.supplier_statements],
         "cash": {c: [x.amount_micros, x.as_of] for c, x in snapshot.cash.items()},
         "counterparties": {k: [c.msme.category, c.msme.registered, c.contact_email]
                            for k, c in snapshot.counterparties.items()},
@@ -272,4 +315,4 @@ def run_days(*, start: date, horizon_days: int, weekdays: Sequence[int], holiday
 
 
 __all__ = ["Cash", "ComplianceDoc", "Counterparty", "Flag", "Notice", "Payable", "PriceBreach", "Receivable",
-           "ReviewFacts", "Snapshot", "digest_content", "run_days"]
+           "ReviewFacts", "Snapshot", "StatementEntry", "SupplierStatement", "digest_content", "run_days"]

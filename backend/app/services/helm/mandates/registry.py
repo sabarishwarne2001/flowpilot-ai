@@ -32,6 +32,7 @@ _MODULES = (
     "compliance_docs",
     "receivables",
     "review_backlog",
+    "supplier_statements",
     "custom_condition",
 )
 

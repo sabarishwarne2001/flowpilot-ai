@@ -26,6 +26,71 @@ const CHECK_WORDS: Record<string, string> = {
   not_applicable: "Not applicable",
 };
 
+interface Draft {
+  readonly subject: string;
+  readonly text: string;
+  readonly to: string | null;
+}
+
+const draftOf = (action: HelmAction): Draft | null => {
+  const raw = action.result["draft"];
+  if (!raw || typeof raw !== "object") {
+    return null;
+  }
+  const found = raw as Record<string, unknown>;
+  return typeof found["subject"] === "string" && typeof found["text"] === "string"
+    ? { subject: found["subject"], text: found["text"], to: typeof found["to"] === "string" ? found["to"] : null }
+    : null;
+};
+
+/** The email a draft action wrote (a dispute, a statement reconciliation): to copy, or as sent. */
+const DraftEmail: React.FC<{ readonly action: HelmAction; readonly draft: Draft }> = ({ action, draft }) => {
+  const sent = Boolean(action.result["sent"]);
+  const copy = (): void => {
+    void navigator.clipboard
+      .writeText(`Subject: ${draft.subject}\n\n${draft.text}`)
+      .then(() => toast.success("The email is copied."))
+      .catch(() => toast.error("Your browser did not allow copying. Select the text instead."));
+  };
+  return (
+    <div className="helm-panel-raised mt-2 space-y-2 p-3 text-xs" data-testid="helm-draft-email">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">
+          {sent ? `Sent${draft.to ? ` to ${draft.to}` : ""}` : "The drafted email"}: {draft.subject}
+        </p>
+        <button type="button" className="helm-btn" onClick={copy} aria-label={`Copy the email: ${draft.subject}`}>
+          Copy the email
+        </button>
+      </div>
+      <pre className="whitespace-pre-wrap break-words font-sans">{draft.text}</pre>
+    </div>
+  );
+};
+
+/** A reconciliation's differences, each with the evidence it rests on, in words. */
+const Differences: React.FC<{ readonly action: HelmAction }> = ({ action }) => {
+  const raw = action.params["differences"];
+  if (!Array.isArray(raw) || raw.length === 0) {
+    return null;
+  }
+  const items = raw.filter((d): d is { code: string; summary: string } =>
+    Boolean(d) && typeof (d as { summary?: unknown }).summary === "string");
+  return (
+    <div>
+      <p className="font-semibold">The differences, from the statement and the ledger:</p>
+      <ul className="mt-1 list-disc space-y-1 pl-5" data-testid="helm-differences">
+        {items.map((d, index) => (
+          <li key={`${d.code}-${index}`}>{d.summary}</li>
+        ))}
+      </ul>
+      <p className="mt-1">
+        Approving drafts the reconciliation email listing each difference. Helm sends it only in Act mode, to a known
+        contact.
+      </p>
+    </div>
+  );
+};
+
 const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: boolean }> = ({ action, readOnly }) => {
   const { organizationId, orgSlug, role, book, withBook } = useHelm();
   const queryClient = useQueryClient();
@@ -74,6 +139,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
   const busy = approve.isPending || reject.isPending || undo.isPending;
   const checks = action.guard.checks ?? [];
   const detailsId = `helm-action-${action.id}`;
+  const draft = action.readable ? draftOf(action) : null;
 
   return (
     <li className="helm-hairline border-t py-3 first:border-t-0" data-testid="helm-action">
@@ -142,7 +208,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
           </button>
           {open ? (
             <div id={detailsId} className="helm-panel-raised mt-2 space-y-2 p-3 text-xs">
-              <p>{action.explanation}</p>
+              {action.kind === "draft_reconciliation" ? <Differences action={action} /> : <p>{action.explanation}</p>}
               {checks.length > 0 ? (
                 <ul className="space-y-1">
                   {checks.map((check) => (
@@ -168,6 +234,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
               ) : null}
             </div>
           ) : null}
+          {draft ? <DraftEmail action={action} draft={draft} /> : null}
         </div>
       ) : (
         <p className="helm-muted mt-2 inline-flex items-center gap-1 text-xs">

@@ -172,10 +172,10 @@ def _claim(db: Session, action_id: uuid.UUID) -> Optional[HelmAction]:
 
 def _destination(db: Session, action: HelmAction, snapshot) -> tuple[Optional[bool], str]:
     """Whether the email the action sends may leave: a known contact, and egress allows mail."""
-    if action.kind not in (v.ACTION_SEND_REMINDER, v.ACTION_DRAFT_DISPUTE, v.ACTION_REQUEST_DOCUMENT,
+    if action.kind not in (v.ACTION_SEND_REMINDER, *v.DRAFT_ACTIONS, v.ACTION_REQUEST_DOCUMENT,
                            v.ACTION_WEBHOOK):
         return None, ""
-    if action.kind == v.ACTION_DRAFT_DISPUTE and action.autonomy != v.AUTONOMY_ACT:
+    if action.kind in v.DRAFT_ACTIONS and action.autonomy != v.AUTONOMY_ACT:
         return True, "A draft only: nothing is sent."
     if action.kind == v.ACTION_WEBHOOK:
         from app.services.helm import hands
@@ -330,6 +330,10 @@ def _apply(db: Session, *, action: HelmAction, book: HelmBook, snapshot, actor: 
         from app.services.helm import hands
 
         return hands.draft_dispute(db, action=action, book=book, snapshot=snapshot)
+    if action.kind == v.ACTION_DRAFT_RECONCILIATION:
+        from app.services.helm import hands
+
+        return hands.draft_reconciliation(db, action=action, book=book, snapshot=snapshot)
     if action.kind == v.ACTION_CREATE_TASK:
         from app.services.helm import hands
 

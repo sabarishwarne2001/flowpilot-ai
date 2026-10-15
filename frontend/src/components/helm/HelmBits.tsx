@@ -42,6 +42,7 @@ export const ACTION_VERBS: Record<ActionKind, string> = {
   decide_renewal: "Decide",
   create_task: "Decide",
   draft_dispute: "Dispute",
+  draft_reconciliation: "Reconcile",
   mark_paid: "Record",
   notify: "Notify",
   webhook: "Notify",

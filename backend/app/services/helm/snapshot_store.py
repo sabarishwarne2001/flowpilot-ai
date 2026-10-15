@@ -15,6 +15,7 @@ from typing import Any, Iterable, Optional
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core import normalize as nz
 from app.models.corroboration import CorroborationDocument, CorroborationRun
 from app.models.helm import HelmAction, HelmBook, HelmCashPosition, HelmCounterparty, HelmPromise, HelmSettings
 from app.models.obligations import HolidayCalendar
@@ -182,6 +183,71 @@ def cash_history(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as
     return sorted(candidates, key=lambda c: (c.as_of, c.currency, c.source))
 
 
+PERIOD_START_KEYS = ("period_start", "from_date", "start_date", "period_from", "statement_from")
+OPENING_BALANCE_KEYS = ("opening_balance", "balance_brought_forward", "brought_forward", "opening_bal")
+
+
+def supplier_statements(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID],
+                        identities: ident.Identities) -> list[snap.SupplierStatement]:
+    """Every supplier's statement of account in the book's workspaces (owner addition B): STATEMENT
+    documents `ledger.statement_kind` reads as a supplier's, and not issued by us (our own statements
+    to customers are not reconciled here)."""
+    if not workspace_ids:
+        return []
+    from app.models.verification import DocumentVerification
+    from app.models.work_item_field_correction import WorkItemFieldCorrection
+    from app.services.helm.ledger_store import _confidence
+
+    rows = db.execute(
+        select(WorkItem.id, WorkItem.workspace_id, WorkItem.original_filename, WorkItem.created_at,
+               WorkItem.extracted_entities,
+               func.substring(WorkItem.extracted_text, 1, TEXT_HEAD_CHARS).label("text_head"),
+               DocumentRole.currency, DocumentRole.document_date, DocumentRole.vendor_key)
+        .join(DocumentRole, DocumentRole.work_item_id == WorkItem.id)
+        .where(DocumentRole.role == "STATEMENT", WorkItem.workspace_id.in_(workspace_ids),
+               DocumentRole.workspace_id == WorkItem.workspace_id, WorkItem.pipeline_stage != "FAILED")
+        .order_by(WorkItem.created_at, WorkItem.id)
+    ).all()
+    if not rows:
+        return []
+    ids = [row.id for row in rows]
+    verification = {row.work_item_id: getattr(row.status, "value", row.status) for row in db.execute(
+        select(DocumentVerification.work_item_id, DocumentVerification.status)
+        .where(DocumentVerification.work_item_id.in_(ids)))}
+    corrected = set(db.execute(select(WorkItemFieldCorrection.work_item_id)
+                               .where(WorkItemFieldCorrection.work_item_id.in_(ids)).distinct()).scalars())
+    out: list[snap.SupplierStatement] = []
+    for row in rows:
+        entities = row.extracted_entities if isinstance(row.extracted_entities, dict) else {}
+        classification = entities.get("document_classification") or entities.get("document_type")
+        facts = ledger.DocumentFacts(
+            work_item_id=row.id, workspace_id=row.workspace_id, organization_id=book.organization_id,
+            filename=row.original_filename, role="STATEMENT", received_on=row.created_at.date(), entities=entities,
+            currency=row.currency, document_date=row.document_date, text_head=row.text_head or "",
+            classification=str(classification) if classification else None)
+        if ledger.statement_kind(facts, identities) != ledger.STATEMENT_SUPPLIER:
+            continue
+        issuer = ident.seller(entities)
+        if identities.is_us(issuer):
+            continue
+        currency = row.currency or nz.currency_code(str(entities.get("currency") or "")) or None
+        entries = tuple(
+            snap.StatementEntry(line_no=n, on=line.on, description=line.description, reference=line.reference,
+                                debit_micros=line.debit_micros, credit_micros=line.credit_micros)
+            for n, line in enumerate(ledger.statement_lines(facts, None), start=1))
+        out.append(snap.SupplierStatement(
+            work_item_id=str(row.id), workspace_id=str(row.workspace_id), document=row.original_filename,
+            counterparty_key=row.vendor_key or issuer.key, counterparty_name=issuer.name, currency=currency,
+            statement_date=ledger.read_date(ident.first(entities, ledger.STATEMENT_DATE_KEYS), None)
+            or row.document_date,
+            period_start=ledger.read_date(ident.first(entities, PERIOD_START_KEYS), None),
+            opening_balance_micros=ledger.read_money(ident.first(entities, OPENING_BALANCE_KEYS), currency),
+            closing_balance_micros=ledger.read_money(ident.first(entities, ledger.CLOSING_BALANCE_KEYS), currency),
+            entries=entries, confidence=_confidence(verification.get(row.id), row.id in corrected),
+            received_on=row.created_at.date()))
+    return out
+
+
 def _flags(db: Session, workspace_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[snap.Flag]]:
     flags: dict[uuid.UUID, list[snap.Flag]] = {}
     if not workspace_ids:
@@ -283,6 +349,8 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
             deadline = details.get("msme_deadline") or None
             cp = counterparties.get(promise.counterparty_key or "")
             protected = cp.msme.protected if cp else bool(details.get("udyam_number"))
+            payment = next((f for f in reversed(promise.fulfilments or []) if isinstance(f, dict)
+                            and f.get("kind") == "PAYMENT"), None)
             payables.append(snap.Payable(
                 promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
                 workspace_id=str(promise.workspace_id),
@@ -305,6 +373,9 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 msme_deadline=_date(deadline.get("due")) if deadline and protected else None,
                 msme_explanation=deadline.get("explanation") if deadline and protected else None,
                 hold_code=settlement.get("hold_code"), waived=tuple(settlement.get("waived") or ()),
+                paid_amount_micros=payment.get("amount_micros") if payment else None,
+                paid_reference=(payment.get("reference") or (payment.get("statement") or {}).get("reference")
+                                or None) if payment else None,
             ))
         elif promise.kind == v.KIND_PAYMENT_EXPECTED:
             settlement = details.get("settlement") or {}
@@ -365,6 +436,8 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
         horizon_days=int(settings.horizon_days), run_days=days, cost_of_capital_bps=int(settings.cost_of_capital_bps),
         payables=tuple(payables), receivables=tuple(receivables), notices=tuple(notices),
         compliance=tuple(compliance), review_items=tuple(sorted(review_items, key=lambda r: (r.kind, r.item_id))),
+        supplier_statements=tuple(supplier_statements(db, book, workspace_ids, ident.Identities.of(
+            settings.identities or []))),
         cash=cash_positions(db, book, workspace_ids, as_of), counterparties=counterparties,
         workspace_ids=tuple(str(w) for w in workspace_ids), settled_action_keys=frozenset(settled_keys),
         reminders_sent={k: tuple(sorted(val)) for k, val in reminders.items()}, account_writable=writable,

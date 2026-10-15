@@ -100,6 +100,29 @@ def draft_dispute(db: Session, *, action: HelmAction, book: HelmBook, snapshot) 
             "note": "A draft: copy it into your email, or switch the mandate to Act mode with a known contact."}
 
 
+def draft_reconciliation(db: Session, *, action: HelmAction, book: HelmBook, snapshot) -> dict[str, Any]:
+    """The reconciliation email for one supplier statement (owner addition B): drafted from the
+    differences the plan found; sent only in Act mode to a known contact, never from the sample book."""
+    from app.templates.emails import helm as templates
+
+    params = dict(action.params or {})
+    counterparty = snapshot.counterparties.get(action.counterparty_key or "") if snapshot else None
+    on = params.get("statement_date")
+    subject, html_body, text_body = templates.render_reconciliation(
+        organization_name=_organization_name(db, action.organization_id),
+        supplier_name=(counterparty.name if counterparty else None) or params.get("counterparty") or "Supplier",
+        statement_date=money.day(datetime.fromisoformat(on).date()) if on else "the statement date",
+        currency=action.currency or "", their_balance_micros=params.get("their_balance_micros"),
+        our_balance_micros=params.get("our_balance_micros"), differences=params.get("differences") or [])
+    draft = {"subject": subject, "text": text_body, "to": counterparty.contact_email if counterparty else None}
+    if action.autonomy == v.AUTONOMY_ACT and draft["to"] and book.kind != v.BOOK_SAMPLE:
+        sent = send_mail(db, organization_id=action.organization_id, workspace_id=action.workspace_id,
+                         to=draft["to"], subject=subject, html_body=html_body, text_body=text_body)
+        return {"draft": draft, "sent": sent}
+    return {"draft": draft, "sent": None,
+            "note": "A draft: copy it into your email, or switch the mandate to Act mode with a known contact."}
+
+
 def create_task(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) -> dict[str, Any]:
     params = dict(action.params or {})
     workspace_id = action.workspace_id or (book.workspace_id if book.workspace_id else None)
@@ -237,5 +260,5 @@ def say(micros: Optional[int], currency: Optional[str]) -> str:
     return money.say(micros, currency)
 
 
-__all__ = ["COMPLIANCE_TEMPLATE_KEY", "HandError", "create_task", "draft_dispute", "email_destination", "notify",
-           "request_document", "send_mail", "send_reminder"]
+__all__ = ["COMPLIANCE_TEMPLATE_KEY", "HandError", "create_task", "draft_dispute", "draft_reconciliation",
+           "email_destination", "notify", "request_document", "send_mail", "send_reminder"]

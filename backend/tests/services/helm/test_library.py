@@ -369,10 +369,12 @@ def test_the_review_backlog_is_escalated_once_per_workspace_per_day():
 # ---------------------------------------------------------------------------
 
 
-def test_the_library_ships_all_twelve_in_order_each_reading_back_in_words():
+def test_the_library_ships_all_thirteen_in_order_each_reading_back_in_words():
+    """The brief's twelve, and the supplier statement reconciliation the owner added (addition B)."""
     library = registry.library(enterprise=False)
     ordered = [t for t in library if t["plan"] == "business"]
-    assert [t["order"] for t in ordered] == list(range(1, 13))
+    assert [t["order"] for t in ordered] == list(range(1, 14))
+    assert ordered[-1]["key"] == "reconcile_supplier_statements"
     for t in ordered:
         assert t["readback"]["sentence"] and "{" not in t["readback"]["sentence"], t["key"]
         assert all(ch.isprintable() for ch in t["readback"]["sentence"])

@@ -1,5 +1,6 @@
-"""Helm's emails: a price dispute to a supplier, a payment reminder to a customer, a request for a
-supplier's renewed compliance document, and the Monday briefing to owners.
+"""Helm's emails: a price dispute to a supplier, a statement reconciliation to a supplier, a payment
+reminder to a customer, a request for a supplier's renewed compliance document, and the Monday
+briefing to owners.
 
 All on `BASE_EMAIL_HTML_LAYOUT` (session 4, F-380), every value escaped, amounts written the way an
 explanation says them (lakh and crore for INR). Each returns (subject, html_body, text_body).
@@ -82,6 +83,110 @@ def render_dispute(*, organization_name: str, supplier_name: str, invoice_number
                           f"Sent by {organization_name} about invoice {invoice_number}."), text
 
 
+@dataclass(frozen=True)
+class ReconciliationItem:
+    """One difference between a supplier's statement and our records, as the email states it to them
+    (`reconcile.Difference.as_json`: a code, both sides' amounts and the evidence)."""
+
+    code: str
+    their_micros: Optional[int]
+    our_micros: Optional[int]
+    on: Optional[str]
+    number: Optional[str]
+    reference: Optional[str]
+    description: Optional[str]
+
+    @classmethod
+    def of(cls, raw: Any) -> "ReconciliationItem":
+        found: Mapping[str, Any] = raw if isinstance(raw, Mapping) else {}
+        evidence = [e for e in (found.get("evidence") or []) if isinstance(e, Mapping)]
+        theirs = next((e for e in evidence if e.get("side") == "theirs"), {})
+        ours = next((e for e in evidence if e.get("side") == "ours"), {})
+
+        def text(value: Any) -> Optional[str]:
+            return str(value).strip() or None if value not in (None, "") else None
+
+        return cls(code=str(found.get("code") or ""), their_micros=_optional_micros(found.get("their_micros")),
+                   our_micros=_optional_micros(found.get("our_micros")),
+                   on=_readable_day(ours.get("paid_on") or ours.get("invoice_date") or theirs.get("on")),
+                   number=text(ours.get("number") or theirs.get("reference")),
+                   reference=text(ours.get("paid_reference") or theirs.get("reference")),
+                   description=text(theirs.get("description")))
+
+    def sentence(self, currency: str) -> Optional[str]:
+        """The difference in the supplier's terms, or None for one the email does not state."""
+        theirs, ours = money.say(self.their_micros, currency), money.say(self.our_micros, currency)
+        on = f" of {self.on}" if self.on else ""
+        number = self.number or "an invoice"
+        if self.code == "NOT_IN_OUR_BOOKS":
+            return (f"Your statement lists {self.reference or 'an invoice'}{on} for {theirs}, which we have not "
+                    "received. Please send us a copy.")
+        if self.code == "AMOUNT_DIFFERS":
+            return f"Invoice {number}: your statement shows {theirs}; the invoice we received is for {ours}."
+        if self.code == "NOT_ON_THEIR_STATEMENT":
+            return (f"Our records include your invoice {number}{on} for {ours}, which is not on your statement. "
+                    "Please confirm it.")
+        if self.code == "PAYMENT_NOT_APPLIED":
+            ref = f" (reference {self.reference})" if self.reference and self.reference != self.number else ""
+            return (f"We paid {ours} against invoice {number} on {self.on or 'the date in our records'}{ref}; it is "
+                    "not on your statement. Please apply it.")
+        if self.code == "PAYMENT_AMOUNT_DIFFERS":
+            return f"Our payment against invoice {number} was {ours}; your statement applies {theirs}."
+        if self.code == "CREDIT_NOT_APPLIED":
+            return f"Your credit of {ours} against invoice {number} is not on your statement."
+        if self.code == "CREDIT_NOT_IN_OUR_BOOKS":
+            ref = f" ({self.reference})" if self.reference else ""
+            return (f"Your statement shows {theirs} received or credited{on}{ref}. Please tell us what it relates "
+                    "to.")
+        return None
+
+
+def _readable_day(value: Any) -> Optional[str]:
+    from datetime import date
+
+    if not value:
+        return None
+    try:
+        return money.day(date.fromisoformat(str(value)[:10]))
+    except ValueError:
+        return str(value)
+
+
+def _optional_micros(value: Any) -> Optional[int]:
+    try:
+        return int(value) if value is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def render_reconciliation(*, organization_name: str, supplier_name: str, statement_date: str, currency: str,
+                          their_balance_micros: Optional[int], our_balance_micros: Optional[int],
+                          differences: Sequence[Any]) -> tuple[str, str, str]:
+    """The reconciliation email for one supplier statement: each difference in their terms, then the
+    balances, and a request to correct the statement or say where our records differ."""
+    subject = single_line(f"Statement reconciliation: our account at {statement_date}")
+    items = [ReconciliationItem.of(raw) for raw in differences]
+    sentences = [s for s in (item.sentence(currency) for item in items) if s]
+    balances = None
+    if their_balance_micros is not None and our_balance_micros is not None \
+            and their_balance_micros != our_balance_micros:
+        balances = (f"Your statement shows a balance of {money.say(their_balance_micros, currency)} at "
+                    f"{statement_date}; our records show {money.say(our_balance_micros, currency)}.")
+    opening = (f"Thank you for your statement of account at {statement_date}. We have compared it with our "
+               "records and found these differences:")
+    closing = ("Please check these items and send us a corrected statement, or tell us where our records differ "
+               "from yours.")
+    text_lines = [f"- {single_line(s)}" for s in sentences]
+    text = (f"Dear {supplier_name},\n\n{opening}\n" + "\n".join(text_lines)
+            + (f"\n\n{balances}" if balances else "") + f"\n\n{closing}\n\nRegards,\n{organization_name}\n")
+    content = (f"<p>Dear {esc(supplier_name)},</p><p>{esc(opening)}</p>"
+               f"<ul>{''.join(f'<li>{esc(s)}</li>' for s in sentences)}</ul>"
+               + (f"<p><strong>{esc(balances)}</strong></p>" if balances else "")
+               + f"<p>{esc(closing)}</p><p>Regards,<br>{esc(organization_name)}</p>")
+    return subject, _wrap(subject, organization_name, content,
+                          f"Sent by {organization_name} about its account with {supplier_name}."), text
+
+
 def render_reminder(*, organization_name: str, customer_name: str, invoice_number: str, currency: str,
                     amount_micros: int, due_date: str, days_overdue: int, level: int) -> tuple[str, str, str]:
     tone_title, tone = REMINDER_TONES.get(max(1, min(3, level)), REMINDER_TONES[1])
@@ -136,5 +241,5 @@ def render_briefing(*, brand_name: str, organization_name: str, book_name: str, 
     return subject, _wrap(subject, brand_name, content, footer), text
 
 
-__all__ = ["DisputeLine", "REMINDER_TONES", "render_briefing", "render_dispute", "render_document_request",
-           "render_reminder"]
+__all__ = ["DisputeLine", "REMINDER_TONES", "ReconciliationItem", "render_briefing", "render_dispute",
+           "render_document_request", "render_reconciliation", "render_reminder"]

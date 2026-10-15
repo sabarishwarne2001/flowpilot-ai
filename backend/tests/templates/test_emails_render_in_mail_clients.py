@@ -28,7 +28,8 @@ from app.templates.emails.organization_invitation import render_organization_inv
 from app.templates.emails.password_reset import render_password_reset
 from app.templates.emails.trial_notice import render_trial_notice
 from app.templates.emails.verify_email import render_verify_email
-from app.templates.emails.helm import render_briefing, render_dispute, render_document_request, render_reminder
+from app.templates.emails.helm import (render_briefing, render_dispute, render_document_request,
+                                        render_reconciliation, render_reminder)
 
 NOW = datetime(2026, 10, 14, 9, 0, tzinfo=timezone.utc)
 LINK = "https://app.example.com/action#token=abc123"
@@ -73,13 +74,21 @@ EMAILS = {
         organization_name="Meridian Wholesale", supplier_name="Konkan Packaging", invoice_number="KP-1182",
         currency="INR", lines=[{"description": "Corrugated boxes", "po_number": "PO-77", "agreed_micros": 42_000_000,
                                 "billed_micros": 46_000_000}], overcharge_micros=400_000_000),
+    "helm-reconciliation": lambda: render_reconciliation(
+        organization_name="Meridian Wholesale", supplier_name="Konkan Packaging", statement_date="30 Sep 2026",
+        currency="INR", their_balance_micros=62_000 * 1_000_000, our_balance_micros=50_000 * 1_000_000,
+        differences=[{"code": "NOT_IN_OUR_BOOKS", "their_micros": 12_000 * 1_000_000,
+                      "evidence": [{"side": "theirs", "on": "2026-09-05", "reference": "KP-1185"}]},
+                     {"code": "PAYMENT_NOT_APPLIED", "our_micros": 50_000 * 1_000_000,
+                      "evidence": [{"side": "ours", "number": "KP-1182", "paid_on": "2026-09-20",
+                                    "paid_reference": "UTR 4471"}]}]),
     "helm-reminder": lambda: render_reminder(
         organization_name="Meridian Wholesale", customer_name="Sahyadri Foods", invoice_number="INV-2041",
         currency="INR", amount_micros=180_000 * 1_000_000, due_date="5 Oct 2026", days_overdue=10, level=2),
 }
 
-#: Emails a supplier or customer receives about one invoice: no link to follow, so no button.
-LINKLESS = {"helm-dispute", "helm-reminder"}
+#: Emails a supplier or customer receives about one invoice or their statement: no link to follow, so no button.
+LINKLESS = {"helm-dispute", "helm-reconciliation", "helm-reminder"}
 
 
 @pytest.mark.parametrize("name", sorted(EMAILS))

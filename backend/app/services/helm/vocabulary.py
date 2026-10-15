@@ -153,6 +153,8 @@ ACTION_SCHEDULE_PAYMENT: Final = "schedule_payment"
 ACTION_APPROVE_PAYMENT: Final = "approve_payment"
 ACTION_MARK_PAID: Final = "mark_paid"
 ACTION_DRAFT_DISPUTE: Final = "draft_dispute"
+#: A supplier statement reconciliation email (owner addition B): a draft unless Act mode sends it.
+ACTION_DRAFT_RECONCILIATION: Final = "draft_reconciliation"
 ACTION_SEND_REMINDER: Final = "send_reminder"
 ACTION_REQUEST_DOCUMENT: Final = "request_document"
 ACTION_CREATE_TASK: Final = "create_task"
@@ -166,6 +168,7 @@ ACTION_KINDS: Final = (
     ACTION_APPROVE_PAYMENT,
     ACTION_MARK_PAID,
     ACTION_DRAFT_DISPUTE,
+    ACTION_DRAFT_RECONCILIATION,
     ACTION_SEND_REMINDER,
     ACTION_REQUEST_DOCUMENT,
     ACTION_CREATE_TASK,
@@ -177,8 +180,10 @@ ACTION_KINDS: Final = (
 PAYMENT_ACTIONS: Final = (ACTION_HOLD_PAYMENT, ACTION_RELEASE_HOLD, ACTION_SCHEDULE_PAYMENT, ACTION_APPROVE_PAYMENT,
                            ACTION_MARK_PAID)
 #: Actions that cannot be taken back once they ran (an email has left).
-IRREVERSIBLE_ACTIONS: Final = (ACTION_SEND_REMINDER, ACTION_DRAFT_DISPUTE, ACTION_REQUEST_DOCUMENT,
-                               ACTION_NOTIFY, ACTION_WEBHOOK)
+IRREVERSIBLE_ACTIONS: Final = (ACTION_SEND_REMINDER, ACTION_DRAFT_DISPUTE, ACTION_DRAFT_RECONCILIATION,
+                               ACTION_REQUEST_DOCUMENT, ACTION_NOTIFY, ACTION_WEBHOOK)
+#: Actions that draft an email, sent only in Act mode to a known contact.
+DRAFT_ACTIONS: Final = (ACTION_DRAFT_DISPUTE, ACTION_DRAFT_RECONCILIATION)
 
 ACTION_PROPOSED: Final = "PROPOSED"
 ACTION_APPROVED: Final = "APPROVED"

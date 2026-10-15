@@ -22,6 +22,7 @@ export type ActionKind =
   | "approve_payment"
   | "mark_paid"
   | "draft_dispute"
+  | "draft_reconciliation"
   | "send_reminder"
   | "request_document"
   | "create_task"

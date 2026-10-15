@@ -166,6 +166,10 @@ class Planted:
     documents_expired: int = 1
     customers_paid_late: int = 0
     cash_floor_days: int = 0
+    #: Differences planted in Sahyadri's statement of account (owner addition B): an invoice we never
+    #: received, one billed at another amount, our latest payment not yet applied; and the balance gap.
+    statement_differences: tuple[str, ...] = ()
+    statement_gap_micros: int = 0
 
 
 @dataclass
@@ -503,6 +507,70 @@ class _Book:
 
     # -- the bank ---------------------------------------------------------------------------
 
+    def supplier_statement(self) -> None:
+        """Sahyadri's statement of account for last month (owner addition B), as their books show
+        Meridian's account: their invoices, the payments they applied, the balance they say is owed.
+        Three differences are planted: an invoice Meridian never received, the month's invoice billed
+        with freight added, and Meridian's latest payment not yet applied. Everything else agrees, so
+        the balance gap is explained to the paisa."""
+        supplier = next(s for s in SUPPLIERS if s.key == "sahyadri")
+        end = date(self.today.year, self.today.month, 1) - timedelta(days=1)
+        start = date(end.year, end.month, 1)
+        invoices = sorted((d for d in self.docs if d.role == "INVOICE" and d.vendor == supplier.name),
+                          key=lambda d: (d.on, d.number or ""))
+        paid: dict[str, tuple[date, Decimal]] = {}
+        for on, amount, text in self.debits:
+            # A payment the bank statements show (they run to yesterday) settles its invoice in the ledger.
+            if text.startswith(f"NEFT {supplier.name.upper()} ") and on <= self.today - timedelta(days=1):
+                paid.setdefault(text.rsplit(" ", 1)[1], (on, amount))
+        opening = sum((d.total or Decimal(0) for d in invoices
+                       if d.on < start and not (d.number in paid and paid[d.number][0] < start)), Decimal(0))
+        events: list[tuple[date, str, str, Decimal, Decimal]] = []  # (on, description, reference, debit, credit)
+        planted: list[str] = []
+        gap = Decimal(0)
+        month = [d for d in invoices if start <= d.on <= end]
+        for index, invoice in enumerate(month):
+            billed = invoice.total or Decimal(0)
+            if index == len(month) - 1:
+                billed += Decimal("1180.00")  # freight they added on their copy
+                planted.append("AMOUNT_DIFFERS")
+                gap += Decimal("1180.00")
+            events.append((invoice.on, f"Invoice {invoice.number}", invoice.number or "", billed, Decimal(0)))
+        payments = sorted((on, number, amount) for number, (on, amount) in paid.items() if start <= on <= end)
+        for i, (on, number, amount) in enumerate(payments):
+            if i == len(payments) - 1:
+                planted.append("PAYMENT_NOT_APPLIED")  # not yet applied in their books
+                gap += amount
+                continue
+            events.append((on, f"Payment received - NEFT, against {number}", number, Decimal(0), amount))
+        phantom = Decimal("14160.00")
+        events.append((end - timedelta(days=6), "Invoice SPI-9917 (pallet wrap)", "SPI-9917", phantom, Decimal(0)))
+        planted.append("NOT_IN_OUR_BOOKS")
+        gap += phantom
+        balance = opening
+        lines = []
+        for on, description, reference, debit, credit in sorted(events, key=lambda e: (e[0], e[2])):
+            balance += debit - credit
+            lines.append({"date": on.isoformat(), "description": description, "reference": reference,
+                          "debit": _r(debit) if debit else "", "credit": _r(credit) if credit else "",
+                          "balance": _r(balance)})
+        number = f"SPI-SOA-{end.strftime('%Y%m')}"
+        text = "\n".join(["STATEMENT OF ACCOUNT", supplier.name, supplier.city, f"GSTIN: {supplier.gstin}",
+                          f"To: {NAME}", f"Period: {_d(start)} to {_d(end)}", f"Opening balance: {_r(opening)}",
+                          *[f"{l['date']} {l['description']} Dr {l['debit']} Cr {l['credit']} Bal {l['balance']}"
+                            for l in lines],
+                          f"Closing balance due: {_r(balance)}", f"Remit to: {supplier.bank}"])
+        received = min(end + timedelta(days=3), self.today)
+        self.docs.append(Doc("STATEMENT", f"{number}.pdf", end, text,
+                             {"document_classification": "Statement of Account", "vendor_name": supplier.name,
+                              "vendor_gstin": supplier.gstin, "customer_name": NAME, "currency": "INR",
+                              "statement_date": end.isoformat(), "period_start": start.isoformat(),
+                              "opening_balance": str(opening), "closing_balance": str(balance),
+                              "transactions": lines},
+                             number=number, vendor=supplier.name, vendor_tax=supplier.gstin, received=received))
+        self.planted.statement_differences = tuple(sorted(planted))
+        self.planted.statement_gap_micros = int(gap * 1_000_000)
+
     def statements(self) -> None:
         balance = Decimal("4200000.00")
         month_start = date(self.start.year, self.start.month, 1)
@@ -558,6 +626,7 @@ def plan(today: Optional[date] = None) -> tuple[list[Doc], Planted]:
     book.sales()
     book.contracts()
     book.statements()
+    book.supplier_statement()
     docs = sorted(book.docs, key=lambda d: (d.received or d.on, d.filename))
     return docs, book.planted
 
@@ -722,7 +791,7 @@ def _match(db: Session, items: list[tuple[WorkItem, Doc]]) -> None:
 DEFAULT_MANDATES = ("never_pay_above_agreed_price", "never_pay_duplicate", "never_pay_changed_bank_account",
                     "po_required_above", "pay_on_time", "capture_early_discounts", "keep_cash_above",
                     "msme_pay_within_limit", "decide_renewals", "compliance_docs_current",
-                    "chase_overdue_customers")
+                    "chase_overdue_customers", "reconcile_supplier_statements")
 
 
 def build(db: Session, *, organization_id: uuid.UUID, actor_user_id: Optional[uuid.UUID],

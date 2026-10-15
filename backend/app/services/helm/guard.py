@@ -32,7 +32,8 @@ PAYMENT_APPROVER_ROLES = {"OWNER", "ADMIN", "BILLING"}
 FACT_ACTIONS = (v.ACTION_SCHEDULE_PAYMENT, v.ACTION_APPROVE_PAYMENT, v.ACTION_SEND_REMINDER, v.ACTION_DRAFT_DISPUTE,
                 v.ACTION_REQUEST_DOCUMENT)
 PAYING_ACTIONS = (v.ACTION_SCHEDULE_PAYMENT, v.ACTION_APPROVE_PAYMENT)
-OUTBOUND_ACTIONS = (v.ACTION_SEND_REMINDER, v.ACTION_DRAFT_DISPUTE, v.ACTION_REQUEST_DOCUMENT, v.ACTION_WEBHOOK)
+OUTBOUND_ACTIONS = (v.ACTION_SEND_REMINDER, v.ACTION_DRAFT_DISPUTE, v.ACTION_DRAFT_RECONCILIATION,
+                    v.ACTION_REQUEST_DOCUMENT, v.ACTION_WEBHOOK)
 
 
 @dataclass(frozen=True)
@@ -156,7 +157,17 @@ def guard(action: ActionView, snapshot: Snapshot, mandates: Sequence[base.Active
         checks.extend(template.guard_checks(action, snapshot, mandate, ctx))
 
     # facts ------------------------------------------------------------------------------------
-    if action.kind in FACT_ACTIONS and payable is not None:
+    if action.kind == v.ACTION_DRAFT_RECONCILIATION:
+        statement = next((s for s in snapshot.supplier_statements if s.work_item_id == action.work_item_id), None)
+        trusted = statement is not None and statement.confidence in v.TRUSTED_CONFIDENCES
+        checks.append(base.check(
+            "facts", "Facts are verified", trusted, on_fail=v.CHECK_APPROVAL,
+            detail=("The supplier's statement was checked by a person or meets the calibrated threshold." if trusted
+                    else "The supplier's statement was read by the model and not checked: a person approves "
+                    "before Helm sends anything."),
+            evidence={"confidence": statement.confidence if statement else None,
+                      "work_item_id": action.work_item_id}))
+    elif action.kind in FACT_ACTIONS and payable is not None:
         trusted = payable.confidence in v.TRUSTED_CONFIDENCES
         checks.append(base.check(
             "facts", "Facts are verified", trusted, on_fail=v.CHECK_APPROVAL,

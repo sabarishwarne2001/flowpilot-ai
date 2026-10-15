@@ -114,12 +114,12 @@ def _merge(terms: Sequence[base.OptimizerTerms]) -> base.OptimizerTerms:
 def _plan_destination(candidate: base.Candidate, snapshot: Snapshot) -> tuple[Optional[bool], str]:
     """What the plan can know of an email's destination: whether there is a contact to send to. The
     mail server and egress are checked again, from the database, when the action runs."""
-    if candidate.kind not in (v.ACTION_SEND_REMINDER, v.ACTION_REQUEST_DOCUMENT, v.ACTION_DRAFT_DISPUTE,
+    if candidate.kind not in (v.ACTION_SEND_REMINDER, v.ACTION_REQUEST_DOCUMENT, *v.DRAFT_ACTIONS,
                               v.ACTION_WEBHOOK):
         return None, ""
     if candidate.kind == v.ACTION_WEBHOOK:
         return None, "The webhook destination is checked when the action runs."
-    if candidate.kind == v.ACTION_DRAFT_DISPUTE and (candidate.mandate is None
+    if candidate.kind in v.DRAFT_ACTIONS and (candidate.mandate is None
                                                       or candidate.mandate.mode != v.AUTONOMY_ACT):
         return True, "A draft only: nothing is sent."
     counterparty = snapshot.counterparties.get(candidate.counterparty_key or "")
