@@ -358,7 +358,9 @@ def assert_workspace_available(db: Session, *, organization_id: uuid.UUID) -> No
         db.execute(
             select(func.count())
             .select_from(Workspace)
-            .where(Workspace.organization_id == organization_id, Workspace.status == WorkspaceStatus.ACTIVE)
+            # Flagship session: Helm's sample company is a demonstration, never one of the plan's workspaces.
+            .where(Workspace.organization_id == organization_id, Workspace.status == WorkspaceStatus.ACTIVE,
+                   Workspace.is_sample.is_(False))
         ).scalar_one()
     )
     if active + 1 > int(limit):

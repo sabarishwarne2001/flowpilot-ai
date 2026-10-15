@@ -933,8 +933,121 @@ def payment_run(db: Session, who: Viewer, book: HelmBook, *, on: Optional[date] 
             "note": "Helm never moves money. Pay these from your bank or accounting system, then mark them paid."}
 
 
+# ---------------------------------------------------------------------------
+# The sample company
+# ---------------------------------------------------------------------------
+
+
+def sample_state(db: Session, who: Viewer) -> dict[str, Any]:
+    """Whether the organization has the sample company, or is building it."""
+    from app.models.job import Job, JobStatus
+    from app.services.helm import sample_company
+
+    ws = sample_company.sample_workspace(db, who.organization_id)
+    book = db.execute(select(HelmBook).where(HelmBook.workspace_id == ws.id, HelmBook.status == v.BOOK_ACTIVE)
+                      ).scalar_one_or_none() if ws is not None else None
+    building = db.execute(select(func.count()).select_from(Job).where(
+        Job.organization_id == who.organization_id, Job.job_type == v.JOB_SAMPLE,
+        Job.status.in_((JobStatus.PENDING, JobStatus.CLAIMED, JobStatus.FAILED)))).scalar_one() > 0
+    return {"workspace_id": str(ws.id) if ws else None, "book_id": str(book.id) if book else None,
+            "building": bool(building and book is None), "name": sample_company.NAME}
+
+
+def build_sample(db: Session, who: Viewer) -> dict[str, Any]:
+    """Explore Helm with a sample company, on every plan: one labelled, deletable workspace."""
+    from app.services import job_service
+
+    require_decider(who)
+    state = sample_state(db, who)
+    if state["book_id"] or state["building"]:
+        return state
+    job_service.enqueue(db, job_type=v.JOB_SAMPLE, organization_id=who.organization_id,
+                        payload={"organization_id": str(who.organization_id), "user_id": str(who.user_id)},
+                        idempotency_key=f"{v.JOB_SAMPLE}:{who.organization_id}:{datetime.now(timezone.utc):%Y%m%d%H}",
+                        max_attempts=2)
+    db.flush()
+    return {**state, "building": True}
+
+
+def delete_sample(db: Session, who: Viewer) -> dict[str, Any]:
+    from app.services.helm import sample_company
+
+    require_decider(who)
+    ws = sample_company.sample_workspace(db, who.organization_id)
+    if ws is None:
+        raise HelmNotFound("There is no sample company to delete.")
+    book = db.execute(select(HelmBook).where(HelmBook.workspace_id == ws.id)).scalars().first()
+    sample_company.delete(db, organization_id=who.organization_id)
+    if book is not None:
+        _audit(db, who, book, "HELM_BOOK", book.id, "ARCHIVED", {"sample": True})
+    return sample_state(db, who)
+
+
+# ---------------------------------------------------------------------------
+# The Time machine: backtests
+# ---------------------------------------------------------------------------
+
+
+def request_backtest(db: Session, who: Viewer, *, book_id: Optional[uuid.UUID], workspace_id: Optional[uuid.UUID],
+                     months: int, templates: Optional[list[str]] = None) -> dict[str, Any]:
+    """Queue a backtest of the book's active mandates (or the named library templates, as drafts).
+    Helm preview runs one a week on its own documents, of up to 3 months: the workspace gets a
+    read-only book for it, which never plans or acts."""
+    from app.services.helm import backtest, plan_store
+
+    require_decider(who)
+    if book_id is not None:
+        book = _book(db, who, book_id)
+    elif workspace_id is not None:
+        found = db.execute(select(HelmBook).where(HelmBook.organization_id == who.organization_id,
+                                                  HelmBook.workspace_id == workspace_id,
+                                                  HelmBook.status == v.BOOK_ACTIVE)).scalar_one_or_none()
+        book = found or create_book(db, who, workspace_id=workspace_id, preview=not who.helm)
+    else:
+        raise HelmInvalid("Choose the book or the workspace to backtest.", reason="BACKTEST_BOOK")
+    if book.kind != v.BOOK_SAMPLE and not who.can_read(book.workspace_id):
+        raise HelmForbidden("You cannot read this workspace's documents.", reason="HELM_NO_ACCESS")
+    preview = not who.helm and book.kind != v.BOOK_SAMPLE
+    if templates:
+        specs: list[Any] = list(templates)
+    else:
+        active = plan_store.active_mandates(db, book.id)
+        specs = [{"template": m.template, "params": m.spec.params, "scope": m.spec.scope.model_dump(mode="json"),
+                  "title": m.title, "mandate_id": m.id, "version": m.version} for m in active] or \
+            registry.recommended(snapshot_store.settings_for(db, book).business_type)
+    try:
+        row = backtest.request(db, book=book, user_id=who.user_id, months=months, specs=specs, preview=preview)
+    except backtest.BacktestError as exc:
+        raise HelmInvalid(exc.message, reason=exc.reason)
+    _audit(db, who, book, "HELM_BACKTEST", row.id, "CREATED",
+           {"months": months, "preview": preview, "mandates": [m["spec"]["template"] for m in row.mandates]})
+    return backtest.json_of(row)
+
+
+def list_backtests(db: Session, who: Viewer, book: HelmBook, *, limit: int = 20) -> list[dict[str, Any]]:
+    from app.models.helm import HelmBacktest
+    from app.services.helm import backtest
+
+    readable = book.kind == v.BOOK_SAMPLE or who.can_read(book.workspace_id)
+    rows = db.execute(select(HelmBacktest).where(HelmBacktest.book_id == book.id)
+                      .order_by(HelmBacktest.created_at.desc()).limit(min(100, max(1, limit)))).scalars().all()
+    return [{**backtest.json_of(r, readable=readable), "result": None} for r in rows]
+
+
+def backtest_json(db: Session, who: Viewer, backtest_id: uuid.UUID) -> dict[str, Any]:
+    from app.models.helm import HelmBacktest
+    from app.services.helm import backtest
+
+    row = db.get(HelmBacktest, backtest_id)
+    if row is None or row.organization_id != who.organization_id:
+        raise HelmNotFound("Backtest not found.")
+    book = _book(db, who, row.book_id)
+    return backtest.json_of(row, readable=book.kind == v.BOOK_SAMPLE or who.can_read(book.workspace_id))
+
+
 __all__ = [
-    "Viewer", "action_for", "action_json", "add_cash_position", "approve", "approve_all", "book_for", "book_json",
+    "Viewer", "action_for", "action_json", "add_cash_position", "approve", "approve_all", "backtest_json", "book_for",
+    "book_json", "build_sample", "delete_sample", "list_backtests", "request_backtest", "sample_state",
     "certificate_json", "cockpit", "create_book", "create_mandate", "ledger_view", "list_books",
     "list_certificates", "list_counterparties", "list_mandates", "mark_paid", "payment_run", "preview_spec",
     "reject", "replan", "require_decider", "require_helm", "set_status", "settings_json", "undo",

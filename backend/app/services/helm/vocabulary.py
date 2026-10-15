@@ -270,7 +270,9 @@ JOB_PLAN: Final = "helm.plan"
 JOB_BACKTEST: Final = "helm.backtest"
 JOB_EXECUTE: Final = "helm.execute"
 JOB_BRIEFING: Final = "helm.briefing"
-JOB_TYPES: Final = (JOB_LEDGER_BUILD, JOB_PLAN, JOB_BACKTEST, JOB_EXECUTE, JOB_BRIEFING)
+#: Builds the sample company (its documents are embedded for the radar, so it runs on the enrich profile).
+JOB_SAMPLE: Final = "helm.sample"
+JOB_TYPES: Final = (JOB_LEDGER_BUILD, JOB_PLAN, JOB_BACKTEST, JOB_EXECUTE, JOB_BRIEFING, JOB_SAMPLE)
 #: A ledger change asks for a plan this long after it, so a burst of documents plans once.
 PLAN_DEBOUNCE_SECONDS: Final = 20
 

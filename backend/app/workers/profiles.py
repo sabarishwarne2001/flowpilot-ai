@@ -261,6 +261,8 @@ ENRICH = WorkerProfile(
     job_types=frozenset({
         "document.enrich",
         "knowledge.reindex",
+        # Flagship session: building Helm's sample company embeds its documents for the radar.
+        "helm.sample",
         # ARCH45-S1:corroboration-enrich-profile. Clause alignment encodes
         # clauses with the platform's SentenceTransformer, which only this
         # profile (and ALL) may import; LIGHT forbids it and OCR does not

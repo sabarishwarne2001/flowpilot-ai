@@ -72,12 +72,13 @@ def _propose(snapshot: Snapshot, mandate: base.ActiveMandate) -> list[base.Candi
         when = (f"The notice deadline is {money.day(notice.due_date)}, in {days_left} days."
                 if days_left >= 0 else f"The notice deadline was {money.day(notice.due_date)}: decide now, it may "
                 "already have renewed.")
+        what = notice.document_title or "contract"
+        party = f" with {notice.counterparty_name}" if notice.counterparty_name else ""
         out.append(base.Candidate(
             kind=v.ACTION_CREATE_TASK, mandate=mandate,
-            title=f"Decide: {notice.title}"[:300],
-            explanation=(f"{notice.title}{' with ' + notice.counterparty_name if notice.counterparty_name else ''}. "
-                         f"{when} Settle this task RENEW, CANCEL or RENEGOTIATE; the decision is written on the "
-                         "contract's obligation."),
+            title=f"Decide on the {what}{party}: renew, cancel or renegotiate"[:300],
+            explanation=(f"The {what}{party} renews on its own unless notice is given. {when} Settle this task "
+                         "RENEW, CANCEL or RENEGOTIATE; the decision is written on the contract's obligation."),
             key_parts=(notice.promise_id, "renewal", notice.due_date.isoformat()),
             workspace_id=notice.workspace_id, work_item_id=notice.work_item_id, promise_id=notice.promise_id,
             params={"task_kind": v.TASK_DECIDE_RENEWAL, "obligation_id": notice.obligation_id,
@@ -93,7 +94,8 @@ def _forecast(snapshot: Snapshot, mandate: base.ActiveMandate, sim) -> list[base
         days_left = (notice.due_date - snapshot.as_of).days
         if params.days_before < days_left <= 90:
             out.append(base.Risk(mandate=KEY, on=notice.due_date,
-                                 summary=f"{notice.title}: notice deadline {money.day(notice.due_date)}."))
+                                 summary=f"The {notice.document_title or 'contract'}: notice deadline "
+                                         f"{money.day(notice.due_date)}."))
     return out
 
 
@@ -119,8 +121,9 @@ def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
             out.append(base.Finding(
                 mandate=KEY, on=notice.due_date, action=v.ACTION_CREATE_TASK, honesty=v.HONESTY_CONFIRMED,
                 category=base.CATEGORY_RENEWAL, currency=None, value_micros=0,
-                summary=(f"{notice.title}: the notice deadline of {money.day(notice.due_date)} passed with no "
-                         "decision recorded. Helm would have asked for one in time."),
+                summary=(f"The {notice.document_title or 'contract'}: the notice deadline of "
+                         f"{money.day(notice.due_date)} passed with no decision recorded. Helm would have asked "
+                         "for one in time."),
                 evidence=[{"obligation_id": notice.obligation_id, "work_item_id": notice.work_item_id}]))
     return out
 

@@ -121,13 +121,19 @@ def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
         on = max(base.seen_on(payable) or flag.raised_on, flag.raised_on)
         if not history.within(on):
             continue
+        other = history.snapshot.payable_for_work_item(flag.counterpart_work_item_id) \
+            if flag.counterpart_work_item_id else None
+        paid_twice = payable.settlement_state == v.SETTLEMENT_PAID and other is not None and \
+            other.settlement_state == v.SETTLEMENT_PAID
         if flag.status == "CONFIRMED":
             honesty, how = v.HONESTY_CONFIRMED, "a reviewer confirmed it is the same bill"
+        elif paid_twice and flag.strong:
+            honesty, how = v.HONESTY_CONFIRMED, f"both it and {other.document} were paid"
         elif flag.strong:
             honesty, how = v.HONESTY_LIKELY, "the radar matched its supplier and number or its text"
         else:
             honesty, how = v.HONESTY_POTENTIAL, "it only looks similar"
-        paid = " It was paid." if payable.settlement_state == v.SETTLEMENT_PAID else ""
+        paid = " It was paid." if payable.settlement_state == v.SETTLEMENT_PAID and not paid_twice else ""
         out.append(base.Finding(
             mandate=KEY, on=on, action=v.ACTION_HOLD_PAYMENT, honesty=honesty, category=v.VALUE_DUPLICATE_BLOCKED,
             currency=payable.currency, value_micros=payable.amount_micros,

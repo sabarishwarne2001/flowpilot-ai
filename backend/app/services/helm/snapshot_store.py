@@ -74,6 +74,16 @@ def account_state(db: Session, organization_id: uuid.UUID) -> tuple[bool, Option
 
 def cash_positions(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as_of: date) -> dict[str, snap.Cash]:
     """Per currency, the newest of: an admin's typed figure, a STATEMENT's closing balance."""
+    best: dict[str, snap.Cash] = {}
+    for cash in sorted(cash_history(db, book, workspace_ids, as_of),
+                       key=lambda c: (c.as_of, c.source == v.CASH_SOURCE_MANUAL)):
+        best[cash.currency] = cash  # newest wins; on the same day a typed figure wins over a statement
+    return best
+
+
+def cash_history(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as_of: date) -> list[snap.Cash]:
+    """Every cash observation Helm has, oldest first: typed positions and statement closing balances
+    (the Time machine draws the past from these)."""
     candidates: list[snap.Cash] = []
     for row in db.execute(
         select(HelmCashPosition).where(HelmCashPosition.book_id == book.id).order_by(HelmCashPosition.as_of)
@@ -103,10 +113,7 @@ def cash_positions(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], 
             candidates.append(snap.Cash(currency=currency, amount_micros=amount, as_of=on,
                                         source=v.CASH_SOURCE_STATEMENT, age_days=max(0, (as_of - on).days),
                                         evidence={"work_item_id": str(row.id), "document": row.original_filename}))
-    best: dict[str, snap.Cash] = {}
-    for cash in sorted(candidates, key=lambda c: (c.as_of, c.source == v.CASH_SOURCE_MANUAL)):
-        best[cash.currency] = cash  # newest wins; on the same day a typed figure wins over a statement
-    return best
+    return sorted(candidates, key=lambda c: (c.as_of, c.currency, c.source))
 
 
 def _flags(db: Session, workspace_ids: list[uuid.UUID]) -> dict[uuid.UUID, list[snap.Flag]]:
@@ -153,6 +160,12 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
     as_of = as_of or datetime.now(timezone.utc).date()
     settings = settings_for(db, book)
     workspace_ids = book_workspace_ids(db, book)
+    # Reads are a consistent snapshot (brief §4.2): a shared hold on each workspace's ledger lock (the
+    # one `ledger_store.rebuild_workspace` takes exclusively) waits for a rebuild being written and
+    # keeps new ones out until this transaction ends, so a plan never reads half of a rebuild. Taken
+    # in one order everywhere; the session's own rebuild lock does not block it.
+    for workspace_id in sorted(workspace_ids, key=str):
+        db.execute(select(func.pg_advisory_xact_lock_shared(func.hashtextextended(f"helm-ledger:{workspace_id}", 0))))
     flags = _flags(db, workspace_ids)
 
     counterparties: dict[str, snap.Counterparty] = {}
@@ -160,12 +173,6 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
         status = msme.MsmeStatus(registered=bool(row.udyam_number) or row.msme_category in (
             v.MSME_MICRO, v.MSME_SMALL, v.MSME_MEDIUM), category=row.msme_category,
             confirmed=row.msme_source == v.MSME_SOURCE_PERSON, udyam_number=row.udyam_number)
-    # Reads are a consistent snapshot (brief §4.2): a shared hold on each workspace's ledger lock (the
-    # one `ledger_store.rebuild_workspace` takes exclusively) waits for a rebuild being written and
-    # keeps new ones out until this transaction ends, so a plan never reads half of a rebuild. Taken
-    # in one order everywhere; the session's own rebuild lock does not block it.
-    for workspace_id in sorted(workspace_ids, key=str):
-        db.execute(select(func.pg_advisory_xact_lock_shared(func.hashtextextended(f"helm-ledger:{workspace_id}", 0))))
         counterparties[row.key] = snap.Counterparty(key=row.key, name=row.display_name, role=row.role, msme=status,
                                                     contact_email=row.contact_email, behaviour=row.behaviour or {})
 
@@ -231,6 +238,7 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 udyam_number=details.get("udyam_number"),
                 msme_deadline=_date(deadline.get("due")) if deadline and protected else None,
                 msme_explanation=deadline.get("explanation") if deadline and protected else None,
+                hold_code=settlement.get("hold_code"), waived=tuple(settlement.get("waived") or ()),
             ))
         elif promise.kind == v.KIND_PAYMENT_EXPECTED:
             settlement = details.get("settlement") or {}
@@ -238,7 +246,6 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
                 workspace_id=str(promise.workspace_id),
                 document=(promise.evidence or [{}])[0].get("document") or "document",
-                hold_code=settlement.get("hold_code"), waived=tuple(settlement.get("waived") or ()),
                 document_number=details.get("document_number"), counterparty_key=promise.counterparty_key,
                 counterparty_name=promise.counterparty_name, currency=promise.currency,
                 amount_micros=int(promise.amount_micros or 0), invoice_date=_date(details.get("invoice_date")),
@@ -249,14 +256,15 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 promise_id=str(promise.id), obligation_id=str(promise.obligation_id),
                 work_item_id=str(promise.work_item_id) if promise.work_item_id else None,
                 workspace_id=str(promise.workspace_id), title=promise.title, due_date=promise.due_date,
-                status=promise.status, counterparty_name=promise.counterparty_name))
+                status=promise.status, counterparty_name=promise.counterparty_name,
+                document_title=details.get("document_title")))
         elif promise.kind == v.KIND_DOCUMENT_VALID_UNTIL:
             compliance.append(snap.ComplianceDoc(
                 promise_id=str(promise.id), obligation_id=str(promise.obligation_id),
                 work_item_id=str(promise.work_item_id) if promise.work_item_id else None,
                 workspace_id=str(promise.workspace_id), title=promise.title, valid_until=promise.due_date,
                 status=promise.status, counterparty_key=promise.counterparty_key,
-                counterparty_name=promise.counterparty_name))
+                counterparty_name=promise.counterparty_name, document_title=details.get("document_title")))
 
     settled_keys: set[str] = set()
     reminders: dict[str, list[int]] = {}
@@ -328,4 +336,4 @@ def _visibility(payables: list[snap.Payable], promises: list[HelmPromise]) -> di
     return parts
 
 
-__all__ = ["account_state", "cash_positions", "holidays_for", "settings_for", "take"]
+__all__ = ["account_state", "cash_history", "cash_positions", "holidays_for", "settings_for", "take"]

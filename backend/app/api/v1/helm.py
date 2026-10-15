@@ -26,6 +26,11 @@
     POST   /organizations/{oid}/helm/actions/{aid}/approve | reject | undo
     GET    /organizations/{oid}/helm/certificates/{cid}               the readable page's data
     GET    /organizations/{oid}/helm/certificates/{cid}/download      the canonical JSON
+    POST   /organizations/{oid}/helm/sample                           build the sample company (a job; any plan)
+    DELETE /organizations/{oid}/helm/sample                           archive it
+    POST   /organizations/{oid}/helm/backtests                        replay the past (preview: once a week)
+    GET    /organizations/{oid}/helm/books/{bid}/backtests
+    GET    /organizations/{oid}/helm/backtests/{tid}                  findings, value by honesty class
 
 Roles: owners and admins decide; the billing role sees everything and approves payment actions;
 members get 403 (their Helm tasks are in the review hub). Writes need `capability.helm` (402
@@ -132,6 +137,15 @@ class RejectIn(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
 
 
+class BacktestIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    book_id: Optional[uuid.UUID] = None
+    workspace_id: Optional[uuid.UUID] = None
+    months: int = Field(default=6, ge=1, le=24)
+    templates: Optional[list[str]] = Field(default=None, max_length=20)
+
+
 class PaidIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -169,7 +183,7 @@ def helm_overview(organization_id: uuid.UUID, db: Session = Depends(get_db),
         "limits": {"mandates": gate.mandates_limit(db, org_id), "active_mandates": gate.active_mandate_count(db, org_id),
                    "backtest_months": gate.backtest_months_limit(db, org_id)},
         "preview": {"backtest_allowed": allowed, "next_backtest_at": next_at.isoformat() if next_at else None},
-        "books": service.list_books(db, who), "workspaces": workspaces,
+        "books": service.list_books(db, who), "workspaces": workspaces, "sample": service.sample_state(db, who),
     }
 
 
@@ -427,3 +441,45 @@ def helm_certificate_download(organization_id: uuid.UUID, certificate_id: uuid.U
     return Response(content=text, media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="helm-certificate-{certificate_id}.json"',
                              "X-Helm-Certificate-SHA256": found["sha256"]})
+
+
+@router.post(f"{P}/backtests", status_code=201)
+def helm_request_backtest(organization_id: uuid.UUID, payload: BacktestIn, db: Session = Depends(get_db),
+                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    who = _viewer(db, context)
+    result = service.request_backtest(db, who, book_id=payload.book_id, workspace_id=payload.workspace_id,
+                                      months=payload.months, templates=payload.templates)
+    db.commit()
+    return result
+
+
+@router.get(f"{P}/books/{{book_id}}/backtests")
+def helm_list_backtests(organization_id: uuid.UUID, book_id: uuid.UUID, db: Session = Depends(get_db),
+                        context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    who = _viewer(db, context)
+    return {"backtests": service.list_backtests(db, who, service.book_for(db, who, book_id))}
+
+
+@router.get(f"{P}/backtests/{{backtest_id}}")
+def helm_backtest(organization_id: uuid.UUID, backtest_id: uuid.UUID, db: Session = Depends(get_db),
+                  context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    who = _viewer(db, context)
+    return service.backtest_json(db, who, backtest_id)
+
+
+@router.post(f"{P}/sample", status_code=202)
+def helm_build_sample(organization_id: uuid.UUID, db: Session = Depends(get_db),
+                      context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    who = _viewer(db, context)
+    result = service.build_sample(db, who)
+    db.commit()
+    return result
+
+
+@router.delete(f"{P}/sample")
+def helm_delete_sample(organization_id: uuid.UUID, db: Session = Depends(get_db),
+                       context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    who = _viewer(db, context)
+    result = service.delete_sample(db, who)
+    db.commit()
+    return result

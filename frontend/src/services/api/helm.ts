@@ -2,6 +2,8 @@
 import { apiClient } from "@/services/api/client";
 import type {
   HelmAction,
+  HelmBacktest,
+  HelmSampleState,
   HelmBook,
   HelmCertificate,
   HelmCertificateRow,
@@ -39,6 +41,8 @@ export const helmKeys = {
   certificate: (organizationId: string, certificateId: string) =>
     ["helm", organizationId, "certificate", certificateId] as const,
   action: (organizationId: string, actionId: string) => ["helm", organizationId, "action", actionId] as const,
+  backtests: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId, "backtests"] as const,
+  backtest: (organizationId: string, backtestId: string) => ["helm", organizationId, "backtest", backtestId] as const,
 };
 
 export const getHelmOverview = async (organizationId: string): Promise<HelmOverview> =>
@@ -212,3 +216,20 @@ export const downloadHelmCertificate = async (organizationId: string, certificat
       responseType: "blob",
     })
   ).data;
+
+export const buildHelmSample = async (organizationId: string): Promise<HelmSampleState> =>
+  (await apiClient.post<HelmSampleState>(`${base(organizationId)}/sample`)).data;
+
+export const deleteHelmSample = async (organizationId: string): Promise<HelmSampleState> =>
+  (await apiClient.delete<HelmSampleState>(`${base(organizationId)}/sample`)).data;
+
+export const requestHelmBacktest = async (
+  organizationId: string,
+  body: { book_id?: string; workspace_id?: string; months: number; templates?: string[] },
+): Promise<HelmBacktest> => (await apiClient.post<HelmBacktest>(`${base(organizationId)}/backtests`, body)).data;
+
+export const listHelmBacktests = async (organizationId: string, bookId: string): Promise<HelmBacktest[]> =>
+  (await apiClient.get<{ backtests: HelmBacktest[] }>(`${book(organizationId, bookId)}/backtests`)).data.backtests;
+
+export const getHelmBacktest = async (organizationId: string, backtestId: string): Promise<HelmBacktest> =>
+  (await apiClient.get<HelmBacktest>(`${base(organizationId)}/backtests/${encodeURIComponent(backtestId)}`)).data;

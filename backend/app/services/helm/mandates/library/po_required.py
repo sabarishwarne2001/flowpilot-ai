@@ -29,9 +29,11 @@ class Params(BaseModel):
 
 
 def missing(payable: Payable, params: Params) -> bool:
+    """Above the amount with no matched PO. A probable duplicate is left to mandate 2: matching opens
+    no case for a later copy, so counting it here would report the same bill twice."""
     return (payable.open and payable.currency == params.threshold.currency
             and payable.amount_micros > params.threshold.amount_micros and not payable.has_matched_po
-            and CODE not in payable.waived)
+            and CODE not in payable.waived and payable.flag("DUPLICATE") is None)
 
 
 def _readback(spec: MandateSpec, params: Params) -> base.Readback:
@@ -129,7 +131,8 @@ def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
         on = base.seen_on(payable)
         unpaid_ok = payable.open or payable.settlement_state == v.SETTLEMENT_PAID
         if not unpaid_ok or not history.within(on) or payable.currency != params.threshold.currency \
-                or payable.amount_micros <= params.threshold.amount_micros or payable.has_matched_po:
+                or payable.amount_micros <= params.threshold.amount_micros or payable.has_matched_po \
+                or any(f.status != "DISMISSED" for f in history.flags_for(payable.work_item_id, "DUPLICATE")):
             continue
         paid = "was paid" if payable.settlement_state == v.SETTLEMENT_PAID else "arrived"
         out.append(base.Finding(

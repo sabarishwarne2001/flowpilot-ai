@@ -61,7 +61,15 @@ export interface HelmWorkspaceOption {
   currency: string;
 }
 
+export interface HelmSampleState {
+  workspace_id: string | null;
+  book_id: string | null;
+  building: boolean;
+  name: string;
+}
+
 export interface HelmOverview {
+  sample: HelmSampleState;
   access: HelmAccess;
   role: HelmRole;
   can_decide: boolean;
@@ -408,4 +416,55 @@ export interface HelmCertificate {
     engine_version?: string;
   };
   canonical: string | null;
+}
+
+export type Honesty = "confirmed" | "likely" | "potential";
+
+export interface BacktestFinding {
+  mandate: string;
+  on: string;
+  action: string;
+  summary: string;
+  honesty: Honesty;
+  category: string;
+  currency: string | null;
+  value_micros: number;
+  evidence: Record<string, unknown>[];
+}
+
+export interface BacktestMandateResult {
+  template: string;
+  title: string;
+  count: number;
+  totals: Record<Honesty, Record<string, number>>;
+  findings: BacktestFinding[];
+  truncated: boolean;
+}
+
+export interface BacktestResult {
+  period?: { start: string; end: string };
+  mandates?: BacktestMandateResult[];
+  totals?: Record<Honesty, Record<string, number>>;
+  by_category?: Record<string, Record<Honesty, Record<string, number>>>;
+  counts?: Record<string, number>;
+  timeline?: { on: string; events: { mandate: string; summary: string; honesty: Honesty; category: string }[] }[];
+  cash_history?: Record<string, { on: string; amount_micros: number; source: string }[]>;
+  honesty_rule?: string;
+  duration_ms?: number;
+}
+
+export interface HelmBacktest {
+  id: string;
+  book_id: string;
+  status: "QUEUED" | "RUNNING" | "DONE" | "FAILED";
+  months: number;
+  period_start: string;
+  period_end: string;
+  preview: boolean;
+  summary: string | null;
+  error: string | null;
+  mandates: { template: string; title: string | null }[];
+  created_at: string | null;
+  finished_at: string | null;
+  result: BacktestResult | null;
 }

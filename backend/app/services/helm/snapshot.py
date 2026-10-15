@@ -139,6 +139,8 @@ class Notice:
     due_date: Optional[date]
     status: str
     counterparty_name: Optional[str]
+    #: What the contract is, in words ("warehouse lease agreement").
+    document_title: Optional[str] = None
 
 
 @dataclass(frozen=True)
@@ -152,6 +154,8 @@ class ComplianceDoc:
     status: str
     counterparty_key: Optional[str]
     counterparty_name: Optional[str]
+    #: What the document is, in words ("goods in transit insurance policy").
+    document_title: Optional[str] = None
 
 
 @dataclass(frozen=True)

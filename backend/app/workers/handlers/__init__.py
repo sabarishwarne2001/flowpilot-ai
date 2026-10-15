@@ -96,7 +96,7 @@ USAGE_ALERT_JOB_TYPES: frozenset[str] = frozenset({"usage.limit_alerts"})
 OPS_ALERT_JOB_TYPES: frozenset[str] = frozenset({"ops.alerts"})
 #: Flagship session: Helm (docs/helm/ARCHITECTURE.md §10). On the LIGHT profile.
 HELM_JOB_TYPES: frozenset[str] = frozenset(
-    {"helm.ledger_build", "helm.plan", "helm.backtest", "helm.execute", "helm.briefing"}
+    {"helm.ledger_build", "helm.plan", "helm.backtest", "helm.execute", "helm.briefing", "helm.sample"}
 )
 
 #: Every job type this package claims to register, by phase.
@@ -576,6 +576,7 @@ _HANDLERS = {
     "helm.backtest": _helm("handle_backtest"),
     "helm.execute": _helm("handle_execute"),
     "helm.briefing": _helm("handle_briefing"),
+    "helm.sample": _helm("handle_sample"),
 }
 
 

@@ -165,10 +165,25 @@ def handle_backtest(payload: dict[str, Any]) -> dict[str, Any]:
         return result
 
 
+def handle_sample(payload: dict[str, Any]) -> dict[str, Any]:
+    """Build the organization's sample company (idempotent: one per organization)."""
+    from app.db.session import SessionLocal
+    from app.services.helm import sample_company
+
+    with SessionLocal() as db:
+        organization_id = _uuid(payload["organization_id"])
+        if not _org_active(db, organization_id):
+            return {"skipped": "organization not active"}
+        user = payload.get("user_id")
+        book = sample_company.build(db, organization_id=organization_id, actor_user_id=_uuid(user) if user else None)
+        db.commit()
+        return {"book_id": str(book.id), "workspace_id": str(book.workspace_id)}
+
+
 def handle_briefing(payload: dict[str, Any]) -> dict[str, Any]:
     from app.services.helm import briefing
 
     return briefing.sweep()
 
 
-__all__ = ["handle_backtest", "handle_briefing", "handle_execute", "handle_ledger_build", "handle_plan"]
+__all__ = ["handle_backtest", "handle_briefing", "handle_execute", "handle_ledger_build", "handle_plan", "handle_sample"]

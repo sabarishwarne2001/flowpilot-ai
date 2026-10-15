@@ -89,17 +89,18 @@ def _propose(snapshot: Snapshot, mandate: base.ActiveMandate) -> list[base.Candi
         if index is None:
             continue
         supplier = doc.counterparty_name or "the supplier"
+        what = doc.document_title or "compliance document"
         word = "Ask" if index == 0 else "Ask again"
         out.append(base.Candidate(
             kind=v.ACTION_REQUEST_DOCUMENT, mandate=mandate,
-            title=f"{word}: {supplier}'s renewed {doc.title}"[:300],
-            explanation=(f"Our copy of {supplier}'s {doc.title} is valid until {money.day(doc.valid_until)}. Helm "
+            title=f"{word} {supplier} for its renewed {what}"[:300],
+            explanation=(f"Our copy of {money.possessive(supplier)} {what} is valid until {money.day(doc.valid_until)}. Helm "
                          f"sends {supplier} a secure single-use upload link for the renewed document"
                          + (f" (request {index + 1} of {params.max_requests})." if index else ".")),
             key_parts=(doc.promise_id, "request", doc.valid_until.isoformat(), index),
             workspace_id=doc.workspace_id, work_item_id=doc.work_item_id, promise_id=doc.promise_id,
             counterparty_key=doc.counterparty_key,
-            params={"document_title": doc.title, "valid_until": doc.valid_until.isoformat(), "round": index + 1,
+            params={"document_title": what, "valid_until": doc.valid_until.isoformat(), "round": index + 1,
                     "obligation_id": doc.obligation_id}))
     return out
 
@@ -110,7 +111,8 @@ def _forecast(snapshot: Snapshot, mandate: base.ActiveMandate, sim) -> list[base
         days_left = (doc.valid_until - snapshot.as_of).days
         if 0 <= days_left <= 90:
             out.append(base.Risk(mandate=KEY, on=doc.valid_until,
-                                 summary=f"{doc.counterparty_name or 'A supplier'}'s {doc.title} expires on "
+                                 summary=f"{money.possessive(doc.counterparty_name or 'A supplier')} "
+                                         f"{doc.document_title or 'compliance document'} expires on "
                                          f"{money.day(doc.valid_until)}."))
     return out
 
@@ -127,7 +129,9 @@ def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
             out.append(base.Finding(
                 mandate=KEY, on=doc.valid_until, action=v.ACTION_REQUEST_DOCUMENT, honesty=v.HONESTY_CONFIRMED,
                 category=base.CATEGORY_DOCUMENT, currency=None, value_micros=0,
-                summary=(f"{doc.counterparty_name or 'A supplier'}'s {doc.title} expired on "
+                summary=(f"{money.possessive(doc.counterparty_name or 'A supplier')} "
+                         f"{doc.document_title or 'compliance document'} "
+                         f"expired on "
                          f"{money.day(doc.valid_until)} with no renewed copy received. Helm would have asked for it "
                          "before it lapsed."),
                 evidence=[{"obligation_id": doc.obligation_id, "work_item_id": doc.work_item_id}]))

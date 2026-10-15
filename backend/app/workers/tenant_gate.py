@@ -68,6 +68,7 @@ TENANT_ACTIVITY_JOB_TYPES: frozenset[str] = frozenset(
         "helm.backtest",
         "helm.execute",
         "helm.briefing",
+        "helm.sample",
     }
 )
 
