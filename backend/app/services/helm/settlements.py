@@ -30,7 +30,7 @@ def snapshot(row: Optional[HelmSettlement]) -> dict[str, Any]:
     return {"state": row.state, "exists": True, "run_date": row.run_date.isoformat() if row.run_date else None,
             "paid_on": row.paid_on.isoformat() if row.paid_on else None, "hold_reason": row.hold_reason,
             "paid_reference": row.paid_reference, "paid_amount_micros": row.paid_amount_micros,
-            "source": row.source, "version": row.version}
+            "source": row.source, "version": row.version, "evidence": dict(row.evidence or {})}
 
 
 def set_state(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID, work_item_id: uuid.UUID,
@@ -85,7 +85,8 @@ def restore(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID,
               run_date=date.fromisoformat(previous["run_date"]) if previous.get("run_date") else None,
               paid_on=date.fromisoformat(previous["paid_on"]) if previous.get("paid_on") else None,
               paid_amount_micros=previous.get("paid_amount_micros"), paid_reference=previous.get("paid_reference"),
-              hold_reason=previous.get("hold_reason"), evidence={"restored_by_undo": True})
+              hold_reason=previous.get("hold_reason"),
+              evidence={**(previous.get("evidence") or {}), "restored_by_undo": True})
 
 
 __all__ = ["get", "restore", "set_state", "snapshot"]
