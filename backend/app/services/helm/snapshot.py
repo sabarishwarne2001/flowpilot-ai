@@ -126,6 +126,9 @@ class Receivable:
     status: str
     paid_on: Optional[date]
     confidence: str
+    #: Days later than their own history says this customer will pay: a what-if's assumption
+    #: (`what_if.apply`); always 0 in a snapshot read from the database, and not in the digest.
+    expected_delay_days: int = 0
 
     @property
     def open(self) -> bool:
