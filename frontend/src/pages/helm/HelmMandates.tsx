@@ -1,0 +1,233 @@
+import React, { useMemo } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { ExternalLink, Lock, Pause, Play, Plus, Trash2 } from "lucide-react";
+
+import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
+import { ReadbackSentence } from "@/components/helm/ReadbackSentence";
+import { LoadFailed } from "@/components/common/LoadFailed";
+import { errorMessage } from "@/services/api/errors";
+import { createHelmMandate, getHelmLibrary, helmKeys, listHelmMandates, setHelmMandateStatus } from "@/services/api/helm";
+import type { HelmMandate, LibraryTemplate } from "@/types/helm";
+
+const STATUS_WORDS: Record<HelmMandate["status"], string> = {
+  DRAFT: "Draft",
+  ACTIVE: "Active",
+  PAUSED: "Paused",
+  ARCHIVED: "Archived",
+};
+
+const MODE_WORDS: Record<string, string> = { watch: "Watch", propose: "Propose", act: "Act" };
+
+const modeOf = (mandate: HelmMandate): string =>
+  MODE_WORDS[String((mandate.spec?.autonomy as { mode?: string } | undefined)?.mode ?? "propose")] ?? "Propose";
+
+const LawLinks: React.FC<{ readonly links: { title: string; url: string }[]; readonly disclaimer: string | null }> = ({
+  links,
+  disclaimer,
+}) =>
+  links.length > 0 || disclaimer ? (
+    <div className="helm-muted mt-2 space-y-1 text-xs">
+      {links.map((link) => (
+        <a key={link.url} href={link.url} target="_blank" rel="noreferrer noopener" className="helm-accent mr-3 inline-flex items-center gap-1 hover:underline">
+          {link.title}
+          <ExternalLink className="h-3 w-3" aria-hidden="true" />
+          <span className="sr-only">(opens in a new tab)</span>
+        </a>
+      ))}
+      {disclaimer ? <p>{disclaimer}</p> : null}
+    </div>
+  ) : null;
+
+export const HelmMandates: React.FC = () => {
+  const { organizationId, overview, canDecide } = useHelm();
+  const book = useHelmBook();
+  const queryClient = useQueryClient();
+  const library = useQuery({ queryKey: helmKeys.library(organizationId), queryFn: () => getHelmLibrary(organizationId) });
+  const mandates = useQuery({
+    queryKey: helmKeys.mandates(organizationId, book.id),
+    queryFn: () => listHelmMandates(organizationId, book.id),
+  });
+  const writable = canDecide && !book.read_only;
+
+  const refresh = (): void => {
+    void queryClient.invalidateQueries({ queryKey: helmKeys.book(organizationId, book.id) });
+    void queryClient.invalidateQueries({ queryKey: helmKeys.overview(organizationId) });
+  };
+
+  const add = useMutation({
+    mutationFn: (template: LibraryTemplate) =>
+      createHelmMandate(organizationId, book.id, { template: template.key, activate: true }),
+    onSuccess: (mandate) => {
+      toast.success(`${mandate.title} is active, in Propose mode: Helm suggests, a person decides.`);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Helm could not add this mandate.")),
+  });
+  const status = useMutation({
+    mutationFn: ({ mandate, verb }: { mandate: HelmMandate; verb: "activate" | "pause" | "archive" }) =>
+      setHelmMandateStatus(organizationId, book.id, mandate.id, verb),
+    onSuccess: (mandate) => {
+      toast.success(`${mandate.title}: ${STATUS_WORDS[mandate.status].toLowerCase()}.`);
+      refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Helm could not change this mandate.")),
+  });
+
+  const inUse = useMemo(() => new Set((mandates.data ?? []).map((m) => m.template)), [mandates.data]);
+  const groups = library.data?.groups ?? [];
+
+  if (library.isError || mandates.isError) {
+    return <LoadFailed what="the mandates" onRetry={() => void Promise.all([library.refetch(), mandates.refetch()])} />;
+  }
+
+  const limit = overview.limits.mandates;
+  return (
+    <div className="mx-auto max-w-5xl space-y-6">
+      <div>
+        <h1 className="text-xl font-semibold tracking-tight">Mandates</h1>
+        <p className="helm-muted mt-1 text-sm">
+          A mandate is something that must always be true. Helm watches each one, proposes what keeps it true and checks
+          every action against all of them. New mandates start in Propose mode.
+        </p>
+        {limit !== null ? (
+          <p className="helm-muted mt-1 text-xs">
+            <span className="helm-figure">{overview.limits.active_mandates}</span> of{" "}
+            <span className="helm-figure">{limit}</span> active mandates on your plan.
+          </p>
+        ) : null}
+      </div>
+
+      <section aria-labelledby="helm-mandates-yours">
+        <h2 id="helm-mandates-yours" className="helm-label mb-2">
+          Yours
+        </h2>
+        {mandates.isLoading ? (
+          <p className="helm-muted text-sm" role="status">
+            Loading…
+          </p>
+        ) : (mandates.data ?? []).length === 0 ? (
+          <p className="helm-panel p-4 text-sm">None yet. Pick from the library below.</p>
+        ) : (
+          <ul className="space-y-2">
+            {(mandates.data ?? []).map((mandate) => (
+              <li key={mandate.id} className="helm-panel p-4" data-testid="helm-mandate">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                      {mandate.title}
+                      <span className="helm-chip">{STATUS_WORDS[mandate.status]}</span>
+                      <span className="helm-chip">{modeOf(mandate)}</span>
+                      <span className="helm-muted text-xs font-normal">version {mandate.version}</span>
+                    </p>
+                    <ReadbackSentence readback={mandate.readback} className="mt-1.5 text-sm" />
+                    <LawLinks links={mandate.law_links} disclaimer={mandate.disclaimer} />
+                  </div>
+                  {writable ? (
+                    <div className="flex shrink-0 gap-2">
+                      {mandate.status === "ACTIVE" ? (
+                        <button
+                          type="button"
+                          className="helm-btn"
+                          disabled={status.isPending}
+                          onClick={() => status.mutate({ mandate, verb: "pause" })}
+                        >
+                          <Pause className="h-3.5 w-3.5" aria-hidden="true" />
+                          Pause
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          className="helm-btn"
+                          disabled={status.isPending}
+                          onClick={() => status.mutate({ mandate, verb: "activate" })}
+                        >
+                          <Play className="h-3.5 w-3.5" aria-hidden="true" />
+                          Activate
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="helm-btn"
+                        disabled={status.isPending}
+                        onClick={() => status.mutate({ mandate, verb: "archive" })}
+                        aria-label={`Archive ${mandate.title}`}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                        Archive
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section aria-labelledby="helm-library">
+        <h2 id="helm-library" className="helm-label mb-2">
+          Library
+        </h2>
+        {library.isLoading ? (
+          <p className="helm-muted text-sm" role="status">
+            Loading…
+          </p>
+        ) : (
+          <div className="space-y-5">
+            {groups.map((group) => {
+              const templates = (library.data?.templates ?? [])
+                .filter((t) => t.group === group)
+                .sort((a, b) => a.order - b.order);
+              if (templates.length === 0) {
+                return null;
+              }
+              return (
+                <div key={group}>
+                  <h3 className="mb-2 text-sm font-semibold">{group}</h3>
+                  <ul className="grid gap-3 md:grid-cols-2">
+                    {templates.map((template) => {
+                      const used = inUse.has(template.key);
+                      return (
+                        <li key={template.key} className="helm-panel flex flex-col p-4" data-testid="helm-template">
+                          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
+                            {template.title}
+                            {template.plan === "enterprise" ? (
+                              <span className="helm-chip">
+                                {!template.available ? <Lock className="h-3 w-3" aria-hidden="true" /> : null}
+                                Enterprise
+                              </span>
+                            ) : null}
+                          </p>
+                          <ReadbackSentence readback={template.readback} className="mt-1.5 text-sm" />
+                          <p className="helm-muted mt-1 text-xs">{template.summary}</p>
+                          <LawLinks links={template.law_links} disclaimer={template.disclaimer} />
+                          {writable ? (
+                            <div className="mt-auto pt-3">
+                              <button
+                                type="button"
+                                className="helm-btn"
+                                disabled={used || !template.available || add.isPending}
+                                onClick={() => add.mutate(template)}
+                                aria-label={used ? `${template.title}: already yours` : `Add ${template.title}`}
+                              >
+                                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                                {used ? "Already yours" : !template.available ? "On Enterprise" : "Add in Propose mode"}
+                              </button>
+                            </div>
+                          ) : null}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+};
+
+export default HelmMandates;

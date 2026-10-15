@@ -1,0 +1,247 @@
+/*
+ * Helm's visual identity: an instrument panel (brief §10.2). Every Helm-specific token lives in this
+ * one file, scoped to `.helm` (HelmLayout's root), so Documents mode is untouched.
+ *
+ * Calm and precise: hairlines instead of shadows, one luminous accent, numbers in JetBrains Mono
+ * with tabular figures, thin instrument rings, and motion that stops under reduced-motion.
+ * Contrast: every text token is at least 4.5:1 on --helm-panel and --helm-bg in both themes; the
+ * state colours are used for text and rings, never as the only signal (each state is also a word).
+ */
+
+.helm {
+  --helm-bg: 220 20% 96.5%;
+  --helm-panel: 0 0% 100%;
+  --helm-panel-raised: 220 22% 98.5%;
+  --helm-line: 220 14% 86%;
+  --helm-line-strong: 220 12% 74%;
+  --helm-ink: 222 32% 11%;
+  --helm-ink-muted: 220 10% 36%;
+  --helm-accent: 176 84% 24%;
+  --helm-accent-ink: 0 0% 100%;
+  --helm-accent-soft: 176 52% 93%;
+  --helm-holding: 152 62% 26%;
+  --helm-drifting: 32 94% 31%;
+  --helm-breached: 0 72% 40%;
+  --helm-unknown: 220 9% 40%;
+  --helm-band: 176 60% 40%;
+  --helm-floor: 0 72% 40%;
+  --helm-focus: 176 84% 24%;
+
+  background-color: hsl(var(--helm-bg));
+  color: hsl(var(--helm-ink));
+}
+
+.dark .helm {
+  --helm-bg: 222 24% 5.5%;
+  --helm-panel: 222 20% 8.5%;
+  --helm-panel-raised: 222 18% 11%;
+  --helm-line: 222 14% 19%;
+  --helm-line-strong: 222 12% 30%;
+  --helm-ink: 210 24% 94%;
+  --helm-ink-muted: 215 14% 68%;
+  --helm-accent: 172 72% 52%;
+  --helm-accent-ink: 222 30% 8%;
+  --helm-accent-soft: 174 46% 13%;
+  --helm-holding: 152 56% 54%;
+  --helm-drifting: 38 92% 62%;
+  --helm-breached: 0 84% 70%;
+  --helm-unknown: 215 12% 64%;
+  --helm-band: 172 60% 50%;
+  --helm-floor: 0 84% 70%;
+  --helm-focus: 172 72% 52%;
+}
+
+.helm-panel {
+  background-color: hsl(var(--helm-panel));
+  border: 1px solid hsl(var(--helm-line));
+  border-radius: 0.75rem;
+}
+
+.helm-panel-raised {
+  background-color: hsl(var(--helm-panel-raised));
+  border: 1px solid hsl(var(--helm-line));
+  border-radius: 0.625rem;
+}
+
+.helm-hairline {
+  border-color: hsl(var(--helm-line));
+}
+
+.helm-muted {
+  color: hsl(var(--helm-ink-muted));
+}
+
+.helm-accent {
+  color: hsl(var(--helm-accent));
+}
+
+.helm-label {
+  color: hsl(var(--helm-ink-muted));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.helm-figure {
+  font-family: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.helm-state-holding { color: hsl(var(--helm-holding)); }
+.helm-state-drifting { color: hsl(var(--helm-drifting)); }
+.helm-state-breached { color: hsl(var(--helm-breached)); }
+.helm-state-unknown { color: hsl(var(--helm-unknown)); }
+
+.helm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid hsl(var(--helm-line-strong));
+  border-radius: 999px;
+  padding: 0.0625rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+
+.helm-chip-accent {
+  border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent-soft));
+  color: hsl(var(--helm-ink));
+}
+
+.helm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  min-height: 2.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--helm-line-strong));
+  background-color: hsl(var(--helm-panel));
+  color: hsl(var(--helm-ink));
+  padding: 0 0.875rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.helm-btn:hover:not(:disabled) {
+  border-color: hsl(var(--helm-accent));
+}
+
+.helm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.helm-btn-primary {
+  border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent));
+  color: hsl(var(--helm-accent-ink));
+}
+
+.helm-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.helm :focus-visible {
+  outline: 2px solid hsl(var(--helm-focus));
+  outline-offset: 2px;
+}
+
+.helm-input {
+  min-height: 2.25rem;
+  width: 100%;
+  border-radius: 0.5rem;
+  border: 1px solid hsl(var(--helm-line-strong));
+  background-color: hsl(var(--helm-panel));
+  color: hsl(var(--helm-ink));
+  padding: 0.375rem 0.625rem;
+  font-size: 0.875rem;
+}
+
+.helm-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: hsl(var(--helm-ink-muted));
+}
+
+.helm-nav-link:hover {
+  background-color: hsl(var(--helm-panel-raised));
+  color: hsl(var(--helm-ink));
+}
+
+.helm-nav-link[aria-current="page"] {
+  background-color: hsl(var(--helm-accent-soft));
+  color: hsl(var(--helm-ink));
+  font-weight: 600;
+  box-shadow: inset 2px 0 0 hsl(var(--helm-accent));
+}
+
+/* The mode switch (Documents | Helm) in both headers. */
+.helm-mode-switch {
+  display: inline-flex;
+  border: 1px solid hsl(var(--border));
+  border-radius: 0.5rem;
+  padding: 2px;
+  background-color: hsl(var(--card) / 0.6);
+}
+
+.helm-mode-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+}
+
+.helm-mode-option[aria-checked="true"] {
+  background-color: hsl(var(--foreground));
+  color: hsl(var(--background));
+}
+
+.helm-mode-option:focus-visible {
+  outline: 2px solid hsl(var(--ring));
+  outline-offset: 1px;
+}
+
+/* Thin instrument ring (an SVG circle's stroke). */
+.helm-ring-track { stroke: hsl(var(--helm-line)); }
+.helm-ring-holding { stroke: hsl(var(--helm-holding)); }
+.helm-ring-drifting { stroke: hsl(var(--helm-drifting)); }
+.helm-ring-breached { stroke: hsl(var(--helm-breached)); }
+.helm-ring-unknown { stroke: hsl(var(--helm-unknown)); }
+
+.helm-motion {
+  transition: stroke-dashoffset 600ms ease-out, opacity 300ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-motion {
+    transition: none;
+  }
+}
+
+/* The flight path chart. */
+.helm-chart-band { fill: hsl(var(--helm-band) / 0.16); }
+.helm-chart-p50 { stroke: hsl(var(--helm-accent)); fill: none; stroke-width: 1.75; }
+.helm-chart-floor { stroke: hsl(var(--helm-floor)); stroke-dasharray: 4 3; stroke-width: 1.25; }
+.helm-chart-axis { stroke: hsl(var(--helm-line)); }
+.helm-chart-text { fill: hsl(var(--helm-ink-muted)); font-size: 10px; }
+.helm-chart-today { stroke: hsl(var(--helm-ink)); stroke-width: 1; stroke-dasharray: 2 2; }
+.helm-chart-pin { fill: hsl(var(--helm-accent)); }
+.helm-chart-past { stroke: hsl(var(--helm-ink-muted)); fill: none; stroke-width: 1.5; }
+
+.helm-meter-track { background-color: hsl(var(--helm-line)); }
+.helm-meter-fill { background-color: hsl(var(--helm-accent)); }
