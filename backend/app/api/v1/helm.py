@@ -14,14 +14,15 @@
     GET    /organizations/{oid}/helm/library                          the mandate gallery
     POST   /organizations/{oid}/helm/books                            start Helm on a workspace (or all, Enterprise)
     GET    /organizations/{oid}/helm/books/{bid}                      one book
-    GET    /organizations/{oid}/helm/books/{bid}/settings             identities, cash, run days, autonomy
-    PATCH  /organizations/{oid}/helm/books/{bid}/settings
+    GET    /organizations/{oid}/helm/books/{bid}/settings             identities, cash, run days, approval chain
+    PATCH  /organizations/{oid}/helm/books/{bid}/settings             (the approval chain: Enterprise)
     POST   /organizations/{oid}/helm/books/{bid}/cash-positions       type a cash position
     GET    /organizations/{oid}/helm/books/{bid}/counterparties
     PATCH  /organizations/{oid}/helm/books/{bid}/counterparties/{cid} confirm an MSME category, a contact
     GET    /organizations/{oid}/helm/books/{bid}/cockpit              the plan, instruments, actions, value held
     POST   /organizations/{oid}/helm/books/{bid}/plan                 re-plan now
     POST   /organizations/{oid}/helm/books/{bid}/plan/approve-all     approve every action that passed the Guard
+                                                                      (approved, waiting for someone else, skipped)
     GET    /organizations/{oid}/helm/books/{bid}/mandates
     POST   /organizations/{oid}/helm/books/{bid}/mandates             create (from the gallery or a draft)
     POST   /organizations/{oid}/helm/books/{bid}/mandates/preview     validate and read back without saving
@@ -92,6 +93,25 @@ class BookIn(BaseModel):
     name: Optional[str] = Field(default=None, max_length=200)
 
 
+class ChainTierIn(BaseModel):
+    """One tier of an approval chain: above `above_micros` in `currency`, `approvals` different people
+    (2 or 3), from `roles` when given. The service checks the values and says what is wrong in words."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    above_micros: int = Field(..., ge=0)
+    currency: str = Field(..., min_length=1, max_length=8)
+    approvals: int = Field(..., ge=0, le=9)
+    roles: Optional[list[str]] = Field(default=None, max_length=8)
+
+
+class ApprovalChainIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    #: An empty list removes the chain.
+    tiers: list[ChainTierIn] = Field(default_factory=list, max_length=12)
+
+
 class SettingsIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -103,6 +123,7 @@ class SettingsIn(BaseModel):
     briefing_enabled: Optional[bool] = None
     business_type: Optional[str] = Field(default=None, max_length=32)
     first_run_step: Optional[int] = Field(default=None, ge=0, le=4)
+    approval_chain: Optional[ApprovalChainIn] = None
 
 
 class CashIn(BaseModel):

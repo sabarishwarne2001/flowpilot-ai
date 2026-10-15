@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Plus, Trash2 } from "lucide-react";
+import { AlertTriangle, Lock, Plus, Trash2 } from "lucide-react";
 
+import { fromMicros, toMicros } from "@/components/helm/EditableReadback";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money } from "@/components/helm/HelmBits";
 import { LoadFailed } from "@/components/common/LoadFailed";
-import { errorMessage } from "@/services/api/errors";
+import { organizationBillingPath } from "@/routes/tenantPaths";
+import { ApiError, errorMessage } from "@/services/api/errors";
 import {
   addHelmCashPosition,
   getHelmSettings,
@@ -15,8 +18,8 @@ import {
   updateHelmCounterparty,
   updateHelmSettings,
 } from "@/services/api/helm";
-import { formatCalendarDate } from "@/utils/displayTime";
-import type { HelmCounterparty, HelmSettings as Settings } from "@/types/helm";
+import { formatCalendarDate, formatNumber } from "@/utils/displayTime";
+import type { ApprovalChainTier, HelmCounterparty, HelmRole, HelmSettings as Settings } from "@/types/helm";
 
 const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
@@ -291,6 +294,267 @@ const Planning: React.FC<{ readonly settings: Settings; readonly writable: boole
   );
 };
 
+/** At most this many tiers (the server says the same, in words). */
+const MAX_TIERS = 6;
+
+const CHAIN_ROLES: { value: HelmRole; label: string }[] = [
+  { value: "OWNER", label: "Owners" },
+  { value: "ADMIN", label: "Admins" },
+  { value: "BILLING", label: "Billing role" },
+];
+
+interface TierDraft {
+  above: string;
+  currency: string;
+  approvals: 2 | 3;
+  /** Whose approvals count; none ticked: owners, admins and the billing role. */
+  roles: HelmRole[];
+}
+
+const draftsOf = (tiers: readonly ApprovalChainTier[]): TierDraft[] =>
+  tiers.map((t) => ({ above: fromMicros(t.above_micros), currency: t.currency, approvals: t.approvals, roles: t.roles ?? [] }));
+
+/** What is wrong with a typed tier before it is sent, or null. */
+const tierProblem = (tier: TierDraft): string | null => {
+  if (toMicros(tier.above) === null) {
+    return "Write the amount as a number, for example 1000000.";
+  }
+  return /^[A-Za-z]{3}$/.test(tier.currency.trim()) ? null : "A currency is three letters, such as INR.";
+};
+
+/** The approval chain (Enterprise): above an amount, a payment waits for two or three different people. */
+const ApprovalChain: React.FC<{ readonly settings: Settings; readonly writable: boolean }> = ({ settings, writable }) => {
+  const { organizationId, orgSlug, role } = useHelm();
+  const book = useHelmBook();
+  const queryClient = useQueryClient();
+  const chain = settings.approval_chain;
+  const [rows, setRows] = useState<TierDraft[]>(() => draftsOf(chain.tiers));
+  const [problems, setProblems] = useState<string[]>([]);
+  useEffect(() => {
+    setRows(draftsOf(chain.tiers));
+    setProblems([]);
+  }, [chain.tiers]);
+
+  const save = useMutation({
+    mutationFn: (tiers: TierDraft[]) =>
+      updateHelmSettings(organizationId, book.id, {
+        approval_chain: {
+          tiers: tiers.map((t) => ({
+            above_micros: toMicros(t.above) ?? 0,
+            currency: t.currency.trim().toUpperCase(),
+            approvals: t.approvals,
+            roles: t.roles.length > 0 ? t.roles : null,
+          })),
+        },
+      }),
+    onSuccess: (data) => {
+      setProblems([]);
+      queryClient.setQueryData(helmKeys.settings(organizationId, book.id), data);
+      void queryClient.invalidateQueries({ queryKey: helmKeys.book(organizationId, book.id) });
+      toast.success(
+        data.approval_chain.tiers.length > 0
+          ? "Saved. Helm is re-planning what waits for approval."
+          : "The approval chain is removed. One approval is enough again.",
+      );
+    },
+    onError: (error) => {
+      const listed = error instanceof ApiError ? error.details["problems"] : undefined;
+      setProblems(Array.isArray(listed) ? listed.filter((p): p is string => typeof p === "string") : []);
+      toast.error(errorMessage(error, "Helm could not save the approval chain."));
+    },
+  });
+
+  const update = (index: number, next: Partial<TierDraft>): void =>
+    setRows((current) => current.map((row, i) => (i === index ? { ...row, ...next } : row)));
+  const toggleRole = (index: number, value: HelmRole, on: boolean): void =>
+    setRows((current) =>
+      current.map((row, i) =>
+        i === index ? { ...row, roles: on ? [...row.roles, value] : row.roles.filter((r) => r !== value) } : row,
+      ),
+    );
+  const firstProblem = rows.map(tierProblem).find((p) => p !== null) ?? null;
+  const defaultCurrency = settings.cash[0]?.currency ?? rows[rows.length - 1]?.currency ?? "INR";
+
+  if (!chain.available) {
+    return (
+      <section aria-labelledby="helm-chain" className="helm-panel p-4" data-testid="helm-approval-chain-locked">
+        <h2 id="helm-chain" className="flex items-center gap-2 text-sm font-semibold">
+          <Lock className="h-4 w-4" aria-hidden="true" />
+          Approval chain
+          <span className="helm-chip">Enterprise</span>
+        </h2>
+        <p className="helm-muted mt-1 text-sm">
+          On the Enterprise plan, a payment above an amount you choose waits for two or three different people to approve
+          it, and you can say whose approvals count.
+        </p>
+        {chain.tiers.length > 0 ? (
+          <div className="mt-2 text-xs">
+            <p>Your chain is kept, and applies again on Enterprise. Until then one approval is enough:</p>
+            <ul className="helm-muted mt-1 list-disc space-y-0.5 pl-5">
+              {chain.sentences.map((sentence) => (
+                <li key={sentence}>{sentence}</li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+        {role === "OWNER" || role === "BILLING" ? (
+          <Link to={organizationBillingPath(orgSlug)} className="helm-btn helm-btn-primary mt-3">
+            See plans
+          </Link>
+        ) : null}
+      </section>
+    );
+  }
+
+  return (
+    <section aria-labelledby="helm-chain" className="helm-panel p-4" data-testid="helm-approval-chain">
+      <h2 id="helm-chain" className="flex items-center gap-2 text-sm font-semibold">
+        Approval chain
+        <span className="helm-chip">Enterprise</span>
+      </h2>
+      <p className="helm-muted mt-1 text-xs">
+        Above an amount you choose, a payment waits for two or three different people before it goes on the payment run,
+        whatever a mandate's act cap says. Holds, releases and recorded payments keep one approval.
+        {chain.updated_at ? ` Changed ${formatCalendarDate(chain.updated_at.slice(0, 10))}.` : ""}
+      </p>
+      {chain.sentences.length > 0 ? (
+        <ul className="mt-3 space-y-1 text-sm" aria-label="The approval chain now">
+          {chain.sentences.map((sentence) => (
+            <li key={sentence}>{sentence}</li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-3 text-sm">No chain: one approval is enough for every payment.</p>
+      )}
+      {chain.warnings.length > 0 ? (
+        <div role="status">
+          <ul className="mt-2 space-y-1 text-xs">
+            {chain.warnings.map((warning) => (
+              <li key={warning} className="helm-state-drifting flex items-start gap-1.5">
+                <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                {warning}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+      {writable ? (
+        <form
+          className="mt-3 space-y-3"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (!firstProblem) {
+              save.mutate(rows);
+            }
+          }}
+        >
+          {rows.map((row, index) => (
+            <fieldset key={index} className="helm-panel-raised space-y-2 p-3" data-testid="helm-chain-tier">
+              <legend className="helm-label px-1">Tier {formatNumber(index + 1)}</legend>
+              <div className="flex flex-wrap items-end gap-2">
+                <label className="text-xs">
+                  <span className="helm-label block">Above</span>
+                  <input
+                    className="helm-input helm-figure mt-1 w-36"
+                    inputMode="decimal"
+                    value={row.above}
+                    placeholder="1000000"
+                    onChange={(event) => update(index, { above: event.target.value })}
+                  />
+                </label>
+                <label className="text-xs">
+                  <span className="helm-label block">Currency</span>
+                  <input
+                    className="helm-input helm-figure mt-1 w-16 uppercase"
+                    maxLength={3}
+                    value={row.currency}
+                    onChange={(event) => update(index, { currency: event.target.value.toUpperCase() })}
+                  />
+                </label>
+                <label className="text-xs">
+                  <span className="helm-label block">Approvals</span>
+                  <select
+                    className="helm-input mt-1 w-44"
+                    value={row.approvals}
+                    onChange={(event) => update(index, { approvals: event.target.value === "3" ? 3 : 2 })}
+                  >
+                    <option value={2}>Two different people</option>
+                    <option value={3}>Three different people</option>
+                  </select>
+                </label>
+                <button
+                  type="button"
+                  className="helm-btn"
+                  onClick={() => setRows((current) => current.filter((_, i) => i !== index))}
+                  aria-label={`Remove tier ${formatNumber(index + 1)}`}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </button>
+              </div>
+              <fieldset>
+                <legend className="helm-label">Whose approvals count</legend>
+                <div className="mt-1 flex flex-wrap gap-2">
+                  {CHAIN_ROLES.map((choice) => (
+                    <label key={choice.value} className="helm-chip cursor-pointer">
+                      <input
+                        type="checkbox"
+                        className="mr-1"
+                        checked={row.roles.includes(choice.value)}
+                        onChange={(event) => toggleRole(index, choice.value, event.target.checked)}
+                      />
+                      {choice.label}
+                    </label>
+                  ))}
+                </div>
+                <p className="helm-muted mt-1 text-xs">
+                  {row.roles.length === 0
+                    ? "None ticked: owners, admins and the billing role all count."
+                    : "Only the ticked roles count towards this tier."}
+                </p>
+              </fieldset>
+            </fieldset>
+          ))}
+          {firstProblem ? (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400">
+              {firstProblem}
+            </p>
+          ) : null}
+          {problems.length > 0 ? (
+            <div role="alert">
+              <ul className="list-disc space-y-0.5 pl-5 text-xs text-red-600 dark:text-red-400">
+                {problems.map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap gap-2">
+            {rows.length < MAX_TIERS ? (
+              <button
+                type="button"
+                className="helm-btn"
+                onClick={() =>
+                  setRows((current) => [...current, { above: "", currency: defaultCurrency, approvals: 2, roles: [] }])
+                }
+              >
+                <Plus className="h-3.5 w-3.5" aria-hidden="true" />
+                {rows.length === 0 ? "Add a tier" : "Add another tier"}
+              </button>
+            ) : null}
+            <button
+              type="submit"
+              className="helm-btn helm-btn-primary"
+              disabled={save.isPending || firstProblem !== null || (rows.length === 0 && chain.tiers.length === 0)}
+            >
+              {rows.length === 0 && chain.tiers.length > 0 ? "Remove the chain" : "Save"}
+            </button>
+          </div>
+        </form>
+      ) : null}
+    </section>
+  );
+};
+
 const MSME_CHOICES: { value: string; label: string }[] = [
   { value: "", label: "Not confirmed" },
   { value: "MICRO", label: "Micro" },
@@ -378,6 +642,7 @@ export const HelmSettings: React.FC = () => {
       <Identities settings={settings.data} writable={writable} />
       <Cash settings={settings.data} canEnter={!book.read_only && (canDecide || role === "BILLING")} />
       <Planning settings={settings.data} writable={writable} />
+      <ApprovalChain settings={settings.data} writable={writable} />
       <section aria-labelledby="helm-counterparties" className="helm-panel p-4">
         <h2 id="helm-counterparties" className="text-sm font-semibold">
           Suppliers and customers

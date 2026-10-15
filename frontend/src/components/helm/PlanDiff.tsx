@@ -6,11 +6,11 @@ import { ChevronDown, FileCheck2, Lock, Undo2 } from "lucide-react";
 
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useHelm } from "@/components/helm/HelmContext";
-import { ACTION_STATE_WORDS, ACTION_VERBS, GuardBadge, Money } from "@/components/helm/HelmBits";
+import { ACTION_STATE_WORDS, ACTION_VERBS, GuardBadge, Money, ROLE_WORDS, rolesWords } from "@/components/helm/HelmBits";
 import { helmCertificatePath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { approveAllHelmActions, approveHelmAction, helmKeys, rejectHelmAction, undoHelmAction } from "@/services/api/helm";
-import { formatCalendarDate } from "@/utils/displayTime";
+import { formatCalendarDate, formatNumber } from "@/utils/displayTime";
 import type { HelmAction } from "@/types/helm";
 
 const PAYMENT_ACTIONS = new Set(["hold_payment", "release_hold", "schedule_payment", "approve_payment", "mark_paid"]);
@@ -18,6 +18,56 @@ const PAYMENT_ACTIONS = new Set(["hold_payment", "release_hold", "schedule_payme
 /** Owners and admins approve anything; the billing role approves payment actions (brief §5.4). */
 export const canApprove = (role: string, kind: string): boolean =>
   role === "OWNER" || role === "ADMIN" || (role === "BILLING" && PAYMENT_ACTIONS.has(kind));
+
+const ORDINALS: Record<number, string> = { 2: "second", 3: "third" };
+
+/** On an approval chain (Enterprise): the viewer already approved and the payment waits for someone else. */
+const waitingForOthers = (action: HelmAction): boolean =>
+  action.approvals.some((a) => a.by_you) && action.approvals_given < action.required_approvals;
+
+/** On an approval chain that names roles, whether the viewer's role is one whose approval counts. */
+const roleCounts = (action: HelmAction, role: string): boolean =>
+  !action.approver_roles || (action.approver_roles as readonly string[]).includes(role);
+
+/** Whether this viewer may approve the action now (the server checks the same, and says why if not). */
+export const mayApprove = (action: HelmAction, role: string): boolean =>
+  action.state === "PROPOSED" &&
+  action.guard_passed &&
+  action.readable &&
+  canApprove(role, action.kind) &&
+  roleCounts(action, role) &&
+  !waitingForOthers(action);
+
+/** "Add the second approval" once someone approved a payment on a chain; "Approve" otherwise. */
+const approveLabel = (action: HelmAction): string =>
+  action.required_approvals > 1 && action.approvals_given > 0 && action.approvals_given < action.required_approvals
+    ? `Add the ${ORDINALS[action.approvals_given + 1] ?? "next"} approval`
+    : "Approve";
+
+/** "1 of 2 approvals: owner (you)", with a pip per approval the payment needs. */
+const ApprovalProgress: React.FC<{ readonly action: HelmAction }> = ({ action }) => {
+  if (action.required_approvals <= 1) {
+    return null;
+  }
+  const given = Math.min(action.approvals_given, action.required_approvals);
+  const who = action.approvals
+    .filter((a) => !a.by_helm && a.role)
+    .map((a) => `${ROLE_WORDS[a.role ?? ""] ?? (a.role ?? "").toLowerCase()}${a.by_you ? " (you)" : ""}`);
+  return (
+    <span className="inline-flex items-center gap-1.5" data-testid="helm-approvals">
+      <span className="helm-pips" aria-hidden="true">
+        {Array.from({ length: action.required_approvals }, (_, index) => (
+          <span key={index} className={`helm-pip ${index < given ? "helm-pip-on" : ""}`} />
+        ))}
+      </span>
+      <span>
+        <span className="helm-figure">{formatNumber(given)}</span> of{" "}
+        <span className="helm-figure">{formatNumber(action.required_approvals)}</span> approvals
+        {who.length > 0 ? `: ${who.join(", ")}` : `, from ${rolesWords(action.approver_roles)}`}
+      </span>
+    </span>
+  );
+};
 
 const CHECK_WORDS: Record<string, string> = {
   pass: "Passed",
@@ -108,7 +158,13 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
   const approve = useMutation({
     mutationFn: () => approveHelmAction(organizationId, action.id),
     onSuccess: (updated) => {
-      toast.success(updated.state === "EXECUTED" ? "Approved and done." : "Approved.");
+      toast.success(
+        updated.state === "EXECUTED"
+          ? "Approved and done."
+          : updated.state === "PROPOSED" && updated.required_approvals > 1
+            ? `Your approval is in: ${formatNumber(updated.approvals_given)} of ${formatNumber(updated.required_approvals)}. It now waits for someone else.`
+            : "Approved.",
+      );
       refresh();
     },
     onError: (error) => toast.error(errorMessage(error, "Helm could not approve this action.")),
@@ -134,7 +190,9 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
 
   const verb = ACTION_VERBS[action.kind] ?? action.kind;
   const mine = !readOnly && action.readable && canApprove(role, action.kind);
-  const approvable = mine && action.state === "PROPOSED" && action.guard_passed;
+  const approvable = mine && mayApprove(action, role);
+  const waiting = mine && action.state === "PROPOSED" && waitingForOthers(action);
+  const notYourRole = mine && action.state === "PROPOSED" && !roleCounts(action, role);
   const rejectable = mine && (action.state === "PROPOSED" || action.state === "BLOCKED");
   const busy = approve.isPending || reject.isPending || undo.isPending;
   const checks = action.guard.checks ?? [];
@@ -160,6 +218,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
             {action.workspace_name ? <span>{action.workspace_name}</span> : null}
             <span>{ACTION_STATE_WORDS[action.state] ?? action.state}</span>
             {action.irreversible ? <span>cannot be undone once sent</span> : null}
+            <ApprovalProgress action={action} />
           </p>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -170,10 +229,16 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
               className="helm-btn helm-btn-primary"
               disabled={busy}
               onClick={() => approve.mutate()}
-              aria-label={`Approve: ${action.title}`}
+              aria-label={`${approveLabel(action)}: ${action.title}`}
             >
-              Approve
+              {approveLabel(action)}
             </button>
+          ) : waiting ? (
+            <span className="helm-muted max-w-[16rem] text-xs" data-testid="helm-approval-waiting">
+              You approved. Waiting for someone else to add the {ORDINALS[action.approvals_given + 1] ?? "next"} approval.
+            </span>
+          ) : notYourRole ? (
+            <span className="helm-muted max-w-[16rem] text-xs">Approved by {rolesWords(action.approver_roles)} only.</span>
           ) : null}
           {rejectable ? (
             <button
@@ -263,17 +328,19 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
   const { organizationId, role, book } = useHelm();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
-  const approvable = actions.filter(
-    (a) => a.state === "PROPOSED" && a.guard_passed && a.readable && canApprove(role, a.kind),
-  );
+  const approvable = actions.filter((a) => mayApprove(a, role));
+  const chained = approvable.filter((a) => a.approvals_given + 1 < a.required_approvals).length;
   const applyAll = useMutation({
     mutationFn: () => approveAllHelmActions(organizationId, book?.id ?? ""),
     onSuccess: (result) => {
-      toast.success(
-        result.skipped
-          ? `Approved ${result.approved}. ${result.skipped} need someone else or were refused.`
-          : `Approved ${result.approved}.`,
-      );
+      const parts = [`Approved ${formatNumber(result.approved)}.`];
+      if (result.waiting) {
+        parts.push(`${formatNumber(result.waiting)} on an approval chain now wait for another person.`);
+      }
+      if (result.skipped) {
+        parts.push(`${formatNumber(result.skipped)} need someone else or were refused.`);
+      }
+      toast.success(parts.join(" "));
       setConfirming(false);
       if (book) {
         void queryClient.invalidateQueries({ queryKey: helmKeys.book(organizationId, book.id) });
@@ -291,7 +358,7 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
       {!readOnly && approvable.length > 0 ? (
         <div className="mb-2 flex justify-end">
           <button type="button" className="helm-btn helm-btn-primary" onClick={() => setConfirming(true)}>
-            Apply plan ({approvable.length})
+            Apply plan ({formatNumber(approvable.length)})
           </button>
         </div>
       ) : null}
@@ -303,7 +370,11 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
       <ConfirmDialog
         open={confirming}
         title="Apply the plan?"
-        message={`Approve the ${approvable.length} actions that passed the Guard. Each is checked again just before it runs. Payments are scheduled for your payment run; Helm never moves money.`}
+        message={`Approve the ${formatNumber(approvable.length)} actions that passed the Guard. Each is checked again just before it runs. Payments are scheduled for your payment run; Helm never moves money.${
+          chained > 0
+            ? ` ${formatNumber(chained)} of them are on an approval chain: yours is one of the approvals they need, and they then wait for another person.`
+            : ""
+        }`}
         confirmText="Apply plan"
         tone="primary"
         initialFocus="confirm"

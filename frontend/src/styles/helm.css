@@ -250,6 +250,26 @@
 .helm-meter-track { background-color: hsl(var(--helm-line)); }
 .helm-meter-fill { background-color: hsl(var(--helm-accent)); }
 
+/* An approval chain's progress (Enterprise): one pip per approval a payment needs, filled as people
+   approve. Decoration only: the words beside it ("1 of 2 approvals") carry the meaning. */
+.helm-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.helm-pip {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid hsl(var(--helm-line-strong));
+  border-radius: 999px;
+}
+
+.helm-pip-on {
+  border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent));
+}
+
 /* The guided tour (owner addition C): the part of the page a step explains. */
 .helm-tour-target {
   outline: 3px solid hsl(var(--helm-accent));

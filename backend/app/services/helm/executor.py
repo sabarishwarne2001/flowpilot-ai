@@ -79,8 +79,14 @@ def enqueue(db: Session, action: HelmAction) -> None:
                         idempotency_key=f"{v.JOB_EXECUTE}:{action.id}:{action.updated_at.isoformat() if action.updated_at else ''}")
 
 
-def approve(db: Session, *, action: HelmAction, actor: Actor, required_approvals: int = 1) -> HelmAction:
-    """One person's approval. Idempotent: approving an approved or executed action changes nothing."""
+def approve(db: Session, *, action: HelmAction, actor: Actor, required_approvals: int = 1,
+            approver_roles: tuple[str, ...] = ()) -> HelmAction:
+    """One person's approval. Idempotent: approving an approved or executed action changes nothing.
+
+    On an approval chain (`helm/approvals.py`) each approval must come from a different person, from a
+    role the chain takes (`approver_roles`; empty: anyone who may approve the action). The row is
+    locked first, so two people approving at the same moment both count."""
+    from app.services.helm import approvals as chains
     from app.services.helm import gate
 
     if not gate.can_approve(actor.role, action.kind):
@@ -90,6 +96,7 @@ def approve(db: Session, *, action: HelmAction, actor: Actor, required_approvals
     if not actor.can_read_workspace:
         raise ActionError("HELM_NO_ACCESS", "You cannot read this document's workspace, so you cannot approve it. "
                           "Ask an organization owner for access.", status_code=403)
+    db.refresh(action, with_for_update=True)
     if action.state in (v.ACTION_APPROVED, v.ACTION_EXECUTING, v.ACTION_EXECUTED):
         return action
     if action.state != v.ACTION_PROPOSED:
@@ -97,13 +104,24 @@ def approve(db: Session, *, action: HelmAction, actor: Actor, required_approvals
                           "action can be approved.")
     if not action.guard_passed:
         raise ActionError("HELM_ACTION_BLOCKED", "The Guard blocks this action; it cannot be approved.")
+    requirement = chains.Requirement(approvals=max(int(action.required_approvals or 1), required_approvals),
+                                     roles=tuple(approver_roles))
+    needed = requirement.approvals
+    if not requirement.allows(actor.role):
+        raise ActionError("HELM_CHAIN_ROLE", "This payment's approval chain takes approvals from "
+                          f"{chains.roles_words(requirement.roles)} only.", status_code=403)
     now = datetime.now(timezone.utc)
     approvals = list(action.approvals or [])
     if any(a.get("user_id") == actor.user_id for a in approvals):
-        return action
-    approvals.append({"user_id": actor.user_id, "role": actor.role, "at": now.isoformat()})
-    needed = max(int(action.required_approvals or 1), required_approvals)
-    final = len([a for a in approvals if a.get("user_id")]) >= needed
+        if len(requirement.counted(approvals)) < needed:
+            raise ActionError(
+                "HELM_SAME_APPROVER", f"You have already approved this. It needs {chains.COUNT_WORDS[needed]} "
+                f"different people: ask someone else ({chains.roles_words(requirement.roles)}) to add the "
+                f"{chains.ORDINAL_WORDS[len(requirement.counted(approvals)) + 1]} approval.")
+        # The chain was lowered after this person approved: the approvals given are now enough.
+    else:
+        approvals.append({"user_id": actor.user_id, "role": actor.role, "at": now.isoformat()})
+    final = len(requirement.counted(approvals)) >= needed
     result = db.execute(
         update(HelmAction)
         .where(HelmAction.id == action.id, HelmAction.state == v.ACTION_PROPOSED)
@@ -117,7 +135,8 @@ def approve(db: Session, *, action: HelmAction, actor: Actor, required_approvals
     if result is None:
         return action  # another request decided it first
     _audit(db, action, "APPROVED" if final else "UPDATED", actor_user_id=uuid.UUID(actor.user_id) if actor.user_id
-           else None, details={"approvals": len(approvals), "required": needed})
+           else None, details={"approvals": len(requirement.counted(approvals)), "required": needed,
+                               "role": actor.role})
     if final:
         enqueue(db, action)
     return action

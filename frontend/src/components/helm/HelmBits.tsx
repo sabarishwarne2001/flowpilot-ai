@@ -60,6 +60,22 @@ export const ACTION_STATE_WORDS: Record<string, string> = {
   FAILED: "Failed",
 };
 
+/** Who approved, as a role (never a person's name). */
+export const ROLE_WORDS: Record<string, string> = { OWNER: "owner", ADMIN: "admin", BILLING: "billing" };
+
+const ROLE_ORDER = ["OWNER", "ADMIN", "BILLING"] as const;
+const ROLE_PLURALS: Record<string, string> = { OWNER: "owners", ADMIN: "admins", BILLING: "the billing role" };
+
+/** ["ADMIN", "OWNER"] -> "owners or admins"; none -> everyone who may approve a payment. */
+export const rolesWords = (roles: readonly string[] | null | undefined): string => {
+  const names = ROLE_ORDER.filter((r) => (roles ?? []).includes(r)).map((r) => ROLE_PLURALS[r] ?? r);
+  const last = names.pop();
+  if (last === undefined) {
+    return "owners, admins or the billing role";
+  }
+  return names.length === 0 ? last : `${names.join(", ")} or ${last}`;
+};
+
 export const GuardBadge: React.FC<{ readonly action: Pick<HelmAction, "guard_passed" | "needs_approval" | "state"> }> = ({
   action,
 }) => {

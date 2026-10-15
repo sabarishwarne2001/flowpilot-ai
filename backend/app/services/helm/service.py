@@ -36,7 +36,7 @@ from app.models.helm import (
 )
 from app.models.workspace import Workspace, WorkspaceStatus
 from app.services.helm import certificate as certs
-from app.services.helm import gate, identity, ledger_store, money, snapshot_store
+from app.services.helm import approvals, gate, identity, ledger_store, money, snapshot_store
 from app.services.helm import vocabulary as v
 from app.services.helm.errors import HelmError, HelmForbidden, HelmInvalid, HelmNotFound
 from app.services.helm.mandates import registry
@@ -229,6 +229,7 @@ def settings_json(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
         "cost_of_capital_pct": settings.cost_of_capital_bps / 100, "default_autonomy": settings.default_autonomy,
         "briefing_enabled": settings.briefing_enabled, "business_type": settings.business_type,
         "first_run_step": settings.first_run_step,
+        "approval_chain": _chain_json(db, book, settings),
         "cash": [{"currency": c.currency, "amount_micros": c.amount_micros, "as_of": c.as_of.isoformat(),
                   "source": c.source, "age_days": c.age_days,
                   "evidence": c.evidence if evidence_visible else {}}
@@ -241,6 +242,8 @@ def update_settings(db: Session, who: Viewer, book: HelmBook, changes: dict[str,
     require_helm(who, book)
     settings = snapshot_store.settings_for(db, book)
     now = datetime.now(timezone.utc)
+    chain_change = _update_chain(db, who, book, settings, changes["approval_chain"]) \
+        if changes.get("approval_chain") is not None else None
     if "identities" in changes and changes["identities"] is not None:
         cleaned = []
         for item in changes["identities"]:
@@ -288,14 +291,51 @@ def update_settings(db: Session, who: Viewer, book: HelmBook, changes: dict[str,
     settings.updated_by_user_id = who.user_id
     settings.updated_at = now
     db.flush()
-    _audit(db, who, book, "HELM_SETTINGS", None, "UPDATED", {"fields": sorted(k for k, val in changes.items()
-                                                                              if val is not None)})
+    details: dict[str, Any] = {"fields": sorted(k for k, val in changes.items() if val is not None)}
+    if chain_change is not None:
+        details["approval_chain"] = chain_change
+    _audit(db, who, book, "HELM_SETTINGS", None, "UPDATED", details)
     if "identities" in changes:
         for wid in ledger_store.book_workspace_ids(db, book):
             ledger_store.enqueue_rebuild(db, workspace_id=wid, organization_id=book.organization_id,
                                          reason="identities changed")
     _replan(db, book)
     return settings_json(db, who, book)
+
+
+def _chain_json(db: Session, book: HelmBook, settings) -> dict[str, Any]:
+    """The book's approval chain for the settings page. A chain kept from Enterprise stays stored after a
+    downgrade (`available` false) and applies again after an upgrade."""
+    available = gate.approval_chains_held(db, book.organization_id)
+    tiers = approvals.parse(approvals.stored(settings))
+    people = approvals.people_by_role(db, book.organization_id) if tiers and available else None
+    return approvals.chain_json(tiers, available=available, stored=approvals.stored(settings), people=people)
+
+
+def _update_chain(db: Session, who: Viewer, book: HelmBook, settings, raw: dict[str, Any]) -> dict[str, Any]:
+    """Set the book's approval chain (Enterprise); an empty list of tiers removes it. Validated in words,
+    refused when it could never be met, stored under a row lock, and audited before and after. A refusal
+    below Enterprise is audited too, like every capability refusal."""
+    from app.api import capability_gate
+    from app.core import entitlements
+    from app.core.billing_errors import CapabilityRequiredError
+
+    try:
+        capability_gate.require_capability_for_organization(
+            db, organization_id=book.organization_id, actor_id=who.user_id,
+            capability_key=entitlements.HELM_APPROVAL_CHAINS_CAPABILITY, operation="helm.approval_chain.update")
+    except CapabilityRequiredError as exc:
+        raise CapabilityRequiredError(
+            "Approval chains are part of the Enterprise plan: above an amount you choose, a payment waits for two "
+            "or three different people.",
+            details={**exc.details, "reason": "capability_required",
+                     "capability": entitlements.HELM_APPROVAL_CHAINS_CAPABILITY, "remedy": "UPGRADE_PLAN"}) from None
+    try:
+        tiers = approvals.validate(raw.get("tiers") or [], people=approvals.people_by_role(db, book.organization_id))
+    except approvals.ChainInvalid as exc:
+        raise HelmInvalid(" ".join(exc.problems), reason="APPROVAL_CHAIN", details={"problems": exc.problems})
+    before = approvals.save(db, settings, tiers, user_id=who.user_id)
+    return {"before": [t.as_json() for t in before], "after": [t.as_json() for t in tiers]}
 
 
 def add_cash_position(db: Session, who: Viewer, book: HelmBook, *, currency: str, amount_micros: int, as_of: date,
@@ -575,7 +615,31 @@ def set_status(db: Session, who: Viewer, book: HelmBook, mandate_id: uuid.UUID, 
 # ---------------------------------------------------------------------------
 
 
-def action_json(db: Session, who: Viewer, action: HelmAction, *, names: Optional[dict] = None) -> dict[str, Any]:
+def _chain_of(db: Session, book_id: uuid.UUID) -> tuple:
+    book = db.get(HelmBook, book_id)
+    return approvals.chain_for(db, book) if book is not None else ()
+
+
+def _approvals_json(who: Viewer, action: HelmAction, chain: tuple) -> dict[str, Any]:
+    """Where an action stands on its approval chain: how many people it needs (the stricter of what the
+    plan stored and what the chain says now, as approving reads it), whose approvals count, and which
+    roles approved (never names; `by_you` marks the viewer's own)."""
+    need = approvals.requirement(chain, kind=action.kind, amount_micros=action.amount_micros,
+                                 currency=action.currency)
+    stored = int(action.required_approvals or 1)
+    required = max(stored, need.approvals) if action.state == v.ACTION_PROPOSED else stored
+    given = list(action.approvals or [])
+    return {
+        "required_approvals": required,
+        "approvals": [{"role": a.get("role"), "at": a.get("at"), "by_helm": a.get("by") == "helm",
+                       "by_you": bool(a.get("user_id")) and a.get("user_id") == str(who.user_id)} for a in given],
+        "approvals_given": len(need.counted(given)),
+        "approver_roles": list(need.roles) or None,
+    }
+
+
+def action_json(db: Session, who: Viewer, action: HelmAction, *, names: Optional[dict] = None,
+                chain: Optional[tuple] = None) -> dict[str, Any]:
     visible = who.can_read(action.workspace_id)
     names = names if names is not None else {}
     workspace_name = names.get(action.workspace_id) if action.workspace_id in names else _workspace_name(
@@ -583,9 +647,7 @@ def action_json(db: Session, who: Viewer, action: HelmAction, *, names: Optional
     out = {
         "id": str(action.id), "kind": action.kind, "state": action.state, "autonomy": action.autonomy,
         "needs_approval": action.needs_approval, "guard_passed": action.guard_passed,
-        "required_approvals": action.required_approvals,
-        "approvals": [{"role": a.get("role"), "at": a.get("at"), "by_helm": a.get("by") == "helm"}
-                      for a in (action.approvals or [])],
+        **_approvals_json(who, action, _chain_of(db, action.book_id) if chain is None else chain),
         "mandate_id": str(action.mandate_id) if action.mandate_id else None, "mandate_version": action.mandate_version,
         "workspace_id": str(action.workspace_id) if action.workspace_id else None, "workspace_name": workspace_name,
         "run_date": action.run_date.isoformat() if action.run_date else None, "currency": action.currency,
@@ -640,6 +702,7 @@ def cockpit(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
     summary = (plan.summary or {}) if plan else {}
     if not readable:
         summary = _mask_summary(summary)
+    chain = approvals.chain_for(db, book)
     return {
         "book": book_json(db, who, book),
         "plan": {"id": str(plan.id), "version": plan.version, "status": plan.solver_status,
@@ -650,8 +713,8 @@ def cockpit(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
                  "duration_ms": plan.duration_ms, "triggered_by": plan.triggered_by,
                  "mandate_versions": plan.mandate_versions} if plan else None,
         "summary": summary,
-        "actions": [action_json(db, who, a, names=names) for a in actions],
-        "recent": [action_json(db, who, a, names=names) for a in recent],
+        "actions": [action_json(db, who, a, names=names, chain=chain) for a in actions],
+        "recent": [action_json(db, who, a, names=names, chain=chain) for a in recent],
         "value_held": value.totals(db, book) if readable else None,
         "mandates": list_mandates(db, who, book),
         "trends": instrument_trends(db, book),
@@ -720,39 +783,36 @@ def _actor(who: Viewer, action: HelmAction):
     return Actor(user_id=str(who.user_id), role=who.role, can_read_workspace=who.can_read(action.workspace_id))
 
 
-def _required_approvals(db: Session, book: HelmBook, action: HelmAction) -> int:
-    """Enterprise approval chains: a second approver above the book's chain amount (preferences)."""
-    if not gate.approval_chains_held(db, book.organization_id):
-        return 1
-    settings = snapshot_store.settings_for(db, book)
-    chain = (settings.preferences or {}).get("approval_chain") or {}
-    above = chain.get("second_approver_above_micros")
-    if above is None or action.kind not in v.PAYMENT_ACTIONS:
-        return 1
-    if (chain.get("currency") in (None, action.currency)) and int(action.amount_micros or 0) > int(above):
-        return 2
-    return 1
+def _requirement(chain: tuple, action: HelmAction) -> "approvals.Requirement":
+    return approvals.requirement(chain, kind=action.kind, amount_micros=action.amount_micros,
+                                 currency=action.currency)
 
 
 def approve(db: Session, who: Viewer, action_id: uuid.UUID) -> dict[str, Any]:
+    """One person's approval; on an approval chain (Enterprise), one of the two or three it needs."""
     from app.services.helm import executor
 
     action = action_for(db, who, action_id)
     book = _book(db, who, action.book_id)
     require_helm(who, book)
+    chain = approvals.chain_for(db, book)
+    need = _requirement(chain, action)
     try:
-        executor.approve(db, action=action, actor=_actor(who, action),
-                         required_approvals=_required_approvals(db, book, action))
+        executor.approve(db, action=action, actor=_actor(who, action), required_approvals=need.approvals,
+                         approver_roles=need.roles)
     except executor.ActionError as exc:
         raise _as_helm_error(exc)
-    return action_json(db, who, action)
+    return action_json(db, who, action, chain=chain)
 
 
 def approve_all(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
+    """Approve every action that passed the Guard. On an approval chain this person's approval may be
+    one of several: such an action is counted as waiting (for someone else), never as approved."""
     from app.services.helm import executor
 
     require_helm(who, book)
-    approved, skipped = 0, 0
+    chain = approvals.chain_for(db, book)
+    approved, waiting, skipped = 0, 0, 0
     for action in db.execute(select(HelmAction).where(HelmAction.book_id == book.id,
                                                       HelmAction.state == v.ACTION_PROPOSED,
                                                       HelmAction.guard_passed.is_(True))
@@ -760,13 +820,21 @@ def approve_all(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
         if not gate.can_approve(who.role, action.kind) or not who.can_read(action.workspace_id):
             skipped += 1
             continue
+        need = _requirement(chain, action)
         try:
-            executor.approve(db, action=action, actor=_actor(who, action),
-                             required_approvals=_required_approvals(db, book, action))
+            executor.approve(db, action=action, actor=_actor(who, action), required_approvals=need.approvals,
+                             approver_roles=need.roles)
+        except executor.ActionError as exc:
+            if exc.code == "HELM_SAME_APPROVER":
+                waiting += 1  # this person approved it before; it waits for someone else
+            else:
+                skipped += 1
+            continue
+        if action.state == v.ACTION_PROPOSED:
+            waiting += 1
+        else:
             approved += 1
-        except executor.ActionError:
-            skipped += 1
-    return {"approved": approved, "skipped": skipped}
+    return {"approved": approved, "waiting": waiting, "skipped": skipped}
 
 
 def reject(db: Session, who: Viewer, action_id: uuid.UUID, reason: str) -> dict[str, Any]:
