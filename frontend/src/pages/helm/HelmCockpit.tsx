@@ -1,17 +1,19 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { AlertTriangle, RefreshCw } from "lucide-react";
 
-import { FlightPath, type FlightPin } from "@/components/helm/FlightPath";
+import { FlightPath, type FlightPin, type PastPoint } from "@/components/helm/FlightPath";
+import { InstrumentTrend } from "@/components/helm/InstrumentTrend";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { InstrumentRing, MoneyByCurrency, StateBadge, VisibilityMeter } from "@/components/helm/HelmBits";
 import { PlanDiff } from "@/components/helm/PlanDiff";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { helmPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
-import { getHelmCockpit, helmKeys, replanHelmBook } from "@/services/api/helm";
+import { getHelmBacktest, getHelmCockpit, helmKeys, listHelmBacktests, replanHelmBook } from "@/services/api/helm";
+import { formatCalendarDate } from "@/utils/displayTime";
 import { formatRelativeTime } from "@/utils/formatters";
 import type { HelmCockpit as Cockpit, HelmMandate } from "@/types/helm";
 
@@ -66,6 +68,49 @@ export const HelmCockpit: React.FC = () => {
     },
     onError: (error) => toast.error(errorMessage(error, "Helm could not re-plan.")),
   });
+
+  // Scrubbing left into the past: the latest finished replay's cash history and what Helm would
+  // have done on those days (brief §10.1).
+  const replays = useQuery({
+    queryKey: helmKeys.backtests(organizationId, book.id),
+    queryFn: () => listHelmBacktests(organizationId, book.id),
+  });
+  const latestDone = replays.data?.find((row) => row.status === "DONE")?.id ?? null;
+  const replay = useQuery({
+    queryKey: helmKeys.backtest(organizationId, latestDone ?? "none"),
+    queryFn: () => getHelmBacktest(organizationId, latestDone as string),
+    enabled: latestDone !== null,
+  });
+  const [lookBack, setLookBack] = useState(0);
+  const history = replay.data?.result?.cash_history ?? {};
+  const pastDays = useMemo(() => {
+    const ons = Object.values(history).flat().map((p) => p.on).sort();
+    const first = ons[0];
+    const today = cockpit.data?.summary.as_of;
+    return first && today ? Math.max(0, Math.round((Date.parse(today) - Date.parse(first)) / 86_400_000)) : 0;
+  }, [history, cockpit.data?.summary.as_of]);
+  const past = useMemo(() => {
+    const today = cockpit.data?.summary.as_of;
+    if (!today || lookBack === 0) {
+      return {};
+    }
+    const from = Date.parse(today) - lookBack * 86_400_000;
+    const out: Record<string, PastPoint[]> = {};
+    for (const [currency, points] of Object.entries(history)) {
+      out[currency] = points.filter((p) => Date.parse(p.on) >= from).map((p) => ({ on: p.on, micros: p.amount_micros }));
+    }
+    return out;
+  }, [history, lookBack, cockpit.data?.summary.as_of]);
+  const pastEvents = useMemo(() => {
+    const today = cockpit.data?.summary.as_of;
+    if (!today || lookBack === 0) {
+      return [];
+    }
+    const from = Date.parse(today) - lookBack * 86_400_000;
+    return (replay.data?.result?.timeline ?? [])
+      .filter((day) => Date.parse(day.on) >= from)
+      .flatMap((day) => day.events.map((event) => ({ on: day.on, ...event })));
+  }, [replay.data, lookBack, cockpit.data?.summary.as_of]);
 
   const floors = useMemo(() => floorsOf(cockpit.data?.mandates ?? []), [cockpit.data]);
   const pins = useMemo(() => (cockpit.data ? pinsOf(cockpit.data) : {}), [cockpit.data]);
@@ -158,6 +203,7 @@ export const HelmCockpit: React.FC = () => {
                   </div>
                   <p className="helm-figure mt-1.5 text-base font-semibold">{instrument.figure}</p>
                   <p className="helm-muted mt-0.5 text-xs">{instrument.detail}</p>
+                  <InstrumentTrend points={cockpit.data?.trends?.[instrument.mandate_id] ?? []} title={instrument.title} />
                 </div>
               </li>
             ))}
@@ -186,9 +232,44 @@ export const HelmCockpit: React.FC = () => {
             paths={forecast?.cash_paths ?? {}}
             floors={floors}
             pins={pins}
+            past={past}
             today={summary.as_of}
             floorProbability={forecast?.floor_probability ?? {}}
           />
+          {pastDays > 0 ? (
+            <div className="mt-3 space-y-2" data-testid="helm-scrub">
+              <label className="flex flex-col gap-1 text-xs sm:flex-row sm:items-center sm:gap-3">
+                <span className="helm-label shrink-0">Look back</span>
+                <input
+                  type="range"
+                  className="w-full sm:max-w-sm"
+                  min={-pastDays}
+                  max={0}
+                  step={1}
+                  value={-lookBack}
+                  aria-valuetext={lookBack === 0 ? "Today only" : `${lookBack} days into the replayed past`}
+                  onChange={(event) => setLookBack(-Number(event.target.value))}
+                />
+                <span className="helm-figure shrink-0">{lookBack === 0 ? "today" : `${lookBack} days`}</span>
+              </label>
+              <p className="helm-muted text-xs">
+                Drag left to replay the past from the Time machine's latest run: the grey line is the cash Helm saw,
+                and below is what it would have done.
+              </p>
+              {pastEvents.length > 0 ? (
+                <ul className="max-h-40 space-y-1 overflow-y-auto text-xs" aria-label="What Helm would have done in the replayed past">
+                  {pastEvents.slice(-12).map((event, index) => (
+                    <li key={`${event.on}-${index}`}>
+                      <span className="helm-figure helm-muted mr-2">{formatCalendarDate(event.on)}</span>
+                      {event.summary}
+                    </li>
+                  ))}
+                </ul>
+              ) : lookBack > 0 ? (
+                <p className="text-xs">Nothing Helm would have done in these days.</p>
+              ) : null}
+            </div>
+          ) : null}
         </section>
         <div className="space-y-4">
           <section aria-labelledby="helm-value" className="helm-panel p-4">

@@ -270,6 +270,14 @@ export interface HelmCockpit {
   recent: HelmAction[];
   value_held: ValueHeld | null;
   mandates: HelmMandate[];
+  /** mandate id -> its key figure, one point a day for the last 30 days, oldest first. */
+  trends?: Record<string, TrendPoint[]>;
+}
+
+export interface TrendPoint {
+  on: string;
+  value: number;
+  state: DriftState | null;
 }
 
 export interface LibraryTemplate {

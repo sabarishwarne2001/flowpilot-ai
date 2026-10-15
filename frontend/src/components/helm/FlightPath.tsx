@@ -173,6 +173,7 @@ export const FlightPath: React.FC<FlightPathProps> = ({ paths, floors = {}, pins
         <span>Band: 8 in 10 of them</span>
         {floor !== undefined ? <span>Dashed: the floor</span> : null}
         <span>Dots: planned payments</span>
+        {(past[currency] ?? []).length > 1 ? <span>Grey, left of today: the cash Helm saw in the replayed past</span> : null}
       </figcaption>
       <details className="mt-2 text-xs">
         <summary className="helm-accent cursor-pointer font-semibold">Show the forecast as a table</summary>
@@ -198,6 +199,25 @@ export const FlightPath: React.FC<FlightPathProps> = ({ paths, floors = {}, pins
               ))}
             </tbody>
           </table>
+          {(past[currency] ?? []).length > 0 ? (
+            <table className="mt-3 w-full min-w-[260px] text-left">
+              <caption className="helm-label py-1 text-left">The replayed past</caption>
+              <thead>
+                <tr className="helm-label">
+                  <th scope="col" className="py-1 pr-3">Date</th>
+                  <th scope="col" className="py-1">Cash Helm saw</th>
+                </tr>
+              </thead>
+              <tbody>
+                {(past[currency] ?? []).map((point) => (
+                  <tr key={point.on} className="helm-hairline border-t">
+                    <th scope="row" className="py-1 pr-3 font-normal">{formatCalendarDate(point.on)}</th>
+                    <td className="helm-figure py-1">{formatMoneyMicros(point.micros, currency)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
         </div>
       </details>
     </figure>

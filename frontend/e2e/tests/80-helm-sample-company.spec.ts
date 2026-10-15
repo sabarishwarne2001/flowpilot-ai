@@ -53,6 +53,13 @@ test.describe("Helm sample company — every plan can explore it", () => {
     await expect(report.getByRole("button", { name: /Never pay above the agreed price/ })).toContainText("finding");
     await expect(report.getByRole("button", { name: /Never pay a duplicate/ })).toContainText("1 finding");
 
+    // The cockpit's flight path scrubs left into the replayed past.
+    await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Cockpit" }).click();
+    const scrub = page.getByTestId("helm-scrub");
+    await expect(scrub).toBeVisible();
+    await scrub.getByRole("slider", { name: /Look back/ }).fill("-200");
+    await expect(scrub.getByRole("list", { name: "What Helm would have done in the replayed past" }).getByRole("listitem").first()).toBeVisible();
+
     // Delete it: the book goes with it.
     await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Another workspace, or the sample company" }).click();
     await sample.getByRole("button", { name: "Delete the sample company" }).click();

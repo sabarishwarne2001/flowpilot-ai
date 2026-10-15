@@ -243,5 +243,9 @@
 .helm-chart-pin { fill: hsl(var(--helm-accent)); }
 .helm-chart-past { stroke: hsl(var(--helm-ink-muted)); fill: none; stroke-width: 1.5; }
 
+/* An instrument's small trend: ink, not a status colour (the badge says the state in words). */
+.helm-trend-line { stroke: hsl(var(--helm-ink-muted)); }
+.helm-trend-end { fill: hsl(var(--helm-ink)); stroke: hsl(var(--helm-panel)); stroke-width: 2; }
+
 .helm-meter-track { background-color: hsl(var(--helm-line)); }
 .helm-meter-fill { background-color: hsl(var(--helm-accent)); }

@@ -654,7 +654,33 @@ def cockpit(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
         "recent": [action_json(db, who, a, names=names) for a in recent],
         "value_held": value.totals(db, book) if readable else None,
         "mandates": list_mandates(db, who, book),
+        "trends": instrument_trends(db, book),
     }
+
+
+#: Days of history behind each instrument's small trend.
+TREND_DAYS = 30
+
+
+def instrument_trends(db: Session, book: HelmBook, *, days: int = TREND_DAYS) -> dict[str, list[dict[str, Any]]]:
+    """Each instrument's key figure, one point a day (the day's last plan), oldest first. Read from
+    the plans' stored summaries in SQL, so the simulations they carry are never loaded."""
+    from sqlalchemy import text
+
+    rows = db.execute(text(
+        "SELECT DISTINCT ON ((created_at AT TIME ZONE 'UTC')::date) "
+        "       (created_at AT TIME ZONE 'UTC')::date AS on_day, summary -> 'instruments' AS instruments "
+        "FROM helm_plans WHERE book_id = :book AND created_at >= now() - make_interval(days => :days) "
+        "ORDER BY (created_at AT TIME ZONE 'UTC')::date, created_at DESC"), {"book": book.id, "days": days}).all()
+    trends: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        for instrument in row.instruments or []:
+            figure = instrument.get("figure_value")
+            if figure is None or not instrument.get("mandate_id"):
+                continue
+            trends.setdefault(str(instrument["mandate_id"]), []).append(
+                {"on": row.on_day.isoformat(), "value": float(figure), "state": instrument.get("state")})
+    return trends
 
 
 def _mask_summary(summary: dict[str, Any]) -> dict[str, Any]:
