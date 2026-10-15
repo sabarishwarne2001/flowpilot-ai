@@ -247,7 +247,7 @@ const ImportPanel: React.FC<{ readonly accounts: HelmBankAccount[]; readonly onI
               }
             }}
           />
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-xs">
               <caption className="helm-label py-1 text-left">
                 How Helm reads the first lines ({preview.rows} rows in the file)
@@ -618,7 +618,7 @@ export const HelmBank: React.FC = () => {
         {[...(matched.data?.lines ?? []), ...(ignored.data?.lines ?? [])].length === 0 ? (
           <p className="helm-muted text-sm">No line is matched yet.</p>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="relative overflow-x-auto">
             <table className="w-full min-w-[620px] text-left">
               <thead>
                 <tr className="helm-label">

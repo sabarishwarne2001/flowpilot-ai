@@ -389,7 +389,7 @@ export const HelmSettings: React.FC = () => {
         {suppliers.length === 0 ? (
           <p className="mt-3 text-sm">None yet. They appear as Helm reads your invoices.</p>
         ) : (
-          <div className="mt-3 overflow-x-auto">
+          <div className="relative mt-3 overflow-x-auto">
             <table className="w-full min-w-[560px] text-sm">
               <thead>
                 <tr className="helm-label text-left">

@@ -110,7 +110,7 @@ export const HelmPlan: React.FC = () => {
                 <MoneyByCurrency totals={day.totals} />
               </div>
             </div>
-            <div className="mt-2 overflow-x-auto">
+            <div className="relative mt-2 overflow-x-auto">
               <table className="w-full min-w-[620px] text-sm">
                 <thead>
                   <tr className="helm-label text-left">

@@ -177,7 +177,7 @@ export const FlightPath: React.FC<FlightPathProps> = ({ paths, floors = {}, pins
       </figcaption>
       <details className="mt-2 text-xs">
         <summary className="helm-accent cursor-pointer font-semibold">Show the forecast as a table</summary>
-        <div className="mt-2 overflow-x-auto">
+        <div className="relative mt-2 overflow-x-auto">
           <table className="w-full min-w-[420px] text-left">
             <caption className="sr-only">{summary}</caption>
             <thead>
