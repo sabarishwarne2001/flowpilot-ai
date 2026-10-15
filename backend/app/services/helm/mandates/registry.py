@@ -9,9 +9,8 @@ problem in words a finance person reads, never a Pydantic error string.
 from __future__ import annotations
 
 import importlib
-import uuid
 from dataclasses import dataclass
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from pydantic import ValidationError
 

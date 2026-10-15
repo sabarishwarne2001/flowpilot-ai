@@ -12,7 +12,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Iterable, Optional
 
-from sqlalchemy import func, select, text
+from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
 from app.models.corroboration import CorroborationDocument, CorroborationRun

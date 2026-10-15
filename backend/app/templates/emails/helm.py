@@ -7,7 +7,7 @@ explanation says them (lakh and crore for INR). Each returns (subject, html_body
 
 from __future__ import annotations
 
-from typing import Any, Optional, Sequence
+from typing import Any, Sequence
 
 from app.services.helm import money
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT

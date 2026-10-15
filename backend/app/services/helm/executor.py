@@ -21,7 +21,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import select, update
+from sqlalchemy import update
 from sqlalchemy.orm import Session
 
 from app.models.helm import HelmAction, HelmBook, HelmCertificate, HelmTask

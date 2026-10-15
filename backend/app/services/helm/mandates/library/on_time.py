@@ -11,8 +11,6 @@ from __future__ import annotations
 
 from datetime import timedelta
 from decimal import Decimal
-from typing import Any
-
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.services.helm import money

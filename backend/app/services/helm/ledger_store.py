@@ -14,9 +14,9 @@ import time
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
-from typing import Any, Iterable, Optional
+from typing import Any, Optional
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 

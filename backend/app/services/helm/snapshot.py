@@ -8,13 +8,13 @@ unchanged plan (the Planner reuses the current one).
 
 from __future__ import annotations
 
-import uuid
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any, Iterable, Optional, Sequence
 
-from app.services.helm import ledger, msme
+from app.services.helm import ledger
+from app.services.helm import msme as msme_rules
 from app.services.helm import terms as terms_parser
 from app.services.helm import vocabulary as v
 
@@ -169,7 +169,7 @@ class Counterparty:
     key: str
     name: str
     role: str
-    msme: msme.MsmeStatus
+    msme: msme_rules.MsmeStatus
     contact_email: Optional[str] = None
     behaviour: dict = field(default_factory=dict)
 

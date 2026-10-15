@@ -18,7 +18,7 @@ import logging
 import time
 import uuid
 from datetime import date, datetime, timezone
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
