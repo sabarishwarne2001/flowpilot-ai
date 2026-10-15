@@ -1,6 +1,8 @@
 /** Helm, the flagship engine. Organization-scoped (backend app/api/v1/helm.py). */
 import { apiClient } from "@/services/api/client";
 import type {
+  ApprovalChainTier,
+  ApproveAllResult,
   HelmAction,
   HelmBacktest,
   HelmSampleState,
@@ -87,12 +89,9 @@ export const getHelmCockpit = async (organizationId: string, bookId: string): Pr
 export const replanHelmBook = async (organizationId: string, bookId: string): Promise<HelmCockpit> =>
   (await apiClient.post<HelmCockpit>(`${book(organizationId, bookId)}/plan`)).data;
 
-export const approveAllHelmActions = async (
-  organizationId: string,
-  bookId: string,
-): Promise<{ approved: number; skipped: number }> =>
-  (await apiClient.post<{ approved: number; skipped: number }>(`${book(organizationId, bookId)}/plan/approve-all`))
-    .data;
+/** Approve everything that passed the Guard; on an approval chain some wait for another person. */
+export const approveAllHelmActions = async (organizationId: string, bookId: string): Promise<ApproveAllResult> =>
+  (await apiClient.post<ApproveAllResult>(`${book(organizationId, bookId)}/plan/approve-all`)).data;
 
 export const getHelmAction = async (organizationId: string, actionId: string): Promise<HelmAction> =>
   (await apiClient.get<HelmAction>(`${base(organizationId)}/actions/${encodeURIComponent(actionId)}`)).data;
@@ -169,8 +168,10 @@ export const getHelmSettings = async (organizationId: string, bookId: string): P
 export const updateHelmSettings = async (
   organizationId: string,
   bookId: string,
-  body: Partial<Omit<HelmSettings, "cash" | "identities_confirmed_at">> & {
+  body: Partial<Omit<HelmSettings, "cash" | "identities_confirmed_at" | "approval_chain">> & {
     identities?: { name: string | null; tax_id: string | null }[];
+    /** Enterprise: the approval chain's tiers; an empty list removes it. */
+    approval_chain?: { tiers: ApprovalChainTier[] };
   },
 ): Promise<HelmSettings> => (await apiClient.patch<HelmSettings>(`${book(organizationId, bookId)}/settings`, body)).data;
 

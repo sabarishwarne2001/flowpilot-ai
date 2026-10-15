@@ -88,6 +88,13 @@ export interface GuardCheck {
   evidence?: Record<string, unknown>;
 }
 
+export interface HelmApproval {
+  role: string | null;
+  at: string | null;
+  by_helm: boolean;
+  by_you: boolean;
+}
+
 export interface HelmAction {
   id: string;
   kind: ActionKind;
@@ -95,8 +102,14 @@ export interface HelmAction {
   autonomy: AutonomyMode;
   needs_approval: boolean;
   guard_passed: boolean;
+  /** How many different people approve it: 1, or 2 or 3 on an approval chain (Enterprise). */
   required_approvals: number;
-  approvals: { role: string | null; at: string | null; by_helm: boolean }[];
+  /** Who approved so far: roles only, never names; `by_you` marks the viewer's own approval. */
+  approvals: HelmApproval[];
+  /** The approvals that count towards the chain (a person's, from a role the chain takes). */
+  approvals_given: number;
+  /** The roles whose approvals count on this payment's chain; null: anyone who may approve it. */
+  approver_roles: HelmRole[] | null;
   mandate_id: string | null;
   mandate_version: number | null;
   workspace_id: string | null;
@@ -354,7 +367,35 @@ export interface HelmSettings {
   briefing_enabled: boolean;
   business_type: string | null;
   first_run_step: number;
+  approval_chain: HelmApprovalChain;
   cash: { currency: string; amount_micros: number; as_of: string; source: string; age_days: number }[];
+}
+
+/** One tier of an approval chain: above this amount, this many different people approve a payment. */
+export interface ApprovalChainTier {
+  above_micros: number;
+  currency: string;
+  approvals: 2 | 3;
+  /** Whose approvals count; null: owners, admins and the billing role. */
+  roles: HelmRole[] | null;
+}
+
+export interface HelmApprovalChain {
+  /** The plan carries approval chains (Enterprise); a kept chain applies only then. */
+  available: boolean;
+  tiers: ApprovalChainTier[];
+  /** Each tier as a sentence: "Above ₹10 lakh: two approvals from different people (owners or admins)." */
+  sentences: string[];
+  updated_at: string | null;
+  /** Tiers the organization has too few people to meet, in words. */
+  warnings: string[];
+}
+
+export interface ApproveAllResult {
+  approved: number;
+  /** Approved by you, and now waiting for another person on an approval chain. */
+  waiting: number;
+  skipped: number;
 }
 
 export interface HelmCounterparty {
