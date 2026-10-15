@@ -7,6 +7,7 @@ import { AlertTriangle, RefreshCw } from "lucide-react";
 import { FlightPath, type FlightPin, type PastPoint } from "@/components/helm/FlightPath";
 import { InstrumentTrend } from "@/components/helm/InstrumentTrend";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
+import { StartTour } from "@/components/helm/HelmTour";
 import { InstrumentRing, MoneyByCurrency, StateBadge, VisibilityMeter } from "@/components/helm/HelmBits";
 import { PlanDiff } from "@/components/helm/PlanDiff";
 import { LoadFailed } from "@/components/common/LoadFailed";
@@ -143,12 +144,18 @@ export const HelmCockpit: React.FC = () => {
               : "No plan yet. Helm plans when a mandate is active and it can see your documents."}
           </p>
         </div>
-        {!readOnly ? (
-          <button type="button" className="helm-btn" onClick={() => replan.mutate()} disabled={replan.isPending}>
-            <RefreshCw className={`h-3.5 w-3.5 ${replan.isPending ? "animate-spin motion-reduce:animate-none" : ""}`} aria-hidden="true" />
-            {replan.isPending ? "Planning…" : "Re-plan now"}
-          </button>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {book.sample ? <StartTour /> : null}
+          {!readOnly ? (
+            <button type="button" className="helm-btn" onClick={() => replan.mutate()} disabled={replan.isPending}>
+              <RefreshCw
+                className={`h-3.5 w-3.5 ${replan.isPending ? "animate-spin motion-reduce:animate-none" : ""}`}
+                aria-hidden="true"
+              />
+              {replan.isPending ? "Planning…" : "Re-plan now"}
+            </button>
+          ) : null}
+        </div>
       </div>
 
       {!readOnly && !book.sample && (book.first_run?.step ?? 4) < 4 ? (
@@ -179,7 +186,7 @@ export const HelmCockpit: React.FC = () => {
         </section>
       ) : null}
 
-      <section aria-labelledby="helm-instruments">
+      <section aria-labelledby="helm-instruments" data-tour="instruments">
         <h2 id="helm-instruments" className="helm-label mb-2">
           Instruments
         </h2>
@@ -224,7 +231,7 @@ export const HelmCockpit: React.FC = () => {
       </section>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <section aria-labelledby="helm-flight" className="helm-panel p-4 lg:col-span-2">
+        <section aria-labelledby="helm-flight" className="helm-panel p-4 lg:col-span-2" data-tour="flight">
           <h2 id="helm-flight" className="helm-label mb-2">
             Flight path · next {forecast?.cash_paths ? Object.values(forecast.cash_paths)[0]?.length ?? 0 : 0} days of cash
           </h2>
@@ -289,7 +296,7 @@ export const HelmCockpit: React.FC = () => {
         </div>
       </div>
 
-      <section aria-labelledby="helm-plan" className="helm-panel p-4">
+      <section aria-labelledby="helm-plan" className="helm-panel p-4" data-tour="plan">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="helm-plan" className="helm-label">
             The plan

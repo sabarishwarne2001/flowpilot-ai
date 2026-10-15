@@ -249,3 +249,22 @@
 
 .helm-meter-track { background-color: hsl(var(--helm-line)); }
 .helm-meter-fill { background-color: hsl(var(--helm-accent)); }
+
+/* The guided tour (owner addition C): the part of the page a step explains. */
+.helm-tour-target {
+  outline: 3px solid hsl(var(--helm-accent));
+  outline-offset: 4px;
+  border-radius: 0.75rem;
+  transition: outline-color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-tour-target {
+    transition: none;
+  }
+}
+
+.helm-tour {
+  background-color: hsl(var(--helm-panel-raised));
+  border-color: hsl(var(--helm-accent));
+}

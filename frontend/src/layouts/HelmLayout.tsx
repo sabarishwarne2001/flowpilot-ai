@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 
 import { HelmProvider, useHelm } from "@/components/helm/HelmContext";
+import { HelmTour } from "@/components/helm/HelmTour";
 import { ModeSwitch } from "@/components/helm/ModeSwitch";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
@@ -248,6 +249,7 @@ const HelmChrome: React.FC = () => {
             </RouteErrorBoundary>
           </DisplayPreferencesBoundary>
         </main>
+        <HelmTour />
       </div>
     </div>
   );

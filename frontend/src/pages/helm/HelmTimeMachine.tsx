@@ -214,7 +214,7 @@ export const HelmTimeMachine: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-5xl space-y-6" data-tour="time-machine">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Time machine</h1>
         <p className="helm-muted mt-1 text-sm">

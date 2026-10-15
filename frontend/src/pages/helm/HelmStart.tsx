@@ -69,6 +69,13 @@ const SampleCompany: React.FC = () => {
           >
             Open {sample.name}
           </button>
+          <button
+            type="button"
+            className="helm-btn"
+            onClick={() => navigate(`${helmPath(orgSlug)}?book=${encodeURIComponent(sample.book_id as string)}&tour=0`)}
+          >
+            Take the guided tour
+          </button>
           {canDecide ? (
             confirming ? (
               <>

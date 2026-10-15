@@ -28,7 +28,7 @@ export const HelmCertificates: React.FC = () => {
     queryFn: () => listHelmCertificates(organizationId, book.id),
   });
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
+    <div className="mx-auto max-w-5xl space-y-4" data-tour="certificates">
       <div>
         <h1 className="text-xl font-semibold tracking-tight">Certificates</h1>
         <p className="helm-muted mt-1 text-sm">
