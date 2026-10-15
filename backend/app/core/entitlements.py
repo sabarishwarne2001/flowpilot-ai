@@ -128,6 +128,12 @@ __all__ = [
     "AUTOMATIONS_CAPABILITY",
     # PHASE2:capability-truthmesh-export
     "TRUTHMESH_CAPABILITY",
+    # Flagship session: Helm
+    "HELM_CAPABILITY",
+    "HELM_CUSTOM_CAPABILITY",
+    "HELM_APPROVAL_CHAINS_CAPABILITY",
+    "HELM_ALL_WORKSPACES_CAPABILITY",
+    "HELM_API_CAPABILITY",
     "CANONICAL_MAX_COST_MICROS",
     "CUSTOM_DOMAIN_ADDON",
     "WAREHOUSE_SYNC_ADDON",
@@ -299,6 +305,21 @@ AUTOMATIONS_CAPABILITY: str = "capability.automations"
 #: called. Business and Enterprise (owner decision N-033, NEEDS-OWNER.md).
 TRUTHMESH_CAPABILITY: str = "capability.truthmesh"
 
+#: Flagship session: Helm, outcome control (docs/helm/ARCHITECTURE.md, NEEDS-OWNER N-082). Business
+#: and Enterprise: the mandate library, Propose and Act modes, the backtest and the forecast. Not
+#: metered: everything Helm decides is deterministic code on the LIGHT worker; the one model call
+#: (a sentence into a mandate draft) is metered as an assistant message. Plans without it get Helm
+#: preview (the sample company and one short backtest a week), which needs no capability.
+HELM_CAPABILITY: str = "capability.helm"
+#: Enterprise: custom condition mandates (an `all`/`any` tree over whitelisted ledger fields).
+HELM_CUSTOM_CAPABILITY: str = "capability.helm_custom"
+#: Enterprise: a second approver above an amount.
+HELM_APPROVAL_CHAINS_CAPABILITY: str = "capability.helm_approval_chains"
+#: Enterprise: one book that plans across every workspace.
+HELM_ALL_WORKSPACES_CAPABILITY: str = "capability.helm_all_workspaces"
+#: Enterprise: Helm through API keys (`helm:read`, `helm:write`) and Helm's outgoing webhooks.
+HELM_API_CAPABILITY: str = "capability.helm_api"
+
 #: ARCH45-S1:capability-universal-corroborator. The Universal Document
 #: Corroborator & Discrepancy Matrix: 2 to 5 documents aligned by fields,
 #: canonical entities, clauses and line items, with materiality, ARCH-33 rules
@@ -389,6 +410,11 @@ CAPABILITY_KEYS: tuple[str, ...] = (
     BATCH_DISPATCH_CAPABILITY,  # PHASE1:capability-keys
     AUTOMATIONS_CAPABILITY,  # campaign session 1, N-049
     TRUTHMESH_CAPABILITY,  # PHASE2:capability-keys
+    HELM_CAPABILITY,  # flagship session: Helm
+    HELM_CUSTOM_CAPABILITY,
+    HELM_APPROVAL_CHAINS_CAPABILITY,
+    HELM_ALL_WORKSPACES_CAPABILITY,
+    HELM_API_CAPABILITY,
 )
 
 #: Every add-on key. `entitlement_service` asserts its catalog equals this set
@@ -555,6 +581,31 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
             "billing, changed payee accounts, contradictory dates and terms); what-if ripple "
             "simulation and an executive cockpit. Bundled into a tier."
         ),
+    ),
+    # Flagship session: Helm
+    Entitlement(
+        name=HELM_CAPABILITY,
+        description=(
+            "Helm: outcome control. The company states outcomes and hard limits (mandates); Helm "
+            "keeps the business inside them with the Promise ledger, the Planner, the Guard and the "
+            "Time machine. Bundled into a tier."
+        ),
+    ),
+    Entitlement(
+        name=HELM_CUSTOM_CAPABILITY,
+        description="Helm custom condition mandates over whitelisted ledger fields. Bundled into a tier.",
+    ),
+    Entitlement(
+        name=HELM_APPROVAL_CHAINS_CAPABILITY,
+        description="Helm approval chains: a second approver above an amount. Bundled into a tier.",
+    ),
+    Entitlement(
+        name=HELM_ALL_WORKSPACES_CAPABILITY,
+        description="Helm planning across every workspace of the organization. Bundled into a tier.",
+    ),
+    Entitlement(
+        name=HELM_API_CAPABILITY,
+        description="Helm through API keys (helm:read, helm:write) and Helm's outgoing webhooks. Bundled into a tier.",
     ),
     # ARCH45-S1:capability-corroborator-entitlement
     Entitlement(

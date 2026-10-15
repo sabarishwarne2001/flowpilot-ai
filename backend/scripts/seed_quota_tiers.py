@@ -126,6 +126,7 @@ BUSINESS_CAPABILITIES = [
     _capability("capability.obligations"),  # ARCH46-S1:tier-business
     _capability("capability.erp_posting"),  # ARCH47-S1:tier-business
     _capability("capability.byok"),  # N-021:tier-business
+    _capability("capability.helm"),  # flagship session: Helm (N-082)
 ]
 BUSINESS_FEATURES = [*DEVELOPER_FEATURES, *BUSINESS_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 ENTERPRISE_CAPABILITIES = [
@@ -150,6 +151,12 @@ ENTERPRISE_CAPABILITIES = [
     _capability("capability.process_intelligence"),  # ARCH49-S1:tier-enterprise (Enterprise only)
     _capability("capability.egress_lockdown"),  # ARCH50-S1:tier-enterprise (Enterprise only)
     _capability("capability.byok"),  # N-021:tier-enterprise
+    # Flagship session: Helm and its Enterprise additions (N-082).
+    _capability("capability.helm"),
+    _capability("capability.helm_custom"),
+    _capability("capability.helm_approval_chains"),
+    _capability("capability.helm_all_workspaces"),
+    _capability("capability.helm_api"),
 ]
 ENTERPRISE_FEATURES = [*DEVELOPER_FEATURES, *ENTERPRISE_CAPABILITIES, ADDON_WAREHOUSE_SYNC]
 
@@ -254,6 +261,8 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             _plan_limit("limit.workspaces", 1),
             _plan_limit("limit.file_size_mb", 10),
             _plan_limit("limit.pages_per_document", 10),
+            # Flagship session: Helm preview's weekly backtest replays up to 3 months (N-082).
+            _plan_limit("limit.helm_backtest_months", 3),
         ],
     },
     "developer": {
@@ -294,6 +303,7 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             _plan_limit("limit.workspaces", 3),
             _plan_limit("limit.file_size_mb", 50),
             _plan_limit("limit.pages_per_document", 100),
+            _plan_limit("limit.helm_backtest_months", 3),  # Helm preview (N-082)
             *DEVELOPER_FEATURES,
         ],
     },
@@ -342,6 +352,9 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             _plan_limit("limit.workspaces", 20),
             _plan_limit("limit.file_size_mb", 100),
             _plan_limit("limit.pages_per_document", 500),
+            # Helm (N-082): 15 active mandates, a 6-month backtest.
+            _plan_limit("limit.helm_mandates", 15),
+            _plan_limit("limit.helm_backtest_months", 6),
             *BUSINESS_FEATURES,
         ],
     },
@@ -389,7 +402,8 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
             {"limit_key": "document.upload", "max_quantity": "10000", "overage_policy": "ALLOW_AND_WARN"},
             # No assistant.message row: fair use under the token ceilings.
             # No limit.* rows: unlimited workspaces; file size and pages per
-            # document up to the platform maximum.
+            # document up to the platform maximum; unlimited Helm mandates (N-082).
+            _plan_limit("limit.helm_backtest_months", 24),
             PLATFORM_KEY,
             *ENTERPRISE_FEATURES,
         ],

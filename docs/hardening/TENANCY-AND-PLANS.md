@@ -122,6 +122,8 @@ Free is a **trial of 7 days per owner account** (owner decision N-052). The acco
 | Workspaces | 1 | 3 | 20 | unlimited |
 | File size, MB | 10 | 50 | 100 | 100 (platform maximum) |
 | Pages per document | 10 | 100 | 500 | 500 (platform maximum) |
+| Active Helm mandates | — (Helm preview) | — (Helm preview) | 15 | unlimited |
+| Helm backtest, months | 3 (preview) | 3 (preview) | 6 | 24 |
 
 ### 4.5 Capabilities
 
@@ -142,6 +144,11 @@ Free is a **trial of 7 days per owner account** (owner decision N-052). The acco
 | The entity graph (`capability.entity_graph`) | — | — | yes | yes |
 | ERP posting (`capability.erp_posting`) | — | — | yes | yes |
 | Extraction memory (`capability.extraction_memory`) | — | — | yes | yes |
+| Helm (`capability.helm`) | — | — | yes | yes |
+| Helm planning across every workspace (`capability.helm_all_workspaces`) | — | — | — | yes |
+| Helm through the API and webhooks (`capability.helm_api`) | — | — | — | yes |
+| Helm approval chains (`capability.helm_approval_chains`) | — | — | — | yes |
+| Helm custom condition mandates (`capability.helm_custom`) | — | — | — | yes |
 | Obligations and calendar feeds (`capability.obligations`) | — | — | yes | yes |
 | Outgoing webhooks (`capability.outgoing_webhooks`) | — | yes | yes | yes |
 | The priority 99.9% SLO (`capability.priority_slo`) | — | — | — | yes |
@@ -160,6 +167,10 @@ Free is a **trial of 7 days per owner account** (owner decision N-052). The acco
 |---|---|---|---|---|
 | Custom domains (`addon.custom_domain`) | — | included | included | included |
 | Warehouse sync (`addon.warehouse_sync`) | — | $300/month | included | included |
+
+### 4.7 Helm
+
+Helm (owner decision N-082) is on Business and Enterprise (`capability.helm`): the mandate library, Propose and Act modes, the backtest up to `limit.helm_backtest_months` and the 90-day forecast, up to `limit.helm_mandates` active mandates (none on Enterprise: unlimited). Enterprise adds custom condition mandates, approval chains, one plan across every workspace, Helm through API keys and webhooks. Every other plan gets **Helm preview**, which needs no capability: the sample company (read-only apart from opening it) and one backtest a week on the organization's own documents, of up to `limit.helm_backtest_months` months. Helm's roles: owners and admins decide; the billing role sees everything and approves payment actions; members never see Helm mode and receive its tasks in the review hub (`app.services.helm.gate`).
 
 ## 5. How a request is resolved: tenant, then role, then plan, then quota
 

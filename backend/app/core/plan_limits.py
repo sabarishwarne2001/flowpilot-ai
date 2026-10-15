@@ -32,6 +32,11 @@ SEATS_LIMIT: str = "limit.seats"
 WORKSPACES_LIMIT: str = "limit.workspaces"
 FILE_SIZE_MB_LIMIT: str = "limit.file_size_mb"
 PAGES_PER_DOCUMENT_LIMIT: str = "limit.pages_per_document"
+#: Flagship session: Helm (N-082). Active mandates per organization (Business 15; Enterprise sets
+#: none, so unlimited) and the longest backtest a plan may run, in months (preview 3, Business 6,
+#: Enterprise 24).
+HELM_MANDATES_LIMIT: str = "limit.helm_mandates"
+HELM_BACKTEST_MONTHS_LIMIT: str = "limit.helm_backtest_months"
 
 
 @dataclass(frozen=True)
@@ -66,6 +71,16 @@ _PLAN_LIMITS: tuple[PlanLimit, ...] = (
         unit="pages",
         description="The most pages one document may have.",
     ),
+    PlanLimit(
+        name=HELM_MANDATES_LIMIT,
+        unit="mandates",
+        description="Helm mandates active at once in the organization (paused and draft ones do not count).",
+    ),
+    PlanLimit(
+        name=HELM_BACKTEST_MONTHS_LIMIT,
+        unit="months",
+        description="The longest period a Helm backtest may replay, in months.",
+    ),
 )
 
 PLAN_LIMIT_KEYS: dict[str, PlanLimit] = {limit.name: limit for limit in _PLAN_LIMITS}
@@ -77,6 +92,8 @@ __all__ = [
     "CANONICAL_OVERAGE_POLICY",
     "CANONICAL_PERIOD",
     "FILE_SIZE_MB_LIMIT",
+    "HELM_BACKTEST_MONTHS_LIMIT",
+    "HELM_MANDATES_LIMIT",
     "PAGES_PER_DOCUMENT_LIMIT",
     "PLAN_LIMIT_KEYS",
     "PlanLimit",

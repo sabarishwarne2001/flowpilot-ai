@@ -78,6 +78,12 @@ _DISPLAY_NAMES = {
     entitlements.BYOK_CAPABILITY: "Bring your own AI key (BYOK)",
     # Campaign session 1, N-049
     entitlements.AUTOMATIONS_CAPABILITY: "Automations",
+    # Flagship session: Helm
+    entitlements.HELM_CAPABILITY: "Helm",
+    entitlements.HELM_CUSTOM_CAPABILITY: "Helm custom condition mandates",
+    entitlements.HELM_APPROVAL_CHAINS_CAPABILITY: "Helm approval chains",
+    entitlements.HELM_ALL_WORKSPACES_CAPABILITY: "Helm planning across every workspace",
+    entitlements.HELM_API_CAPABILITY: "Helm through the API and webhooks",
     # PHASE1:capability-display
     entitlements.BATCH_DISPATCH_CAPABILITY: "Batch operations and integrity-verified export packages",
     # PHASE2:capability-display

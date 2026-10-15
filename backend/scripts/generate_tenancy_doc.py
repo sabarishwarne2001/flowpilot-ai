@@ -159,6 +159,8 @@ LIMIT_WORDS = {
     "limit.workspaces": "Workspaces",
     "limit.file_size_mb": "File size, MB",
     "limit.pages_per_document": "Pages per document",
+    "limit.helm_mandates": "Active Helm mandates",
+    "limit.helm_backtest_months": "Helm backtest, months",
 }
 POLICY_WORDS = {"REFUSE": "refuse", "ALLOW_AND_BILL": "bill overage", "ALLOW_AND_WARN": "warn"}
 
@@ -218,8 +220,15 @@ def _limit_table(seed: Any) -> str:
     for limit, words in LIMIT_WORDS.items():
         cells = []
         for key in PLAN_ORDER:
-            row = _entries(tiers, key).get(limit)
-            cells.append(_num(row["max_quantity"]) if row is not None else platform[limit])
+            entries = _entries(tiers, key)
+            row = entries.get(limit)
+            if row is not None:
+                cells.append(_num(row["max_quantity"]) + (" (preview)" if limit == "limit.helm_backtest_months"
+                                                          and "capability.helm" not in entries else ""))
+            elif limit == "limit.helm_mandates":
+                cells.append("unlimited" if "capability.helm" in entries else "— (Helm preview)")
+            else:
+                cells.append(platform[limit])
         rows.append([words, *cells])
     return _table(["Per organization", *[tiers[k]["display_name"] for k in PLAN_ORDER]], rows)
 
@@ -406,6 +415,18 @@ def render() -> str:
         "### 4.6 Add-ons",
         "",
         _addon_table(seed),
+        "",
+        "### 4.7 Helm",
+        "",
+        "Helm (owner decision N-082) is on Business and Enterprise (`capability.helm`): the mandate library, "
+        "Propose and Act modes, the backtest up to `limit.helm_backtest_months` and the 90-day forecast, up to "
+        "`limit.helm_mandates` active mandates (none on Enterprise: unlimited). Enterprise adds custom condition "
+        "mandates, approval chains, one plan across every workspace, Helm through API keys and webhooks. Every "
+        "other plan gets **Helm preview**, which needs no capability: the sample company (read-only apart from "
+        "opening it) and one backtest a week on the organization's own documents, of up to "
+        "`limit.helm_backtest_months` months. Helm's roles: owners and admins decide; the billing role sees "
+        "everything and approves payment actions; members never see Helm mode and receive its tasks in the "
+        "review hub (`app.services.helm.gate`).",
         "",
         "## 5. How a request is resolved: tenant, then role, then plan, then quota",
         "",
