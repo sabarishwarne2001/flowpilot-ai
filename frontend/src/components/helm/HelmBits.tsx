@@ -36,6 +36,7 @@ export const ACTION_VERBS: Record<ActionKind, string> = {
   schedule_payment: "Pay",
   approve_payment: "Pay",
   hold_payment: "Hold",
+  release_hold: "Release",
   send_reminder: "Chase",
   request_document: "Request",
   decide_renewal: "Decide",

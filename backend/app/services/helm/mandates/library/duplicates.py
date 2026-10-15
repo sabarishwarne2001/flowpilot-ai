@@ -108,9 +108,40 @@ def _optimizer(snapshot: Snapshot, mandate: base.ActiveMandate) -> base.Optimize
     return terms
 
 
+
+def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
+    params: Params = mandate.params
+    out: list[base.Finding] = []
+    for payable in base.payables_in_scope(history.snapshot, mandate):
+        flags = [f for f in history.flags_for(payable.work_item_id, "DUPLICATE")
+                 if f.status != "DISMISSED" and (f.strong or params.include_similar)]
+        if not flags:
+            continue
+        flag = flags[0]
+        on = max(base.seen_on(payable) or flag.raised_on, flag.raised_on)
+        if not history.within(on):
+            continue
+        if flag.status == "CONFIRMED":
+            honesty, how = v.HONESTY_CONFIRMED, "a reviewer confirmed it is the same bill"
+        elif flag.strong:
+            honesty, how = v.HONESTY_LIKELY, "the radar matched its supplier and number or its text"
+        else:
+            honesty, how = v.HONESTY_POTENTIAL, "it only looks similar"
+        paid = " It was paid." if payable.settlement_state == v.SETTLEMENT_PAID else ""
+        out.append(base.Finding(
+            mandate=KEY, on=on, action=v.ACTION_HOLD_PAYMENT, honesty=honesty, category=v.VALUE_DUPLICATE_BLOCKED,
+            currency=payable.currency, value_micros=payable.amount_micros,
+            summary=(f"{payable.document} ({money.say(payable.amount_micros, payable.currency)}) is a probable "
+                     f"duplicate: {how}.{paid} Helm would have held it."),
+            evidence=base.evidence_of(payable) + [{"finding": flag.summary}]))
+    return out
+
+
 TEMPLATE = base.Template(
     key=KEY, kind=v.MANDATE_KIND_LIMIT, title="Never pay a duplicate", group=base.GROUP_PROTECT, order=2,
     summary="A probable duplicate cannot be scheduled until a reviewer clears it.", Params=Params,
     readback=_readback, evaluate=_evaluate, propose=_propose, guard_checks=_guard, optimizer=_optimizer,
-    is_limit=True, keywords=("duplicate", "twice", "double pay", "paid twice", "same invoice"),
+    is_limit=True, hold_code="PROBABLE_DUPLICATE", backtest=_backtest,
+    still_holds=lambda snapshot, payable, mandate: duplicate_flag(payable, mandate.params) is not None,
+    keywords=("duplicate", "twice", "double pay", "paid twice", "same invoice"),
 )

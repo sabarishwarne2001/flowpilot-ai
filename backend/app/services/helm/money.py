@@ -75,4 +75,19 @@ def say(micros: Optional[int], currency: Optional[str]) -> str:
     return plain(micros, currency)
 
 
-__all__ = ["MICROS", "from_micros", "interest", "lakh", "pct_of", "plain", "say", "to_micros"]
+def day(on) -> str:
+    """A date as an explanation says it: "20 Oct 2026" (never an ISO string in a sentence). Screens
+    format dates through the display layer; explanations are sentences stored with the action."""
+    if on is None:
+        return "an unknown date"
+    if isinstance(on, str):
+        from datetime import date as _date
+
+        try:
+            on = _date.fromisoformat(on[:10])
+        except ValueError:
+            return on
+    return f"{on.day} {on.strftime('%b %Y')}"
+
+
+__all__ = ["MICROS", "day", "from_micros", "interest", "lakh", "pct_of", "plain", "say", "to_micros"]

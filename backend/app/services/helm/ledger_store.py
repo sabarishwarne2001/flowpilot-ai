@@ -178,7 +178,8 @@ def load_inputs(db: Session, *, workspace_id: uuid.UUID, as_of: date,
         s.work_item_id: ledger.SettlementFacts(
             work_item_id=s.work_item_id, state=s.state, source=s.source, run_date=s.run_date, paid_on=s.paid_on,
             paid_amount_micros=s.paid_amount_micros, paid_reference=s.paid_reference, hold_reason=s.hold_reason,
-            version=s.version)
+            hold_code=(s.evidence or {}).get("reason") if s.state in (v.SETTLEMENT_HELD, v.SETTLEMENT_DISPUTED)
+            else None, waived=tuple(sorted((s.evidence or {}).get("waived") or ())), version=s.version)
         for s in db.execute(select(HelmSettlement).where(HelmSettlement.workspace_id == workspace_id)).scalars()
     }
     return ledger.LedgerInputs(

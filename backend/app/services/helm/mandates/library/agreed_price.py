@@ -145,11 +145,41 @@ def _optimizer(snapshot: Snapshot, mandate: base.ActiveMandate) -> base.Optimize
     return terms
 
 
+
+def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
+    params: Params = mandate.params
+    out: list[base.Finding] = []
+    for payable in base.payables_in_scope(history.snapshot, mandate):
+        found = breaches(payable, params)
+        on = base.seen_on(payable)
+        if not found or not history.within(on):
+            continue
+        value = sum(b.overcharge_micros for b in found)
+        if (payable.gross_micros or payable.amount_micros) > payable.amount_micros:
+            honesty, how = v.HONESTY_CONFIRMED, "the supplier later credited part of it"
+        elif payable.settlement_state == v.SETTLEMENT_PAID:
+            honesty, how = v.HONESTY_CONFIRMED, "it was paid in full"
+        elif payable.confidence in v.TRUSTED_CONFIDENCES:
+            honesty, how = v.HONESTY_LIKELY, "the prices on it were checked"
+        else:
+            honesty, how = v.HONESTY_POTENTIAL, "its prices were read by the model and not checked"
+        out.append(base.Finding(
+            mandate=KEY, on=on, action=v.ACTION_HOLD_PAYMENT, honesty=honesty,
+            category=v.VALUE_OVERCHARGE_RECOVERED, currency=payable.currency, value_micros=value,
+            summary=(f"{payable.document} billed {money.say(value, payable.currency)} above the agreed price "
+                     f"({how}); Helm would have held it and drafted a dispute."),
+            evidence=base.evidence_of(payable) + [{"po_number": b.po_number, "line": b.description,
+                                                   "agreed_micros": b.agreed_micros, "billed_micros": b.billed_micros}
+                                                  for b in found]))
+    return out
+
+
 TEMPLATE = base.Template(
     key=KEY, kind=v.MANDATE_KIND_LIMIT, title="Never pay above the agreed price", group=base.GROUP_PROTECT,
     order=1, summary="Hold any invoice billed above the agreed price, and draft a dispute with the evidence.",
     Params=Params, readback=_readback, evaluate=_evaluate, propose=_propose, guard_checks=_guard,
-    optimizer=_optimizer, is_limit=True,
+    optimizer=_optimizer, is_limit=True, backtest=_backtest, hold_code="PRICE_ABOVE_AGREED",
+    still_holds=lambda snapshot, payable, mandate: bool(breaches(payable, mandate.params)),
     keywords=("agreed price", "above the price", "overcharge", "over charge", "price", "po price", "contract rate",
               "overbill", "more than agreed"),
 )

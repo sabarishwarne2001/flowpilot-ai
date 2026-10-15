@@ -17,6 +17,7 @@ export type ActionState =
   | "FAILED";
 export type ActionKind =
   | "hold_payment"
+  | "release_hold"
   | "schedule_payment"
   | "approve_payment"
   | "mark_paid"

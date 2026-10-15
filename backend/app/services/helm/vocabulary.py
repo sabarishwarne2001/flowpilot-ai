@@ -137,6 +137,9 @@ PLAN_TRIGGERS: Final = (TRIGGER_LEDGER, TRIGGER_SCHEDULE, TRIGGER_PERSON, TRIGGE
 
 # --- actions (Helm's hands) -------------------------------------------------------------------
 ACTION_HOLD_PAYMENT: Final = "hold_payment"
+#: Ends a hold Helm placed once its reason is gone (the duplicate cleared, the bank account verified,
+#: the PO matched): proposed by the mandate that held it, guarded and certified like any other.
+ACTION_RELEASE_HOLD: Final = "release_hold"
 ACTION_SCHEDULE_PAYMENT: Final = "schedule_payment"
 ACTION_APPROVE_PAYMENT: Final = "approve_payment"
 ACTION_MARK_PAID: Final = "mark_paid"
@@ -149,6 +152,7 @@ ACTION_NOTIFY: Final = "notify"
 ACTION_WEBHOOK: Final = "webhook"
 ACTION_KINDS: Final = (
     ACTION_HOLD_PAYMENT,
+    ACTION_RELEASE_HOLD,
     ACTION_SCHEDULE_PAYMENT,
     ACTION_APPROVE_PAYMENT,
     ACTION_MARK_PAID,
@@ -161,7 +165,8 @@ ACTION_KINDS: Final = (
     ACTION_WEBHOOK,
 )
 #: Actions that move a payment (the Billing role may approve these).
-PAYMENT_ACTIONS: Final = (ACTION_HOLD_PAYMENT, ACTION_SCHEDULE_PAYMENT, ACTION_APPROVE_PAYMENT, ACTION_MARK_PAID)
+PAYMENT_ACTIONS: Final = (ACTION_HOLD_PAYMENT, ACTION_RELEASE_HOLD, ACTION_SCHEDULE_PAYMENT, ACTION_APPROVE_PAYMENT,
+                           ACTION_MARK_PAID)
 #: Actions that cannot be taken back once they ran (an email has left).
 IRREVERSIBLE_ACTIONS: Final = (ACTION_SEND_REMINDER, ACTION_DRAFT_DISPUTE, ACTION_REQUEST_DOCUMENT,
                                ACTION_NOTIFY, ACTION_WEBHOOK)
@@ -243,6 +248,18 @@ TASK_OPEN: Final = "OPEN"
 TASK_DONE: Final = "DONE"
 TASK_CANCELLED: Final = "CANCELLED"
 TASK_STATUSES: Final = (TASK_OPEN, TASK_DONE, TASK_CANCELLED)
+#: Who Helm is for first (brief §2.6), in plain words for first run's step 3: each library mandate
+#: names the types it is recommended for (`Template.recommended_for`; empty = everyone).
+BUSINESS_TYPES: Final = {
+    "distributor": "Distributor or wholesaler",
+    "manufacturer": "Manufacturer",
+    "logistics": "Logistics and transport",
+    "construction": "Construction and contracting",
+    "retail": "Multi-branch retail, restaurants or clinics",
+    "accounting_firm": "Accounting or bookkeeping firm running payables for clients",
+    "other": "Something else",
+}
+
 RENEWAL_DECISIONS: Final = ("renew", "cancel", "renegotiate")
 
 SEVERITIES: Final = ("LOW", "MEDIUM", "HIGH")

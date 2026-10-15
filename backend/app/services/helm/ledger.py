@@ -130,6 +130,11 @@ class SettlementFacts:
     paid_amount_micros: Optional[int] = None
     paid_reference: Optional[str] = None
     hold_reason: Optional[str] = None
+    #: Why Helm (or a person) holds it, as a code ("PROBABLE_DUPLICATE", "BANK_ACCOUNT_CHANGED", ...):
+    #: the mandate that held it proposes the release once its reason is gone.
+    hold_code: Optional[str] = None
+    #: Hold reasons a person waived for this invoice (a settled review task).
+    waived: tuple[str, ...] = ()
     version: int = 1
 
 
@@ -524,6 +529,8 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
                 "settlement": {"state": state, "source": paid_source or (settlement.source if settlement else None),
                                "paid_on": paid_on, "run_date": settlement.run_date if settlement else None,
                                "hold_reason": settlement.hold_reason if settlement else None,
+                               "hold_code": settlement.hold_code if settlement else None,
+                               "waived": list(settlement.waived) if settlement else [],
                                "version": settlement.version if settlement else 0},
                 "bank_account": masked_account(doc.entities) if not receivable else None,
                 "udyam_number": udyam, "msme_deadline": msme_deadline,

@@ -147,8 +147,95 @@ def notify(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) ->
     return {"notified": count}
 
 
+COMPLIANCE_TEMPLATE_KEY = "helm-supplier-compliance"
+#: A request link stays usable for 30 days (the cases service allows up to 90).
+REQUEST_TTL_HOURS = 720
+
+
+def _compliance_template(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID):
+    """The workspace's published "Supplier compliance (Helm)" case template, made on first use."""
+    from sqlalchemy import select
+
+    from app.models.cases import CaseTemplate
+    from app.services.cases import templates
+    from app.services.cases import vocabulary as cv
+
+    found = db.execute(select(CaseTemplate).where(
+        CaseTemplate.workspace_id == workspace_id, CaseTemplate.key == COMPLIANCE_TEMPLATE_KEY,
+        CaseTemplate.status == cv.TEMPLATE_PUBLISHED)).scalar_one_or_none()
+    if found is not None:
+        return found
+    draft = templates.create(db, organization_id=organization_id, workspace_id=workspace_id, actor_user_id=None,
+                             payload={"key": COMPLIANCE_TEMPLATE_KEY, "name": "Supplier compliance (Helm)",
+                                      "description": "Renewed supplier insurance policies, licences and "
+                                                     "certifications that Helm asked for before they expired.",
+                                      "assembly_key": cv.ASSEMBLY_MANUAL,
+                                      "required_documents": [{"doc_type": "compliance_document",
+                                                              "label": "Renewed compliance document"}],
+                                      "request_ttl_hours": REQUEST_TTL_HOURS})
+    return templates.publish(db, template=draft)
+
+
+def request_document(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) -> dict[str, Any]:
+    """Ask a supplier for its renewed compliance document: a case in the workspace's cases, a
+    single-use upload link (the link itself is never stored, only its hash), and an email."""
+    from app.core.config import settings
+    from app.services.cases import assembly, requests
+    from app.services.cases import vocabulary as cv
+    from app.templates.emails import helm as mail
+
+    params = dict(action.params or {})
+    counterparty = snapshot.counterparties.get(action.counterparty_key or "") if snapshot else None
+    supplier = (counterparty.name if counterparty else None) or "Supplier"
+    to = params.get("to") or (counterparty.contact_email if counterparty else None)
+    if book.kind == v.BOOK_SAMPLE:
+        return {"sent": None, "note": "The sample company sends no email."}
+    if action.workspace_id is None:
+        raise HandError("HELM_REQUEST_NO_WORKSPACE", "A document request needs the workspace the document is in.")
+    if not to:
+        raise HandError("HELM_NO_CONTACT", f"No email contact for {supplier}; add one in Helm settings.")
+    title = str(params.get("document_title") or "compliance document")
+    template = _compliance_template(db, organization_id=action.organization_id, workspace_id=action.workspace_id)
+    case = assembly.open_case(db, template, anchor_kind=cv.ASSEMBLY_MANUAL, title=f"{supplier}: {title}")
+    request, token = requests.create(db, case=case, document_type="compliance_document", recipient_label=supplier,
+                                     actor_user_id=None, ttl_hours=REQUEST_TTL_HOURS)
+    url = f"{settings.FRONTEND_URL.rstrip('/')}/request/{token}"
+    subject, html_body, text_body = mail.render_document_request(
+        organization_name=_organization_name(db, action.organization_id), supplier_name=supplier,
+        document_title=title, valid_until=money.day(params.get("valid_until")), upload_url=url)
+    sent = send_mail(db, organization_id=action.organization_id, workspace_id=action.workspace_id, to=to,
+                     subject=subject, html_body=html_body, text_body=text_body)
+    return {"case_id": str(case.id), "request_id": str(request.id), "sent": sent,
+            "expires_at": request.expires_at.isoformat()}
+
+
+def send_reminder(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) -> dict[str, Any]:
+    """Remind a customer of an overdue invoice, at the action's tone level, from the organization's
+    own sender settings. Without a contact or a mail path the Guard has already stopped it."""
+    from app.templates.emails import helm as mail
+
+    params = dict(action.params or {})
+    counterparty = snapshot.counterparties.get(action.counterparty_key or "") if snapshot else None
+    customer = (counterparty.name if counterparty else None) or "Customer"
+    to = params.get("to") or (counterparty.contact_email if counterparty else None)
+    subject, html_body, text_body = mail.render_reminder(
+        organization_name=_organization_name(db, action.organization_id), customer_name=customer,
+        invoice_number=str(params.get("document_number") or ""), currency=action.currency or "",
+        amount_micros=int(action.amount_micros or 0), due_date=money.day(params.get("due_date")),
+        days_overdue=int(params.get("days_overdue") or 0), level=int(params.get("level") or 1))
+    draft = {"subject": subject, "text": text_body, "to": to}
+    if book.kind == v.BOOK_SAMPLE:
+        return {"draft": draft, "sent": None, "note": "The sample company sends no email."}
+    if not to:
+        raise HandError("HELM_NO_CONTACT", f"No email contact for {customer}; add one in Helm settings.")
+    sent = send_mail(db, organization_id=action.organization_id, workspace_id=action.workspace_id, to=to,
+                     subject=subject, html_body=html_body, text_body=text_body)
+    return {"draft": draft, "sent": sent}
+
+
 def say(micros: Optional[int], currency: Optional[str]) -> str:
     return money.say(micros, currency)
 
 
-__all__ = ["HandError", "create_task", "draft_dispute", "email_destination", "notify", "send_mail"]
+__all__ = ["COMPLIANCE_TEMPLATE_KEY", "HandError", "create_task", "draft_dispute", "email_destination", "notify",
+           "request_document", "send_mail", "send_reminder"]

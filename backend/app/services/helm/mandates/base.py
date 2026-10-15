@@ -252,6 +252,47 @@ class Template:
     disclaimer: Optional[str] = None
     #: Is it a limit the Guard enforces (an action that breaks it never passes)?
     is_limit: bool = False
+    #: The hold reason this mandate places ("PROBABLE_DUPLICATE", ...), and whether it still applies
+    #: to a payable: when it no longer does, the planner proposes releasing the hold (`release_hold`).
+    hold_code: Optional[str] = None
+    still_holds: Optional[Callable[[Snapshot, Payable, ActiveMandate], bool]] = None
+
+
+#: Backtest finding categories beyond the value-held ones (vocabulary.VALUE_CATEGORIES): facts a
+#: mandate would have caught that carry no money claim of their own.
+CATEGORY_PAYMENT_PROTECTED = "PAYMENT_PROTECTED"  # a payment into an unverified new account
+CATEGORY_CONTROL = "CONTROL"  # an invoice paid without a required PO
+CATEGORY_CASH_FLOOR = "CASH_FLOOR"
+CATEGORY_MSME_LATE = "MSME_LATE"
+CATEGORY_RENEWAL = "RENEWAL_MISSED"
+CATEGORY_DOCUMENT = "DOCUMENT_EXPIRED"
+CATEGORY_RECEIVABLE = "RECEIVABLE_LATE"
+
+
+def evidence_of(payable: Any) -> list[dict[str, Any]]:
+    """A finding's evidence: the document it stands on."""
+    return [{"work_item_id": payable.work_item_id, "document": payable.document,
+             "document_number": getattr(payable, "document_number", None)}]
+
+
+def seen_on(payable: Any) -> Optional[date]:
+    """The day Helm would have seen a document: the day it arrived, else its own date."""
+    return getattr(payable, "received_on", None) or getattr(payable, "invoice_date", None) or payable.due_date
+
+
+def release_candidate(payable: Payable, mandate: ActiveMandate, why: str) -> Candidate:
+    """Release a hold this mandate placed, now that its reason is gone."""
+    from app.services.helm import money
+
+    return Candidate(
+        kind=v.ACTION_RELEASE_HOLD, mandate=mandate,
+        title=f"Release {payable.document_number or payable.document} for payment",
+        explanation=f"Helm held {payable.document} ({money.say(payable.amount_micros, payable.currency)} from "
+                    f"{payable.counterparty_name or 'the supplier'}). {why} It goes back into the payment plan.",
+        key_parts=(payable.promise_id, "release", payable.hold_code, payable.settlement_version),
+        workspace_id=payable.workspace_id, work_item_id=payable.work_item_id, promise_id=payable.promise_id,
+        counterparty_key=payable.counterparty_key, amount_micros=payable.amount_micros, currency=payable.currency,
+        params={"reason": payable.hold_code, "document_number": payable.document_number})
 
 
 Templates = Sequence[Template]
@@ -260,5 +301,7 @@ __all__ = [
     "ActiveMandate", "BREACHED", "Candidate", "Check", "Chip", "DRIFTING", "DRIFT_STATES", "Drift", "Finding",
     "GROUPS", "GROUP_CONTRACTS", "GROUP_CUSTOM", "GROUP_INDIA", "GROUP_OPERATIONS", "GROUP_PROTECT",
     "GROUP_RECEIVABLES", "GROUP_RUN", "HOLDING", "OptimizerTerms", "Readback", "Risk", "Template", "UNKNOWN",
+    "CATEGORY_CASH_FLOOR", "CATEGORY_CONTROL", "CATEGORY_DOCUMENT", "CATEGORY_MSME_LATE", "CATEGORY_PAYMENT_PROTECTED",
+    "CATEGORY_RECEIVABLE", "CATEGORY_RENEWAL", "evidence_of", "release_candidate", "seen_on",
     "check", "in_scope", "payables_in_scope", "readback",
 ]

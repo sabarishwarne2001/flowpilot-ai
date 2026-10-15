@@ -13,7 +13,7 @@ import { approveAllHelmActions, approveHelmAction, helmKeys, rejectHelmAction, u
 import { formatCalendarDate } from "@/utils/displayTime";
 import type { HelmAction } from "@/types/helm";
 
-const PAYMENT_ACTIONS = new Set(["hold_payment", "schedule_payment", "approve_payment", "mark_paid"]);
+const PAYMENT_ACTIONS = new Set(["hold_payment", "release_hold", "schedule_payment", "approve_payment", "mark_paid"]);
 
 /** Owners and admins approve anything; the billing role approves payment actions (brief §5.4). */
 export const canApprove = (role: string, kind: string): boolean =>

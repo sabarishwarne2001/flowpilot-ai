@@ -73,10 +73,19 @@ class Payable:
     udyam_number: Optional[str] = None
     msme_deadline: Optional[date] = None
     msme_explanation: Optional[str] = None
+    #: Why it is held, as a code (see ledger.SettlementFacts.hold_code).
+    hold_code: Optional[str] = None
+    #: Hold reasons a person waived for it (e.g. "NO_MATCHED_PO": pay without a PO).
+    waived: tuple[str, ...] = ()
 
     @property
     def open(self) -> bool:
         return self.settlement_state != v.SETTLEMENT_PAID and self.amount_micros > 0
+
+    def held_by_helm_for(self, code: str) -> bool:
+        """Held (by an action Helm proposed) for this reason, so the mandate that held it may release it."""
+        return self.settlement_state == v.SETTLEMENT_HELD and self.hold_code == code and \
+            self.settlement_source == v.SOURCE_HELM
 
     @property
     def schedulable(self) -> bool:
@@ -224,7 +233,7 @@ def digest_content(snapshot: Snapshot) -> dict[str, Any]:
         return [p.promise_id, p.currency, p.amount_micros, p.due_date, p.invoice_date, p.settlement_state,
                 p.run_date, p.settlement_version, p.confidence, p.terms.as_json(), p.counterparty_key,
                 [f.id for f in p.flags], [(b.promise_id, b.above_micros) for b in p.price_breaches],
-                p.has_matched_po, p.msme_deadline]
+                p.has_matched_po, p.msme_deadline, p.hold_code, list(p.waived)]
 
     return {
         "book": snapshot.book_id, "as_of": snapshot.as_of, "horizon": snapshot.horizon_days,

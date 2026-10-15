@@ -142,6 +142,10 @@ class MsmeDeadline:
         }
 
 
+def _day(on: date) -> str:
+    return f"{on.day} {on.strftime('%b %Y')}"
+
+
 def deadline(
     *,
     invoice_date: Optional[date],
@@ -160,13 +164,13 @@ def deadline(
     agreed = stated_net_days is not None and 0 <= stated_net_days <= AGREED_LIMIT_DAYS
     days = int(stated_net_days) if agreed else DEFAULT_DAYS
     if agreed:
-        why = (f"{days} days from acceptance ({basis}, {acceptance.isoformat()}): the agreed terms are within "
+        why = (f"{days} days from acceptance ({basis}, {_day(acceptance)}): the agreed terms are within "
                f"the {AGREED_LIMIT_DAYS}-day limit.")
     elif stated_net_days is None:
-        why = (f"{DEFAULT_DAYS} days from acceptance ({basis}, {acceptance.isoformat()}): no payment terms were "
+        why = (f"{DEFAULT_DAYS} days from acceptance ({basis}, {_day(acceptance)}): no payment terms were "
                "read, so the law's default applies.")
     else:
-        why = (f"{DEFAULT_DAYS} days from acceptance ({basis}, {acceptance.isoformat()}): the stated "
+        why = (f"{DEFAULT_DAYS} days from acceptance ({basis}, {_day(acceptance)}): the stated "
                f"{stated_net_days} days exceed the {AGREED_LIMIT_DAYS}-day limit, so Helm uses the law's default.")
     return MsmeDeadline(due=acceptance + timedelta(days=days), acceptance=acceptance, acceptance_basis=basis,
                         days=days, agreed=agreed, explanation=why)

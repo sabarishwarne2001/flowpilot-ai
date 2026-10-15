@@ -65,9 +65,31 @@ def set_state(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUI
         row.paid_on = None
         row.paid_amount_micros = None
         row.paid_reference = None
-    row.evidence = dict(evidence or {})
+    # A person's waiver of a hold reason ("pay this without a PO") outlives every later move.
+    waived = list((previous.get("evidence") or {}).get("waived") or []) if previous.get("exists") else []
+    row.evidence = {**({"waived": waived} if waived else {}), **dict(evidence or {})}
     db.flush()
     return previous
+
+
+def waive(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID, work_item_id: uuid.UUID, code: str,
+          actor_user_id: Optional[uuid.UUID], note: Optional[str] = None) -> None:
+    """A person decided this invoice may be paid despite `code` (a settled review task): record the
+    waiver, and end a hold Helm placed for that reason. The mandate never holds it for `code` again."""
+    row = get(db, work_item_id)
+    if row is None:
+        set_state(db, organization_id=organization_id, workspace_id=workspace_id, work_item_id=work_item_id,
+                  state=v.SETTLEMENT_UNPAID, source=v.SOURCE_PERSON, actor_user_id=actor_user_id)
+        row = get(db, work_item_id)
+    evidence = dict(row.evidence or {})
+    if row.state == v.SETTLEMENT_HELD and evidence.get("reason") == code:
+        set_state(db, organization_id=organization_id, workspace_id=workspace_id, work_item_id=work_item_id,
+                  state=v.SETTLEMENT_UNPAID, source=v.SOURCE_PERSON, actor_user_id=actor_user_id,
+                  evidence={"released": code, "note": (note or "")[:500]})
+        evidence = dict(row.evidence or {})
+    waived = sorted(set(evidence.get("waived") or []) | {code})
+    row.evidence = {**evidence, "waived": waived}
+    db.flush()
 
 
 def restore(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID, work_item_id: uuid.UUID,
@@ -89,4 +111,4 @@ def restore(db: Session, *, organization_id: uuid.UUID, workspace_id: uuid.UUID,
               evidence={**(previous.get("evidence") or {}), "restored_by_undo": True})
 
 
-__all__ = ["get", "restore", "set_state", "snapshot"]
+__all__ = ["get", "restore", "set_state", "snapshot", "waive"]

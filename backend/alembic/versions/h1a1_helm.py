@@ -493,7 +493,7 @@ def upgrade() -> None:
             {book_fk.format(table="helm_actions")},
             {work_item_fk.format(table="helm_actions")},
             CONSTRAINT ck_helm_actions_kind CHECK (kind IN ({_in((
-                "hold_payment", "schedule_payment", "approve_payment", "mark_paid", "draft_dispute",
+                "hold_payment", "release_hold", "schedule_payment", "approve_payment", "mark_paid", "draft_dispute",
                 "send_reminder", "request_document", "create_task", "decide_renewal", "notify", "webhook"))})),
             CONSTRAINT ck_helm_actions_state CHECK (state IN ('PROPOSED', 'APPROVED', 'EXECUTING', 'EXECUTED',
                 'REJECTED', 'BLOCKED', 'UNDONE', 'SUPERSEDED', 'FAILED')),

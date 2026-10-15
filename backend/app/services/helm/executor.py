@@ -279,6 +279,13 @@ def _apply(db: Session, *, action: HelmAction, book: HelmBook, snapshot, actor: 
             evidence={"reason": params.get("reason"), "certificate_id": str(action.certificate_id)})
         _notify_hold(db, action, book)
         return {"previous": previous, "settlement": v.SETTLEMENT_HELD}
+    if action.kind == v.ACTION_RELEASE_HOLD:
+        previous = settlements.set_state(
+            db, organization_id=action.organization_id, workspace_id=action.workspace_id,
+            work_item_id=action.work_item_id, state=v.SETTLEMENT_UNPAID, source=v.SOURCE_HELM, actor_user_id=who,
+            action_id=action.id, evidence={"released": params.get("reason"),
+                                           "certificate_id": str(action.certificate_id)})
+        return {"previous": previous, "settlement": v.SETTLEMENT_UNPAID}
     if action.kind == v.ACTION_SCHEDULE_PAYMENT:
         previous = settlements.set_state(
             db, organization_id=action.organization_id, workspace_id=action.workspace_id,
@@ -362,8 +369,8 @@ def undo(db: Session, *, action: HelmAction, actor: Actor) -> HelmAction:
         return action
     who = uuid.UUID(actor.user_id) if actor.user_id else None
     result = dict(action.result or {})
-    if action.kind in (v.ACTION_HOLD_PAYMENT, v.ACTION_SCHEDULE_PAYMENT, v.ACTION_APPROVE_PAYMENT,
-                       v.ACTION_MARK_PAID) and result.get("previous") is not None:
+    if action.kind in (v.ACTION_HOLD_PAYMENT, v.ACTION_RELEASE_HOLD, v.ACTION_SCHEDULE_PAYMENT,
+                       v.ACTION_APPROVE_PAYMENT, v.ACTION_MARK_PAID) and result.get("previous") is not None:
         settlements.restore(db, organization_id=action.organization_id, workspace_id=action.workspace_id,
                             work_item_id=action.work_item_id, previous=result["previous"], actor_user_id=who,
                             action_id=action.id)

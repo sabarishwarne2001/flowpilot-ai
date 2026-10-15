@@ -4,6 +4,7 @@ A reviewer settles one with a verdict (`helm_verdict`):
 
     VERIFY_BANK_ACCOUNT  VERIFIED (confirmed by phone, on a number you already had) | NOT_VERIFIED
     DECIDE_RENEWAL       RENEW | CANCEL | RENEGOTIATE (recorded on the obligation, which is then DONE)
+    REVIEW_MISSING_PO    DONE pays it without a PO (the hold ends; the mandate does not hold it again)
     any task             DONE | CANCEL
 
 A verified bank account closes the radar's BANK_ACCOUNT_CHANGED flag as CONFIRMED with the note,
@@ -53,6 +54,13 @@ def resolve(db: Session, *, task_id: uuid.UUID, workspace_id: uuid.UUID, verdict
     now = datetime.now(timezone.utc)
     if task.kind == v.TASK_VERIFY_BANK_ACCOUNT and verdict in ("VERIFIED", "NOT_VERIFIED") and task.work_item_id:
         _settle_bank_flag(db, task=task, verified=verdict == "VERIFIED", note=note, actor_user_id=actor_user_id)
+    if task.kind == v.TASK_REVIEW_PO and verdict == "DONE" and task.work_item_id:
+        # "Pay it without a PO": the person's decision releases the hold and stops the mandate holding it again.
+        from app.services.helm import settlements
+
+        settlements.waive(db, organization_id=task.organization_id, workspace_id=task.workspace_id,
+                          work_item_id=task.work_item_id, code="NO_MATCHED_PO", actor_user_id=actor_user_id,
+                          note=note)
     if task.kind == v.TASK_DECIDE_RENEWAL and task.obligation_id and verdict in VERDICTS[v.TASK_DECIDE_RENEWAL]:
         _record_renewal(db, task=task, decision=verdict.lower(), note=note, actor_user_id=actor_user_id)
     task.status = v.TASK_CANCELLED if verdict == "CANCEL" else v.TASK_DONE

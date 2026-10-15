@@ -114,10 +114,30 @@ def _optimizer(snapshot: Snapshot, mandate: base.ActiveMandate) -> base.Optimize
     return base.OptimizerTerms(floors={params.floor.currency: params.floor.amount_micros})
 
 
+
+def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
+    params: Params = mandate.params
+    floor = params.floor
+    out: list[base.Finding] = []
+    for cash in history.cash:
+        if cash.currency != floor.currency or not history.within(cash.as_of) or cash.amount_micros >= floor.amount_micros:
+            continue
+        statement = cash.source == v.CASH_SOURCE_STATEMENT
+        out.append(base.Finding(
+            mandate=KEY, on=cash.as_of, action="observe", honesty=v.HONESTY_CONFIRMED if statement else
+            v.HONESTY_LIKELY, category=base.CATEGORY_CASH_FLOOR, currency=cash.currency, value_micros=0,
+            summary=(f"Cash was {money.say(cash.amount_micros, cash.currency)} on {money.day(cash.as_of)}, "
+                     f"{money.say(floor.amount_micros - cash.amount_micros, cash.currency)} below the floor "
+                     f"({'a bank statement' if statement else 'a typed position'}). Helm would have timed payments "
+                     "to keep it above."),
+            evidence=[cash.evidence] if cash.evidence else []))
+    return out
+
+
 TEMPLATE = base.Template(
     key=KEY, kind=v.MANDATE_KIND_SET_POINT, title="Keep cash above a floor", group=base.GROUP_RUN, order=7,
     summary="A floor the optimiser respects in one currency; the simulation says how likely it holds.",
-    Params=Params, readback=_readback, evaluate=_evaluate, guard_checks=_guard, optimizer=_optimizer,
+    Params=Params, readback=_readback, evaluate=_evaluate, guard_checks=_guard, optimizer=_optimizer, backtest=_backtest,
     validate=_validate, is_limit=True,
     keywords=("cash above", "cash floor", "minimum cash", "keep cash", "balance above", "never below", "lakh", "crore",
               "cash buffer"),

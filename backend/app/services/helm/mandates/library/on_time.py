@@ -81,9 +81,40 @@ def _optimizer(snapshot: Snapshot, mandate: base.ActiveMandate) -> base.Optimize
     return terms
 
 
+
+def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
+    params: Params = mandate.params
+    out: list[base.Finding] = []
+    for payable in base.payables_in_scope(history.snapshot, mandate):
+        if payable.due_date is None or not history.within(payable.due_date):
+            continue
+        due = payable.due_date + timedelta(days=params.grace_days)
+        paid_late = payable.paid_on is not None and payable.paid_on > due
+        unpaid_late = payable.paid_on is None and payable.open and due < history.end
+        if not (paid_late or unpaid_late):
+            continue
+        days = ((payable.paid_on or history.end) - payable.due_date).days
+        fee_pct = payable.terms.late_fee_pct_per_month
+        fee = money.pct_of(payable.amount_micros, fee_pct * Decimal(days) / Decimal(30)) if fee_pct else 0
+        if paid_late:
+            honesty = v.HONESTY_LIKELY if fee else v.HONESTY_CONFIRMED
+            what = f"was paid {days} days late"
+        else:
+            honesty, what = v.HONESTY_POTENTIAL, f"is {days} days overdue"
+        cost = (f"; its terms charge {fee_pct.normalize()}% a month, about {money.say(fee, payable.currency)}"
+                if fee else "")
+        out.append(base.Finding(
+            mandate=KEY, on=payable.due_date, action=v.ACTION_SCHEDULE_PAYMENT, honesty=honesty,
+            category=v.VALUE_LATE_FEE_AVOIDED, currency=payable.currency, value_micros=fee,
+            summary=(f"{payable.document} ({money.say(payable.amount_micros, payable.currency)}) {what}{cost}. "
+                     "Helm would have scheduled it by its due date."),
+            evidence=base.evidence_of(payable)))
+    return out
+
+
 TEMPLATE = base.Template(
     key=KEY, kind=v.MANDATE_KIND_GOAL, title="Pay every supplier on time", group=base.GROUP_RUN, order=5,
     summary="Schedule each payable by its due date on a payment-run day.", Params=Params, readback=_readback,
-    evaluate=_evaluate, optimizer=_optimizer,
+    evaluate=_evaluate, optimizer=_optimizer, backtest=_backtest,
     keywords=("on time", "due date", "pay suppliers", "late payment", "never late", "pay every supplier"),
 )

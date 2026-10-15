@@ -24,6 +24,13 @@ from app.services.helm.snapshot import Snapshot
 #: Templates whose presence means Helm plans payment timing at all.
 TIMING_TEMPLATES = ("pay_on_time", "capture_early_discounts", "keep_cash_above", "msme_pay_within_limit")
 DEFAULT_TIME_LIMIT_S = 5.0
+#: Why a hold can end, by its reason code.
+RELEASE_WHY = {
+    "PROBABLE_DUPLICATE": "A reviewer cleared the duplicate finding.",
+    "PRICE_ABOVE_AGREED": "No line is above the agreed price any more (a corrected invoice or a credit note).",
+    "BANK_ACCOUNT_CHANGED": "The new bank account was verified.",
+    "NO_MATCHED_PO": "It now has a matching purchase order (or is no longer above the amount).",
+}
 
 
 @dataclass
@@ -104,6 +111,25 @@ def _merge(terms: Sequence[base.OptimizerTerms]) -> base.OptimizerTerms:
     return merged
 
 
+def _plan_destination(candidate: base.Candidate, snapshot: Snapshot) -> tuple[Optional[bool], str]:
+    """What the plan can know of an email's destination: whether there is a contact to send to. The
+    mail server and egress are checked again, from the database, when the action runs."""
+    if candidate.kind not in (v.ACTION_SEND_REMINDER, v.ACTION_REQUEST_DOCUMENT, v.ACTION_DRAFT_DISPUTE,
+                              v.ACTION_WEBHOOK):
+        return None, ""
+    if candidate.kind == v.ACTION_WEBHOOK:
+        return None, "The webhook destination is checked when the action runs."
+    if candidate.kind == v.ACTION_DRAFT_DISPUTE and (candidate.mandate is None
+                                                      or candidate.mandate.mode != v.AUTONOMY_ACT):
+        return True, "A draft only: nothing is sent."
+    counterparty = snapshot.counterparties.get(candidate.counterparty_key or "")
+    contact = candidate.params.get("to") or (counterparty.contact_email if counterparty else None)
+    if not contact:
+        name = (counterparty.name if counterparty else None) or "this counterparty"
+        return False, f"No email contact for {name}; add one in Helm settings."
+    return True, f"Email to {contact}; the mail server and egress are checked again when it runs."
+
+
 def _owner(mandates: Sequence[base.ActiveMandate], template_key: str) -> Optional[base.ActiveMandate]:
     return next((m for m in mandates if m.template == template_key), None)
 
@@ -118,7 +144,15 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
     for mandate in active:
         if mandate.mode == v.AUTONOMY_WATCH:
             continue
-        candidates.extend(TEMPLATES[mandate.template].propose(snapshot, mandate))
+        template = TEMPLATES[mandate.template]
+        candidates.extend(template.propose(snapshot, mandate))
+        # A hold this mandate placed whose reason is gone: propose releasing it.
+        if template.hold_code and template.still_holds is not None:
+            for payable in base.payables_in_scope(snapshot, mandate):
+                if payable.held_by_helm_for(template.hold_code) and not template.still_holds(snapshot, payable,
+                                                                                             mandate):
+                    candidates.append(base.release_candidate(payable, mandate, RELEASE_WHY.get(
+                        template.hold_code, "Its reason is gone.")))
 
     timing = [m for m in active if m.template in TIMING_TEMPLATES]
     terms = _merge([TEMPLATES[m.template].optimizer(snapshot, m) for m in active])
@@ -174,9 +208,9 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
             owner = _owner(active, "pay_on_time") or (timing[0] if timing else None)
         if owner is not None and owner.mode == v.AUTONOMY_WATCH:
             continue
-        why = [f"Due {payable.due_date.isoformat()}" + (f" ({payable.terms.rule})" if payable.terms.parsed else "")]
+        why = [f"Due {money.day(payable.due_date)}" + (f" ({payable.terms.rule})" if payable.terms.parsed else "")]
         if deadline:
-            why.append(f"deadline {deadline[0].isoformat()}: {deadline[2]}")
+            why.append(f"deadline {money.day(deadline[0])}: {deadline[2]}")
         if discount:
             why.append(f"pays inside the discount window, saving {money.say(discount, payable.currency)}")
         if day > (payable.due_date or day):
@@ -219,11 +253,10 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
                                                 c.idempotency_key))
     for candidate in ordered:
         view = ActionView.of(candidate)
+        allowed, detail = _plan_destination(candidate, snapshot)
         ctx = GuardContext(
             stage=v.CERT_STAGE_PLAN, capability_held=capability_held,
-            destination_allowed=None if candidate.kind in ("send_reminder", "draft_dispute", "request_document",
-                                                           "webhook") else None,
-            destination_detail="The destination is checked when the action runs.",
+            destination_allowed=allowed, destination_detail=detail,
             scheduled_before=dict(paid_ahead),
             inflow_by={c: sim.p10_inflow_by(c, candidate.run_date or snapshot.as_of) for c in snapshot.cash},
             sim=context["sim"], schedule=schedule)

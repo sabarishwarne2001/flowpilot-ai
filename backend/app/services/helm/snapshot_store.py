@@ -238,6 +238,7 @@ def take(db: Session, book: HelmBook, *, as_of: Optional[date] = None) -> snap.S
                 promise_id=str(promise.id), work_item_id=str(promise.work_item_id),
                 workspace_id=str(promise.workspace_id),
                 document=(promise.evidence or [{}])[0].get("document") or "document",
+                hold_code=settlement.get("hold_code"), waived=tuple(settlement.get("waived") or ()),
                 document_number=details.get("document_number"), counterparty_key=promise.counterparty_key,
                 counterparty_name=promise.counterparty_name, currency=promise.currency,
                 amount_micros=int(promise.amount_micros or 0), invoice_date=_date(details.get("invoice_date")),
