@@ -90,4 +90,9 @@ def day(on) -> str:
     return f"{on.day} {on.strftime('%b %Y')}"
 
 
-__all__ = ["MICROS", "day", "from_micros", "interest", "lakh", "pct_of", "plain", "say", "to_micros"]
+def possessive(name: str) -> str:
+    """ "Konkan Logistics LLP's", "Shree Ganesh Steel Traders'" """
+    return f"{name}'" if name.endswith(("s", "S")) else f"{name}'s"
+
+
+__all__ = ["MICROS", "day", "possessive", "from_micros", "interest", "lakh", "pct_of", "plain", "say", "to_micros"]

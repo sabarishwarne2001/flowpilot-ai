@@ -642,22 +642,26 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
     # ---- obligations: notice deadlines, compliance documents, everything else ---------------------
     expiry_by_counterparty: dict[tuple[uuid.UUID, str], list[ObligationFacts]] = {}
     for ob in inputs.obligations:
-        if ob.kind == "EXPIRY" and _is_compliance(ob, by_id.get(ob.work_item_id) if ob.work_item_id else None):
-            key = ident.key_for(ob.counterparty_name) or (str(ob.work_item_id) if ob.work_item_id else "")
+        doc = by_id.get(ob.work_item_id) if ob.work_item_id else None
+        if ob.kind == "EXPIRY" and _is_compliance(ob, doc):
+            key = _party_of(ob, doc)[1] or (str(ob.work_item_id) if ob.work_item_id else "")
             expiry_by_counterparty.setdefault((ob.workspace_id, key), []).append(ob)
     for ob in sorted(inputs.obligations, key=lambda o: str(o.obligation_id)):
         doc = by_id.get(ob.work_item_id) if ob.work_item_id else None
-        cp_name = ob.counterparty_name or (ident.seller(doc.entities).name if doc else None)
-        cp_key = ident.key_for(cp_name) if cp_name else None
+        cp_name, cp_key = _party_of(ob, doc)
         confidence = _worst(ob.confidence, doc.confidence) if doc else ob.confidence
         evidence = [{"obligation_id": str(ob.obligation_id), "quote": (ob.quote or "")[:400],
                      **({"work_item_id": str(doc.work_item_id), "document": doc.filename} if doc else {})}]
         if ob.kind == "NOTICE":
             kind, direction = v.KIND_NOTICE_DEADLINE, v.DIRECTION_OUR_DECISION
-            title = f"Decide {ob.title.lower() if ob.title else 'the renewal'} before {ob.due_date or 'the deadline'}"
+            what = _document_title(doc, ob.title) or "contract"
+            title = (f"Decide on the {what}: renew, cancel or renegotiate before {money.day(ob.due_date)}"
+                     if ob.due_date else f"Decide on the {what}: renew, cancel or renegotiate (no deadline read)")
         elif ob.kind == "EXPIRY" and _is_compliance(ob, doc):
             kind, direction = v.KIND_DOCUMENT_VALID_UNTIL, v.DIRECTION_OWED_TO_US
-            title = f"{cp_name or 'Supplier'} keeps {ob.title.lower() if ob.title else 'its certificate'} valid"
+            what = _document_title(doc, ob.title) or "certificate"
+            owner = money.possessive(cp_name or "The supplier")
+            title = f"{owner} {what} valid until {money.day(ob.due_date)}" if ob.due_date else f"{owner} {what}"
         else:
             kind = v.KIND_OBLIGATION
             direction = {"DELIVERY": v.DIRECTION_OWED_TO_US, "RENEWAL": v.DIRECTION_OUR_DECISION}.get(
@@ -672,7 +676,7 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
             fulfil.append({"kind": "DECISION" if kind == v.KIND_NOTICE_DEADLINE else "OBLIGATION",
                            "on": ob.done_on, "decision": ob.decision})
         elif kind == v.KIND_DOCUMENT_VALID_UNTIL:
-            key = ident.key_for(ob.counterparty_name) or (str(ob.work_item_id) if ob.work_item_id else "")
+            key = cp_key or (str(ob.work_item_id) if ob.work_item_id else "")
             newer = [o for o in expiry_by_counterparty.get((ob.workspace_id, key), [])
                      if o.obligation_id != ob.obligation_id and o.due_date and ob.due_date and o.due_date > ob.due_date]
             if newer:
@@ -692,7 +696,8 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
             status=status, confidence=confidence, title=title, counterparty_key=cp_key, counterparty_name=cp_name,
             currency=ob.currency, amount_micros=ob.amount_micros, due_date=ob.due_date, evidence=evidence,
             fulfilments=fulfil, obligation_id=ob.obligation_id,
-            details={"obligation_kind": ob.kind, "obligation_state": ob.state, "obligation_title": ob.title},
+            details={"obligation_kind": ob.kind, "obligation_state": ob.state, "obligation_title": ob.title,
+                     "document_title": _document_title(doc, ob.title)},
         ))
 
     rows.sort(key=lambda r: r.source_key)
@@ -704,6 +709,39 @@ def _org_of(inputs: LedgerInputs, workspace_id: uuid.UUID) -> uuid.UUID:
         if doc.workspace_id == workspace_id:
             return doc.organization_id
     raise ValueError("an obligation's workspace has no documents in these inputs; pass organization_id facts")
+
+
+def _party_of(ob: ObligationFacts, doc: Optional[DocumentFacts]) -> tuple[Optional[str], Optional[str]]:
+    """The counterparty an obligation is with: the name it states, else the document's seller; keyed
+    with the document's tax id (GSTIN) when it names the same party, so a supplier's certificate and
+    its invoices are one counterparty."""
+    seller = ident.seller(doc.entities) if doc is not None else None
+    name = ob.counterparty_name or (seller.name if seller else None)
+    tax = None
+    if seller is not None and seller.tax_id and (ob.counterparty_name is None
+                                                   or ident.key_for(ob.counterparty_name) == ident.key_for(seller.name)):
+        tax = seller.tax_id
+    if not name and not tax:
+        return None, None
+    return name, ident.key_for(name, tax)
+
+
+TITLE_KEYS = ("certificate_type", "document_type", "document_title", "title", "policy_type", "agreement_type")
+
+
+def _document_title(doc: Optional[DocumentFacts], fallback: Optional[str]) -> Optional[str]:
+    """What the document is, in words: its stated type, else its file name made readable."""
+    raw = None
+    if doc is not None:
+        raw = next((str(doc.entities.get(k)).strip() for k in TITLE_KEYS if doc.entities.get(k)), None)
+        if raw is None and doc.filename:
+            stem = re.sub(r"\.[A-Za-z0-9]{2,4}$", "", doc.filename)
+            raw = re.sub(r"[-_]+", " ", stem).strip()
+    raw = raw or fallback
+    if not raw:
+        return None
+    # "Goods in transit insurance policy" -> "goods in transit insurance policy"; "ISO 9001 ..." stays.
+    return raw[0].lower() + raw[1:] if len(raw) > 1 and raw[1].islower() else raw
 
 
 def _is_compliance(ob: ObligationFacts, doc: Optional[DocumentFacts]) -> bool:
