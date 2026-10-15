@@ -150,6 +150,7 @@ contradictory parameters in plain words.
 | 10 | `supplier_documents_never_expire` | set point | document request |
 | 11 | `chase_overdue_customers` | goal | reminders |
 | 12 | `review_backlog_under` | set point | escalation |
+| 13 | `reconcile_supplier_statements` (owner addition B, §17) | goal | a reconciliation email draft |
 | — | `custom_condition` (Enterprise) | limit | `all`/`any` of `field op value` over whitelisted ledger fields |
 
 Sentence drafting (`helm/drafting.py`): `POST …/helm/books/{id}/mandates/draft` reserves one
@@ -226,6 +227,7 @@ actions and asserts no action that breaks an active limit passes.
 | `approve_payment` | approver action; re-runs the Guard |
 | `mark_paid` | a person, or a STATEMENT line match; settlement → paid with evidence |
 | `draft_dispute` | an email draft to the supplier with the evidence; sends only in Act mode with a known contact |
+| `draft_reconciliation` | the supplier statement reconciliation email (§17); a draft unless Act mode with a known contact |
 | `send_reminder` | receivables email at an escalation level, through `email_service` with the organization's sender settings |
 | `request_document` | a public document request (`app/services/cases/requests.create`) on a "Supplier compliance documents" case for that supplier, plus the email |
 | `create_task` | a `helm_tasks` row, shown in the review hub (kind `HELM`), assigned |
@@ -285,14 +287,32 @@ capability or preview gate as its first statement. Enterprise API keys get `helm
 - Visual identity: `frontend/src/styles/helm.css` (instrument-panel tokens, one luminous accent,
   JetBrains Mono for numbers, thin rings, reduced-motion respected). Hand-built SVG flight path.
 
-## 13. Performance budget (measured on the sandbox; filled in when measured)
+## 13. Performance budget (measured on the sandbox, 2026-10-15)
 
-| Budget | Target | Measured |
-|---|---|---|
-| Plan for 1,000 open payables over 30 days | ≤ 10 s | _pending_ |
-| 1,000 futures | ≤ 3 s | _pending_ |
-| Incremental ledger update | ≤ 1 s per document | _pending_ |
-| Event loop | no database work on the loop (threadpool rule) | _pending_ |
+`tests/performance/test_helm_budgets.py` seeds one workspace with a distributor's year (invoices
+from 40 suppliers, purchase orders, goods receipts, credit notes, monthly bank statements, one
+statement of account per supplier) and times each step on real Postgres. It runs in the suite at
+1,000 documents; `HELM_PERF_DOCUMENTS=10000` is the owner's run (owner addition D). The sandbox is a
+4-core container, Postgres 16 in memory.
+
+| Step | Budget | 1,000 documents | 10,000 documents |
+|---|---|---|---|
+| Plan for the open payables over 30 days | ≤ 10 s for 1,000 open payables | 2.9 s (88 open) | **5.8 s (1,080 open)** |
+| 1,000 seeded futures of cash | ≤ 3 s | 0.01 s | 0.01 s |
+| Ledger update after one document changes | ≤ 1 s | 0.7 s | **2.9 s: over budget** |
+| Snapshot (every input the plan reads) | — | 0.2 s | 1.7 s |
+| Every supplier statement reconciled (40) | — | 0.9 s | 1.3 s |
+| Bank import with matching | — | 0.4 s (500 lines) | 4.0 s (5,000 lines) |
+| First full ledger build | — | 2.8 s | 25.4 s |
+| Event loop | no database work on the loop | every Helm route is a plain `def` (threadpool) | — |
+
+Fixed on the way (F-423, F-425): the ledger compared every invoice with every statement line (now an
+index by amount) and named-invoice checks scanned every known number (now one pass per line); the
+reconciliation re-read every supplier's name per statement and ran twice per plan (now cached).
+**Not yet within budget:** the ledger update recomputes the whole workspace on each change, which
+holds the 1-second budget up to about 2,000 documents a workspace; each further 1,000 documents add
+about 0.25 s. The update runs in the worker, never in a request, so nobody waits on it; making
+it truly incremental (recompute only the documents a change touches) is the next step (HANDOFF).
 
 ## 14. The Time machine (`helm/backtest.py`, `helm/history.py`)
 
@@ -334,3 +354,91 @@ missed renewal, an expired certificate, late-paying customers and a cash dip.
 - `Planted` lists exactly what was planted; the backtest of the sample must find exactly that (a
   live test checks it to the paisa). `scripts/helm_demo_company.py --org <slug> [--rebuild]
   [--print]` builds it from the command line and refuses to run against production.
+
+## 16. Bank statements (owner addition A; `helm/bank_parse.py`, `bank_match.py`, `bank.py`)
+
+Migration `h1a2_helm_bank` (after `h1a1_helm`): `helm_bank_accounts` (name, last four digits only,
+currency, the saved column mapping), `helm_bank_imports` (one file: its SHA-256, so the same file
+twice is refused; its period and closing balance), `helm_bank_lines` (date, narration, reference,
+signed amount, balance; a fingerprint per account so an overlapping period adds no line twice; the
+status UNMATCHED, SUGGESTED, MATCHED or IGNORED; the invoice and the action when matched). Cash
+positions gain source `BANK`, tied to the import and the account. Audit resource `HELM_BANK`.
+
+1. **Reading** (`bank_parse`, pure): CSV (encoding and delimiter sniffed), .xlsx (openpyxl,
+   read-only, formulas never evaluated) and .xls (xlrd); the header row is found below the bank's
+   preamble; amounts go through the table engine's strict number reader (Western, Indian and
+   European grouping; anything else is not read); dates in day-, month- or year-first order, named
+   months and Excel serials; a Dr/Cr column in the bank's words. A cell that cannot be read is a
+   problem on its line, never a guess. `guess_mapping` proposes the columns from the headings; the
+   person confirms, and the mapping is saved per account.
+2. **Importing** (`bank.import_statement`): new lines only (fingerprint = account, date, amount,
+   narration, reference and how many identical lines came before it); the closing balance (when the
+   file has a balance column) becomes the account's cash; the new lines and the account's earlier
+   undecided ones are matched.
+3. **Matching** (`bank_match`, pure): automatic only when the evidence leaves one answer (§N-095);
+   otherwise up to three suggestions with their reasons, or nothing. Invoices already claimed by a
+   matched line are not offered again.
+4. **Recording**: a match (Helm's or a person's) is a `mark_paid` action with `bank_line_id` in its
+   params, approved and queued to `helm.execute`. The executor writes the settlement PAID with
+   source STATEMENT and the line as evidence; the ledger rebuild then records the payment (on time
+   or late, inside a discount window or not) and value held follows from it. Undoing the action (in
+   the cockpit, or "Reopen" on the line) restores the settlement and returns the line to the person.
+5. **Cash** (`snapshot_store.cash_positions`): each account's latest imported balance; accounts in
+   one currency are summed; the total is dated by its oldest part; a typed figure wins a tie; the
+   cash-floor mandate counts imported balances as confirmed evidence.
+
+API: `…/books/{id}/bank-accounts` (GET, POST, PATCH), `…/bank-statements/preview` and
+`…/bank-statements` (multipart, 5 MB, streamed through `spool_upload_file`), `…/bank-imports`,
+`…/bank-lines?status=WAITING|MATCHED|IGNORED`, `…/bank-lines/{id}/match | ignore | reopen`. Owners,
+admins and billing; Helm's capability for writes. Page: `/:org/helm/bank` ("Bank statements").
+
+## 17. Supplier statements (owner addition B; `helm/reconcile.py`, library mandate 13)
+
+**Two kinds of STATEMENT.** The role classifier gives a bank's statement and a supplier's statement
+of account the same role. Read as a bank's, a supplier's statement marked their invoices PAID (their
+own statement as "evidence") and turned the balance we owe them into our cash: the defect this
+addition found and fixed first (`tests/services/helm/test_supplier_statements.py`).
+`ledger.statement_kind(doc, identities)` now decides, in order: a classification naming a bank; an
+issuer that is a bank; an issuer that is anyone else (not us: an extractor may put the account
+holder there); a bank named in the header; words only a counterparty's statement uses. A statement
+nothing identifies stays a bank's, as before. Only bank statements settle invoices
+(`ledger.build`) and give cash (`snapshot_store.cash_history`).
+
+**Reconciliation** (`reconcile.reconcile`, pure). The snapshot carries every supplier statement of
+the book's workspaces (`snapshot.SupplierStatement`: lines, opening and closing balance, period,
+confidence; our own statements to customers are left out). Each is compared with the ledger of the
+same workspace and supplier (by key, else by name): their invoices we do not have, the same invoice
+at another amount, our invoices in their period they left out, our payments (with the bank or
+person evidence) they have not applied or applied at another amount, credit notes we hold they have
+not applied, credits they show that we cannot place ("record it before paying again"), and the
+balance. Each difference carries the evidence on both sides and its effect on their balance against
+ours, so the balance gap is explained line by line; what no line explains (usually an opening balance
+from before Helm's records) is said to be unexplained. Rounding up to a parameter (₹1 by default)
+agrees.
+
+**The mandate** `reconcile_supplier_statements` (goal, "Run payables well", order 13): statements
+dated in the last 45 days (a parameter); one `draft_reconciliation` action per statement that
+differs, proposed once (drafted, rejected or undone ones are not proposed again; the next month's
+statement is a new one). The instrument says "unknown" when there are no statements, rather than
+guessing. No value is claimed. The action (`helm_actions.kind` gains `draft_reconciliation`, migration
+`h1a3_helm_reconcile`) is an outbound draft like `draft_dispute`: the Guard's facts check asks a
+person when the statement was not checked; `hands.draft_reconciliation` renders
+`templates/emails/helm.render_reconciliation` (each difference in the supplier's terms, then both
+balances) and sends only in Act mode to a known contact, never from the sample book. The cockpit
+lists the differences under "Why", and an executed draft shows the email with "Copy the email".
+
+**Sample company.** Sahyadri Packaging's statement for last month plants three differences (an
+invoice Meridian never received, the month's invoice with freight added, Meridian's latest payment
+not yet applied); its plan proposes exactly those, the gap explained to the paisa
+(`tests/engines/test_helm_reconcile_live.py`).
+
+## 18. The guided tour (owner addition C; `components/helm/HelmTour.tsx`)
+
+On the sample company only: "Take the guided tour" (Start, and the sample's cockpit) walks six steps:
+the instruments, the flight path, the plan and its Guard, a certificate, the Time machine, then "Your
+turn" (set Helm up on your own workspace). The step is in the address (`?tour=2`), so a demo can be
+reloaded or shared mid-tour and the browser's back button walks back. Each step outlines the part of
+the page it explains (`data-tour="…"`) and scrolls it into view; the panel is a non-modal dialog
+whose heading takes focus; Escape or "End the tour" closes it. Spec 82 walks it and approves the
+sample's reconciliation.
+

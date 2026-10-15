@@ -1402,3 +1402,109 @@ of the business it can see (a visibility meter) and never presents a guess as a 
 "Value held" counts only outcomes backed by evidence; projections are labelled "potential". Helm
 gives recommendations, not financial or tax advice; the MSMED / 43B(h) mandate links to the law and
 says so.
+
+## N-086 — Books: whose business Helm runs (DECIDED (flagship session))
+
+Helm keeps one "book" per workspace on Business; Enterprise may also keep one book for all its
+workspaces together. The sample company has its own book in its own labelled workspace, which never
+counts towards the plan's workspace limit and can be deleted (it is archived). A Helm-preview
+backtest on a lower plan creates a read-only book that never plans or acts.
+
+## N-087 — Who sees and does what in Helm (DECIDED (flagship session))
+
+Owners and admins see Helm and decide (mandates, act caps, approvals). The billing role sees
+everything, approves payment actions, records payments and imports bank statements (it is the
+finance contact). Members never see Helm mode; they receive the tasks Helm assigns them in the
+review hub. The Documents | Helm switch remembers the last mode per browser.
+
+## N-088 — How a payment leaves Helm (DECIDED (flagship session))
+
+Helm never moves money. It hands over a **payment run list** (date, payee, masked account, amount,
+invoice, certificate; downloadable as CSV) for the bank or the accounting system. The platform's
+ERP model has no payment-date or hold field on a supplier bill, so the list is the hand-over; Helm
+writes no bank payment files.
+
+## N-089 — How holds end (DECIDED (flagship session))
+
+A hold Helm placed ends when its reason is gone (for example the duplicate finding was dismissed):
+Helm proposes releasing it, and the release is guarded, certified and undoable like any action. A
+person who settles a "missing purchase order" task as done waives that reason for that invoice for
+good.
+
+## N-090 — First run and examples (DECIDED (flagship session))
+
+Setup is four steps: who we are, the cash, the kind of business (distributor, manufacturer,
+logistics, construction, multi-branch retail/restaurants/clinics, accounting firm, other) with the
+mandates recommended for it, and an automatic replay. A gallery value with no default (a cash floor,
+a PO threshold) is an **example**: Helm never saves or replays it as the owner's own number; the
+owner must set it.
+
+## N-091 — The Monday briefing (DECIDED (flagship session))
+
+09:00 on Monday in the book's workspace time zone (an all-workspaces book uses its organization's
+oldest workspace), to the organization's owners and admins who have not turned it off; once a week;
+never for the sample company. It links to the cockpit and to the person's own notification
+preferences.
+
+## N-092 — Writing a mandate from a sentence (DECIDED (flagship session))
+
+On Business a sentence maps only to library mandates (Enterprise adds custom conditions). The AI's
+answer is checked strictly; it never sets how a mandate acts (every new mandate starts in Propose
+mode); suppliers it names are matched to the book's own, and an unknown one is named, not guessed.
+When the AI is unavailable or unsure, the gallery's closest mandates are offered. The call is
+metered like an assistant message and refused cleanly (402) when the AI usage limit is reached.
+
+## N-093 — Replays and their honesty classes (DECIDED (flagship session))
+
+A replay counts value in three classes that are never added together: confirmed (evidence shows it
+happened), likely, and potential (facts are missing). Business replays 6 months, Enterprise 24,
+Helm preview 3 months once a week; the sample company may be replayed whole (9 months) on any plan.
+
+## N-094 — The sample company (DECIDED (flagship session))
+
+Meridian Wholesale Pvt Ltd, an invented Pune distributor, built on request in each organization
+from nine months of generated documents that the platform's own engines read. Its planted problems
+(overcharges, a duplicate paid twice, a bank-account change, late MSME payments, missed discounts, a
+missed renewal, an expired certificate, late customers, a cash dip) are exactly what its replay
+finds. Invented names only; it is also the data for the website's screenshots.
+
+## N-095 — Bank statement import (DECIDED (flagship session); owner addition A)
+
+- Files: CSV and Excel (.xlsx with openpyxl, MIT licence; old .xls with xlrd, BSD licence); both are
+  free, local libraries, no service is called. Up to 5 MB and 20,000 lines a file.
+- Accounts: a name, the currency and only the **last four digits** of the number. The column
+  mapping is confirmed once by a person and saved for the account.
+- Duplicates: the same file twice adds nothing; an overlapping period adds only lines not seen
+  before (two identical payments on one day stay two).
+- Cash: an import's closing balance becomes that account's cash. Two accounts in one currency are
+  **added together**; the total is only as current as its oldest part; a figure a person typed on
+  the same day wins.
+- Matching by itself only when the evidence leaves one answer: the exact amount (or the amount less
+  its early-payment discount); the invoice number, or the payee's name within the date window of a
+  payment Helm scheduled or a person approved; one invoice only, claimed by one line only. Money in
+  settles invoices owed to us the same way. Everything else is suggested to a person, with the
+  reasons; a suggestion to an invoice Helm held warns that the hold may not have stopped the
+  payment. Part payments are not matched (recorded with "Record paid").
+- A match is an ordinary "Record paid" action with the bank line as its evidence: guarded,
+  certified, audited and undoable; reopening a line undoes it.
+
+## N-096 — Supplier statement reconciliation (DECIDED (flagship session); owner addition B)
+
+- A statement of account from a supplier is **never** read as a bank statement: it does not mark
+  invoices paid and its balance is not cash. When nothing on a statement says whose it is, it is
+  treated as a bank's, as before.
+- Each month (statements dated in the last 45 days), every supplier statement is compared with the
+  ledger of its workspace. Differences up to ₹1 (or 1 unit of the currency) are rounding; the owner
+  can change both in the mandate.
+- Helm drafts one reconciliation email per statement that differs, written to the supplier ("your
+  statement lists…"), never mentioning Helm. It is sent only in Act mode to a known contact, and only
+  after a person approves when the statement's facts were not checked. A rejected or sent draft is
+  not proposed again for the same statement.
+- The mandate claims no "value held": reconciling prevents paying twice or paying what is not owed,
+  but no amount is counted until it is proven.
+
+## N-097 — The guided tour (DECIDED (flagship session); owner addition C)
+
+- On the sample company only, six steps, started from Start or the sample's cockpit; it never runs
+  on a customer's own book. The step lives in the page address, nothing is stored.
+

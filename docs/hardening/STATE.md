@@ -31,14 +31,25 @@ below. Never restart.**
   upsell, the Overview card (instrument trends, the flight path scrubbing into a replay's past,
   `/helm/setup`, the sample company button, the Overview card, plan-card limits; specs 78–80).
 - Owner additions (2026-10-15, after box 6), built before box 7:
-  - [ ] A. Bank statement import: CSV or Excel with a column mapping saved per bank account; cash
+  - [x] A. Bank statement import: CSV or Excel with a column mapping saved per bank account; cash
     positions; automatic matching of payments to scheduled or approved invoices (amount, date
     window, reference or payee) so "paid" and "value held" rest on evidence; unmatched lines listed.
-  - [ ] B. Supplier statement reconciliation mandate: monthly, every supplier statement against the
-    Promise ledger, differences with evidence, a drafted reconciliation email.
-  - [ ] C. A guided Helm tour on the sample company (instruments, plan, Guard certificate, Time
-    machine) for demos and first-time users.
-  - [ ] D. If time remains: more hardening tests and a performance run at 10,000 documents.
+    (`h1a2_helm_bank`, ARCHITECTURE §16, spec 81. An adversarial review found 34 issues: memory
+    and zip-bomb limits, workspace read rules, rejected matches re-made, loose payee matching,
+    newest-first balances, discount windows, value events surviving an undo, …; each was proven by
+    a failing test and fixed before the first commit.)
+  - [x] B. Supplier statement reconciliation mandate: monthly, every supplier statement against the
+    Promise ledger, differences with evidence, a drafted reconciliation email. (Found and fixed
+    first, proven by a failing test: a supplier's statement of account was read as a bank's, so it
+    marked their invoices PAID and counted what we owe them as our cash. `h1a3_helm_reconcile`,
+    library mandate 13, ARCHITECTURE §17, live test on the sample company's planted statement.)
+  - [x] C. A guided Helm tour on the sample company (instruments, plan, Guard certificate, Time
+    machine) for demos and first-time users. (ARCHITECTURE §18, spec 82.)
+  - [x] D. If time remains: more hardening tests and a performance run at 10,000 documents.
+    (`tests/performance/test_helm_budgets.py`, ARCHITECTURE §13: the plan, the simulation and the
+    reconciliation are within budget at 10,000 documents; the ledger update after one change is
+    not, 2.9 s against 1 s, above about 2,000 documents a workspace: next step in HANDOFF. The run
+    found F-423, F-424 and F-425. Spec 83 checks every Helm page for accessibility and widths.)
 - [ ] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
   API scopes.
 - [ ] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
