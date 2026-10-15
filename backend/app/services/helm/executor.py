@@ -238,10 +238,14 @@ def execute(db: Session, *, action_id: uuid.UUID, actor: Actor = SYSTEM) -> Opti
         _audit(db, action, "BLOCKED", actor_user_id=None, details={"failed": [c.id for c in result.failed]})
         plan_store.enqueue(db, book, triggered_by=v.TRIGGER_EXECUTION, delay_s=1, force=True)
         return action
+    from app.services.helm.hands import HandError
+
     try:
         with db.begin_nested():
             outcome = _apply(db, action=action, book=book, snapshot=snapshot, actor=actor)
-    except ActionError as exc:
+    except (ActionError, HandError) as exc:
+        # The effect could not happen (a refused email, a task with nowhere to go): the action is FAILED
+        # with the reason in words, never left EXECUTING.
         action.state = v.ACTION_FAILED
         action.result = {"error": exc.code, "message": exc.message}
         action.updated_at = now
