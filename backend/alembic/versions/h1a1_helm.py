@@ -143,6 +143,9 @@ def upgrade() -> None:
             op.execute(f"ALTER TYPE audit_action ADD VALUE IF NOT EXISTS '{value}'")
 
     op.execute("ALTER TABLE workspaces ADD COLUMN is_sample boolean NOT NULL DEFAULT false")
+    # `/:orgSlug/helm` is Helm's address: a workspace already slugged "helm" would be shadowed by it.
+    # Give it a free slug (app/core/slugs.py now reserves "helm" for new ones). Not reversed.
+    op.execute("UPDATE workspaces SET slug = 'helm-' || left(md5(id::text), 6) WHERE lower(slug) = 'helm'")
 
     op.execute(
         """

@@ -53,6 +53,13 @@ export const RESERVED_ROUTE_SEGMENTS: ReadonlySet<string> = new Set<string>([
   "workspaces",
 ]);
 
+/**
+ * Helm (the flagship session). Segments the app routes itself in the WORKSPACE position:
+ * `/:orgSlug/helm/…` is Helm's address, not a workspace called "helm". app/core/slugs.py reserves
+ * the slug (and the h1a1 migration renamed any existing one), so no workspace can be shadowed.
+ */
+export const RESERVED_WORKSPACE_SEGMENTS: ReadonlySet<string> = new Set<string>(["helm"]);
+
 const P_ORG = `:${ROUTE_PARAMS.orgSlug}`;
 const P_WS = `:${ROUTE_PARAMS.workspaceSlug}`;
 const P_ITEM = `:${ROUTE_PARAMS.workItemId}`;
@@ -123,6 +130,20 @@ export const ROUTE_PATTERNS = {
   // not respond to it.
   partnerPortalShell: "/partners",
 
+  // HELM:route-patterns. Organization-level, in the workspace position; it outranks the workspace
+  // shell because "helm" is a static segment (and RESERVED_WORKSPACE_SEGMENTS keeps parseTenantPath
+  // from reading it as a workspace).
+  helmShell: `/${P_ORG}/helm`,
+  helmCockpit: "",
+  helmPlan: "plan",
+  helmMandates: "mandates",
+  helmLedger: "ledger",
+  helmTimeMachine: "time-machine",
+  helmCertificates: "certificates",
+  helmCertificate: "certificates/:certificateId",
+  helmSettings: "settings",
+  helmStart: "start",
+
   workspaceShell: `/${P_ORG}/${P_WS}`,
   workspaceDashboard: "",
   workspaceWorkItems: "work-items",
@@ -184,6 +205,21 @@ export const ROUTE_PATTERNS = {
 } as const;
 
 const seg = (value: string): string => encodeURIComponent(value);
+
+/** Helm's pages: `/:orgSlug/helm`, `/:orgSlug/helm/mandates`, … */
+export type HelmPage = "" | "plan" | "mandates" | "ledger" | "time-machine" | "certificates" | "settings" | "start";
+
+export const helmPath = (orgSlug: string, page: HelmPage = ""): string =>
+  page ? `/${seg(orgSlug)}/helm/${page}` : `/${seg(orgSlug)}/helm`;
+
+export const helmCertificatePath = (orgSlug: string, certificateId: string): string =>
+  `${helmPath(orgSlug, "certificates")}/${seg(certificateId)}`;
+
+export const isHelmPath = (pathname: string): boolean => {
+  const segments = pathname.split("/").filter(Boolean);
+  return segments.length >= 2 && !isReservedSegment(segments[0] ?? "") &&
+    RESERVED_WORKSPACE_SEGMENTS.has((segments[1] ?? "").toLowerCase());
+};
 
 export const organizationPath = (orgSlug: string): string =>
   `/organizations/${seg(orgSlug)}`;
@@ -409,6 +445,16 @@ export const parseTenantPath = (pathname: string): ParsedTenantPath | null => {
   const [first, second, ...rest] = segments;
   if (!first || !second || isReservedSegment(first)) {
     return null;
+  }
+
+  // `/:orgSlug/helm/…` names the organization and no workspace: the tenant resolves to that
+  // organization and its remembered workspace, and switching away rebases to the workspace root.
+  if (RESERVED_WORKSPACE_SEGMENTS.has(second.toLowerCase())) {
+    try {
+      return { orgSlug: decodeURIComponent(first), workspaceSlug: "", rest: "" };
+    } catch {
+      return null;
+    }
   }
 
   let orgSlug: string;
@@ -674,6 +720,19 @@ export const runTenantPathSelfCheck = (): string[] => {
   expect(
     "an involuntary exit still refuses an unsafe destination",
     loginPathForExit("//evil.example.com", false) === "/login",
+  );
+
+  // HELM:self-check. Helm's address names the organization and no workspace.
+  const helm = parseTenantPath("/acme/helm/mandates");
+  expect(
+    "/:orgSlug/helm is Helm's address, not a workspace called helm",
+    helm?.orgSlug === "acme" && helm?.workspaceSlug === "" && helm?.rest === "",
+  );
+  expect("helm paths build under the organization", helmPath("acme", "ledger") === "/acme/helm/ledger");
+  expect("a helm path is recognised", isHelmPath("/acme/helm") && !isHelmPath("/acme/engineering"));
+  expect(
+    "switching workspace from Helm lands on the workspace root",
+    rebaseTenantPath("/acme/helm/plan", "acme", "engineering") === "/acme/engineering",
   );
 
   return failures;
