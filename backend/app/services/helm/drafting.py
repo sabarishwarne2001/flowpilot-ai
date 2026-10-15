@@ -137,10 +137,6 @@ def parse_answer(raw: str) -> Optional[_Answer]:
         return None
 
 
-def _required(found: base.Template) -> list[str]:
-    return [name for name, field in found.Params.model_fields.items() if field.is_required()]
-
-
 def _money_params(found: base.Template, params: dict[str, Any]) -> dict[str, Any]:
     """Amounts as written ("5 lakh" is not a number: the model writes 500000) become micros here."""
     schema = found.Params.model_json_schema()
@@ -266,7 +262,7 @@ def draft(db: Session, who: Any, book: HelmBook, sentence: str) -> dict[str, Any
     params = _money_params(found, answer.params)
     # A required parameter the sentence did not state gets the gallery's example so the readback can
     # show it, and the draft cannot be saved until a person sets it: an example is not a fact.
-    unstated = [name for name in _required(found) if name not in params]
+    unstated = [name for name in registry.required_params(found.key) if name not in params]
     examples = registry.defaults_for(found.key)
     params.update({name: examples[name] for name in unstated if name in examples})
     raw_spec = {"template": found.key, "params": params, "scope": {"counterparty_keys": counterparty_keys}}

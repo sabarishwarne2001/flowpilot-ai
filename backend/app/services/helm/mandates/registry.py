@@ -195,8 +195,13 @@ def library(*, enterprise: bool = True) -> list[dict[str, Any]]:
                     "kind": found.kind, "summary": found.summary, "plan": found.plan,
                     "available": enterprise or found.plan != "enterprise", "defaults": defaults, "readback": rb,
                     "is_limit": found.is_limit, "law_links": list(found.law_links), "disclaimer": found.disclaimer,
-                    "recommended_for": list(found.recommended_for)})
+                    "recommended_for": list(found.recommended_for), "required": required_params(found.key)})
     return out
+
+
+def required_params(key: str) -> list[str]:
+    """Parameters with no default: the gallery's value for them is an example a person must replace."""
+    return [name for name, field in template(key).Params.model_fields.items() if field.is_required()]
 
 
 DEFAULT_FLOOR_CURRENCY = "INR"
@@ -236,4 +241,4 @@ def recommended(business_type: Optional[str]) -> list[str]:
 
 
 __all__ = ["BookFacts", "MandateError", "TEMPLATES", "defaults_for", "library", "load", "normalized", "params_of",
-           "parse_spec", "recommended", "spec_hash", "template", "validate"]
+           "parse_spec", "recommended", "required_params", "spec_hash", "template", "validate"]

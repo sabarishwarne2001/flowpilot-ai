@@ -144,6 +144,14 @@ class RejectIn(BaseModel):
     reason: str = Field(..., min_length=1, max_length=1000)
 
 
+class BacktestMandateIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    template: str = Field(..., min_length=3, max_length=48)
+    params: Optional[dict[str, Any]] = None
+    scope: Optional[dict[str, Any]] = None
+
+
 class BacktestIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -151,6 +159,8 @@ class BacktestIn(BaseModel):
     workspace_id: Optional[uuid.UUID] = None
     months: int = Field(default=6, ge=1, le=24)
     templates: Optional[list[str]] = Field(default=None, max_length=20)
+    #: Full draft specs: a drafted mandate backtested before it is saved.
+    mandates: Optional[list[BacktestMandateIn]] = Field(default=None, max_length=20)
 
 
 class PaidIn(BaseModel):
@@ -469,7 +479,9 @@ def helm_request_backtest(organization_id: uuid.UUID, payload: BacktestIn, db: S
                           context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
     who = _viewer(db, context)
     result = service.request_backtest(db, who, book_id=payload.book_id, workspace_id=payload.workspace_id,
-                                      months=payload.months, templates=payload.templates)
+                                      months=payload.months, templates=payload.templates,
+                                      mandates=[m.model_dump() for m in payload.mandates]
+                                      if payload.mandates else None)
     db.commit()
     return result
 

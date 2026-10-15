@@ -73,6 +73,10 @@ def _mandate_specs(db: Session, book: HelmBook, specs: Sequence[dict[str, Any]])
         if key not in registry.TEMPLATES:
             raise BacktestError(f"There is no mandate called {key!r} to backtest.")
         template = registry.TEMPLATES[key]
+        unstated = [n for n in registry.required_params(key) if n not in (raw.get("params") or {})]
+        if unstated and book.kind != v.BOOK_SAMPLE:
+            raise BacktestError(f"Set the {unstated[0].replace('_', ' ')} of \"{template.title}\" before "
+                                "backtesting it: the gallery's value is only an example.", reason="BACKTEST_UNSTATED")
         try:
             spec = registry.normalized(registry.parse_spec({
                 "template": key, "kind": template.kind, "scope": raw.get("scope") or {},

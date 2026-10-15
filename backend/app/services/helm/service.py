@@ -434,13 +434,27 @@ def readback_of(spec: MandateSpec) -> dict[str, Any]:
     return template.readback(spec, registry.params_of(spec)).as_json()
 
 
+def unstated_params(raw: dict[str, Any]) -> list[str]:
+    """Required parameters a request leaves out: the gallery's value for them is only an example."""
+    try:
+        required = registry.required_params(str(raw.get("template") or ""))
+    except registry.MandateError:
+        return []
+    given = raw.get("params") or {}
+    return [name for name in required if name not in given]
+
+
+def unstated_problems(names: list[str]) -> list[str]:
+    return [f"Set the {name.replace('_', ' ')}: the value shown is an example, not yours." for name in names]
+
+
 def preview_spec(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any]) -> dict[str, Any]:
     """Validate and read back a spec without saving it (the composer and the gallery)."""
     try:
         spec = _spec_from(db, book, raw, status=v.MANDATE_DRAFT, owner=who.user_id)
     except registry.MandateError as exc:
         return {"valid": False, "problems": exc.problems, "spec": None, "readback": None}
-    problems = registry.validate(spec, _facts(db, book))
+    problems = unstated_problems(unstated_params(raw)) + registry.validate(spec, _facts(db, book))
     return {"valid": not problems, "problems": problems, "spec": spec.as_json(), "readback": readback_of(spec)}
 
 
@@ -453,7 +467,7 @@ def create_mandate(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any]
     except registry.MandateError as exc:
         raise HelmInvalid("; ".join(exc.problems), reason="MANDATE_INVALID", details={"problems": exc.problems})
     _check_act_cap(who, spec)
-    problems = registry.validate(spec, _facts(db, book))
+    problems = unstated_problems(unstated_params(raw)) + registry.validate(spec, _facts(db, book))
     if problems:
         raise HelmInvalid(" ".join(problems), reason="MANDATE_INVALID", details={"problems": problems})
     template = registry.template(spec.template)
@@ -989,8 +1003,10 @@ def delete_sample(db: Session, who: Viewer) -> dict[str, Any]:
 
 
 def request_backtest(db: Session, who: Viewer, *, book_id: Optional[uuid.UUID], workspace_id: Optional[uuid.UUID],
-                     months: int, templates: Optional[list[str]] = None) -> dict[str, Any]:
-    """Queue a backtest of the book's active mandates (or the named library templates, as drafts).
+                     months: int, templates: Optional[list[str]] = None,
+                     mandates: Optional[list[dict[str, Any]]] = None) -> dict[str, Any]:
+    """Queue a backtest of the book's active mandates (or the named library templates, or full draft
+    specs, as drafts).
     Helm preview runs one a week on its own documents, of up to 3 months: the workspace gets a
     read-only book for it, which never plans or acts."""
     from app.services.helm import backtest, plan_store
@@ -1008,13 +1024,18 @@ def request_backtest(db: Session, who: Viewer, *, book_id: Optional[uuid.UUID], 
     if book.kind != v.BOOK_SAMPLE and not who.can_read(book.workspace_id):
         raise HelmForbidden("You cannot read this workspace's documents.", reason="HELM_NO_ACCESS")
     preview = not who.helm and book.kind != v.BOOK_SAMPLE
-    if templates:
-        specs: list[Any] = list(templates)
+    if mandates:
+        specs: list[Any] = [dict(m) for m in mandates]
+    elif templates:
+        specs = list(templates)
     else:
         active = plan_store.active_mandates(db, book.id)
+        # With none active, the recommended ones, less those that need a person's own number (a cash
+        # floor, a PO threshold): their gallery value is only an example.
         specs = [{"template": m.template, "params": m.spec.params, "scope": m.spec.scope.model_dump(mode="json"),
                   "title": m.title, "mandate_id": m.id, "version": m.version} for m in active] or \
-            registry.recommended(snapshot_store.settings_for(db, book).business_type)
+            [key for key in registry.recommended(snapshot_store.settings_for(db, book).business_type)
+             if book.kind == v.BOOK_SAMPLE or not registry.required_params(key)]
     try:
         row = backtest.request(db, book=book, user_id=who.user_id, months=months, specs=specs, preview=preview)
     except backtest.BacktestError as exc:
