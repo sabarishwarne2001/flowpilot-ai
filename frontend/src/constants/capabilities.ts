@@ -55,6 +55,14 @@ export const CAPABILITY = {
   batchDispatch: "capability.batch_dispatch",
   // PHASE2:capability-constant — TruthMesh, the cross-document digital twin, Business and Enterprise (N-033).
   truthmesh: "capability.truthmesh",
+  // HELM:capability-constants — Helm, the flagship engine (docs/helm/ARCHITECTURE.md). Helm itself on
+  // Business and Enterprise; custom conditions, approval chains, planning across every workspace and
+  // the Helm API on Enterprise only.
+  helm: "capability.helm",
+  helmCustom: "capability.helm_custom",
+  helmApprovalChains: "capability.helm_approval_chains",
+  helmAllWorkspaces: "capability.helm_all_workspaces",
+  helmApi: "capability.helm_api",
 } as const;
 
 export type CapabilityKey = (typeof CAPABILITY)[keyof typeof CAPABILITY];
