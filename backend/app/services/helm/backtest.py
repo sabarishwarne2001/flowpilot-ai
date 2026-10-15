@@ -67,7 +67,9 @@ def period(months: int, *, today: Optional[date] = None) -> tuple[date, date]:
 
 def _mandate_specs(db: Session, book: HelmBook, specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
     """Validated spec JSON for each requested mandate (a library key with its defaults, or a full spec).
-    An Enterprise template (a custom condition) is replayed only on a plan that carries it."""
+    An Enterprise template (a custom condition) is replayed only on a plan that carries it, or when it
+    is a mandate already in force (`mandate_id`, which only the book's active mandates carry): after
+    a move to Business it keeps running, so the Time machine keeps replaying it."""
     out: list[dict[str, Any]] = []
     enterprise: Optional[bool] = None
     for raw in specs:
@@ -76,7 +78,7 @@ def _mandate_specs(db: Session, book: HelmBook, specs: Sequence[dict[str, Any]])
         if key not in registry.TEMPLATES:
             raise BacktestError(f"There is no mandate called {key!r} to backtest.")
         template = registry.TEMPLATES[key]
-        if template.plan == "enterprise":
+        if template.plan == "enterprise" and not raw.get("mandate_id"):
             enterprise = gate.custom_held(db, book.organization_id) if enterprise is None else enterprise
             if not enterprise:
                 raise BacktestError(f"\"{template.title}\" is part of the Enterprise plan.", reason="BACKTEST_PLAN")

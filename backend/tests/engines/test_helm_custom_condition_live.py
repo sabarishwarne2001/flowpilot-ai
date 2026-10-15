@@ -211,6 +211,13 @@ def test_after_a_move_to_business_a_custom_condition_is_paused_or_archived_but_n
     assert planned.status_code == 200, planned.text
     assert [a["mandate_id"] for a in planned.json()["actions"]
             if a["kind"] == "hold_payment" and a["work_item_id"] == str(item.id)] == [mandate["id"]]
+    # The Time machine still replays the mandates in force, this one included; a new custom rule is refused.
+    replay = client.post(_url(tenant, "/backtests"), json={"book_id": book["id"], "months": 3}, headers=headers)
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["mandates"] == [{"template": "custom_condition", "title": mandate["title"]}]
+    fresh = client.post(_url(tenant, "/backtests"), json={"book_id": book["id"], "months": 3, "mandates": [
+        {"template": "custom_condition", "params": RULE}]}, headers=headers)
+    assert fresh.status_code == 422 and fresh.json()["message"] == '"Custom condition" is part of the Enterprise plan.'
     edited = client.patch(f"{url}/{mandate['id']}", json={"params": {**RULE, "name": "Bigger"}}, headers=headers)
     assert edited.status_code == 422, edited.text
     assert edited.json()["message"] == '"Custom condition" is part of the Enterprise plan.'
