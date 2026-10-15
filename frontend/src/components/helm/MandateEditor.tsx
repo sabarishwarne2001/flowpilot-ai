@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { History } from "lucide-react";
 
+import { ConditionsEditor, CUSTOM_TEMPLATE } from "@/components/helm/ConditionsEditor";
 import { EditableReadback, fromMicros, toMicros } from "@/components/helm/EditableReadback";
 import { errorMessage } from "@/services/api/errors";
 import { createHelmMandate, previewHelmMandate, updateHelmMandate } from "@/services/api/helm";
@@ -188,6 +189,8 @@ export const MandateEditor: React.FC<{
     ...serverProblems,
   ];
   const ready = problems.length === 0 && !check.isPending;
+  // A custom condition (Enterprise) is built in a rows editor rather than by pressing chips.
+  const custom = start.template === CUSTOM_TEMPLATE;
   const currency = String(((params.floor ?? params.threshold) as { currency?: string } | undefined)?.currency ?? "INR");
 
   const change = (param: string, value: unknown): void => {
@@ -202,7 +205,11 @@ export const MandateEditor: React.FC<{
       <h3 id={`helm-editor-${start.template}`} ref={heading} tabIndex={-1} className="text-sm font-semibold outline-none">
         {mandate ? `Edit ${start.title}` : start.title}
       </h3>
-      <p className="helm-muted mt-0.5 text-xs">Press a highlighted value to change it.</p>
+      <p className="helm-muted mt-0.5 text-xs">
+        {custom
+          ? "Build the rule below; the sentence is how Helm reads it."
+          : "Press a highlighted value to change it."}
+      </p>
       <EditableReadback
         readback={preview.readback}
         params={params}
@@ -210,6 +217,7 @@ export const MandateEditor: React.FC<{
         disabled={check.isPending || save.isPending}
         className="mt-2 text-sm"
       />
+      {custom ? <ConditionsEditor params={params} onChange={change} disabled={save.isPending} /> : null}
       {mandate ? (
         <AutonomyFields
           name={mandate.title}

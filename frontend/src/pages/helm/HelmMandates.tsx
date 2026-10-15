@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { ExternalLink, Lock, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
@@ -8,6 +9,7 @@ import { MandateComposer } from "@/components/helm/MandateComposer";
 import { MandateEditor, type EditorStart } from "@/components/helm/MandateEditor";
 import { ReadbackSentence } from "@/components/helm/ReadbackSentence";
 import { LoadFailed } from "@/components/common/LoadFailed";
+import { organizationBillingPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import {
   createHelmMandate,
@@ -48,8 +50,22 @@ const LawLinks: React.FC<{ readonly links: { title: string; url: string }[]; rea
     </div>
   ) : null;
 
+/** A library mandate this plan does not carry: what it needs, and where to upgrade (owners and billing). */
+const UpgradeNote: React.FC<{ readonly orgSlug: string; readonly role: string }> = ({ orgSlug, role }) => (
+  <p className="helm-muted mt-2 text-xs" data-testid="helm-upgrade-note">
+    Part of the Enterprise plan.{" "}
+    {role === "OWNER" || role === "BILLING" ? (
+      <Link to={organizationBillingPath(orgSlug)} className="helm-accent hover:underline">
+        See plans
+      </Link>
+    ) : (
+      "Ask your organization's owner about upgrading."
+    )}
+  </p>
+);
+
 export const HelmMandates: React.FC = () => {
-  const { organizationId, orgSlug, overview, canDecide } = useHelm();
+  const { organizationId, orgSlug, overview, canDecide, role } = useHelm();
   const book = useHelmBook();
   const queryClient = useQueryClient();
   const library = useQuery({ queryKey: helmKeys.library(organizationId), queryFn: () => getHelmLibrary(organizationId) });
@@ -283,6 +299,7 @@ export const HelmMandates: React.FC = () => {
                           <ReadbackSentence readback={template.readback} className="mt-1.5 text-sm" />
                           <p className="helm-muted mt-1 text-xs">{template.summary}</p>
                           <LawLinks links={template.law_links} disclaimer={template.disclaimer} />
+                          {!template.available ? <UpgradeNote orgSlug={orgSlug} role={role} /> : null}
                           {writable ? (
                             <div className="mt-auto pt-3">
                               <button

@@ -298,6 +298,34 @@ export interface LibraryTemplate {
   recommended_for: string[];
   /** Parameters with no default: the value shown is an example the person must set before adding. */
   required: string[];
+  /** The custom condition's rows editor: the facts it may test, their comparisons and the outcomes. */
+  editor?: ConditionEditorSpec;
+}
+
+/** A comparison a custom condition makes (backend mandates/library/custom_condition.py OP_WORDS). */
+export type ConditionOp = ">" | ">=" | "<" | "<=" | "=" | "!=" | "contains" | "in";
+
+export interface ConditionField {
+  key: string;
+  label: string;
+  type: "money" | "number" | "text" | "bool" | "choice";
+  ops: { op: ConditionOp; words: string }[];
+  unit: string | null;
+  choices: { value: string; label: string }[];
+}
+
+export interface ConditionEditorSpec {
+  fields: ConditionField[];
+  matches: { value: "all" | "any"; label: string }[];
+  outcomes: { value: "hold" | "approval" | "notify"; label: string; help: string }[];
+  max_conditions: number;
+}
+
+/** One stored condition: `field op value` (money as {amount_micros, currency}; "in" as a list). */
+export interface CustomCondition {
+  field: string;
+  op: ConditionOp;
+  value: unknown;
 }
 
 export interface HelmLibrary {
