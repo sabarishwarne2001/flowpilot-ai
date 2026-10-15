@@ -418,22 +418,117 @@ def _tokens(text: Optional[str]) -> set[str]:
     return {t for t in re.split(r"[^a-z0-9]+", (text or "").lower()) if len(t) >= 4}
 
 
+def _joined(number: Optional[str]) -> str:
+    """An invoice number as the bank rules compare it: its letter and digit groups, run together."""
+    return "".join(t for t in re.split(r"[^a-z0-9]+", (number or "").lower()) if t)
+
+
+def numbers_named(text: str, known: frozenset[str]) -> frozenset[str]:
+    """Which of the `known` invoice numbers (`_joined` forms) a narration names as whole tokens: one
+    pass over the narration's words, not one per known number."""
+    words = [t for t in re.split(r"[^a-z0-9]+", (text or "").lower()) if t]
+    found = set()
+    for i in range(len(words)):
+        run = ""
+        for word in words[i:i + 4]:
+            run += word
+            if run in known:
+                found.add(run)
+    return frozenset(found)
+
+
 def _line_matches(line: StatementLine, *, amount: int, not_before: Optional[date], number: Optional[str],
-                  counterparty: Optional[str], outgoing: bool) -> bool:
+                  counterparty: Optional[str], outgoing: bool, named: frozenset[str] = frozenset()) -> bool:
+    """A statement line pays this invoice when the amount and date fit and the line names the invoice,
+    or names its payee and no other invoice. The rules are the bank import's (`bank_match`): the
+    number as whole tokens, never inside a longer number; the payee by every distinctive word of the
+    name, never by one word companies share ("Shree", "Industries", "Traders")."""
+    from app.services.helm.bank_match import mentions_document, mentions_payee
+
     value = line.debit_micros if outgoing else line.credit_micros
     if value is None or abs(value - amount) > money.MICROS // 100:  # within one paisa / cent
         return False
     if not_before and line.on and line.on < not_before:
         return False
-    haystack = f"{line.description} {line.reference}".lower()
-    if number and nz_number(number) and nz_number(number) in re.sub(r"[^a-z0-9]", "", haystack):
+    text = f"{line.description} {line.reference}"
+    if number and mentions_document(number, text):
         return True
-    name_tokens = _tokens(counterparty) - {"private", "limited", "india", "trading", "company", "services"}
-    return bool(name_tokens and name_tokens & _tokens(haystack))
+    if named - {_joined(number)}:
+        return False  # it names another invoice: it pays that one
+    return mentions_payee(counterparty, text)
+
+
+_CENT = money.MICROS // 100
 
 
 def nz_number(number: Optional[str]) -> str:
     return re.sub(r"[^a-z0-9]", "", (number or "").lower())
+
+
+def _credits(doc: DocumentFacts, credits_by_invoice: Mapping[tuple[uuid.UUID, str], list[DocumentFacts]],
+             currency: Optional[str]) -> list[dict[str, Any]]:
+    """The credit notes that point at this invoice, each as a fulfilment (they reduce what is owed)."""
+    out: list[dict[str, Any]] = []
+    if not doc.document_number:
+        return out
+    for credit in credits_by_invoice.get((doc.workspace_id, nz_number(doc.document_number)), []):
+        credit_amount = credit.total_micros or read_money(_first(credit.entities, TOTAL_KEYS), currency) or 0
+        out.append({"kind": "CREDIT", "work_item_id": str(credit.work_item_id), "document": credit.filename,
+                    "on": (credit.document_date or credit.received_on), "amount_micros": abs(credit_amount)})
+    return out
+
+
+def _use_lines_of_recorded_payments(inputs: LedgerInputs, docs: Sequence[DocumentFacts],
+                                    lines_by_workspace: Mapping[uuid.UUID, list[StatementLine]],
+                                    lines_by_amount: Mapping[tuple[uuid.UUID, bool, int], list[int]],
+                                    credits_by_invoice: Mapping[tuple[uuid.UUID, str], list[DocumentFacts]],
+                                    known_numbers: frozenset[str], used_lines: set[tuple[uuid.UUID, int]],
+                                    named_in_line: dict[tuple[uuid.UUID, int], frozenset[str]]) -> None:
+    """Mark as used the statement line behind each payment already recorded, so no other invoice claims it.
+
+    A payment recorded through a bank import (or by a person) settles its invoice as PAID on the day the
+    money moved. The same payment is often also a line of a bank statement uploaded as a document (the
+    PDF of the month the CSV came from). That line is this payment's evidence: without this, the ledger
+    found it "unused" and settled a second invoice of the same amount from the same payee with it, so
+    one real payment counted against two invoices. A line is this payment's when it is in the invoice's
+    workspace, on the day it was paid, of the amount paid (within a paisa), in the same direction, and
+    names the invoice or its payee (and no other invoice). One line per recorded payment: a second
+    payment of the same amount on the same day is still free for the invoice it pays.
+    """
+    for doc in docs:
+        settlement = inputs.settlements.get(doc.work_item_id)
+        if doc.role != ROLE_INVOICE or settlement is None or settlement.state != v.SETTLEMENT_PAID \
+                or settlement.paid_on is None or not lines_by_workspace.get(doc.workspace_id):
+            continue
+        receivable = ident.we_are_seller(doc.entities, inputs.identities)
+        _, cp_name = _counterparty(doc, receivable=receivable)
+        currency = doc.currency or nz.currency_code(_text(doc.entities.get("currency")) or "")
+        paid = settlement.paid_amount_micros
+        if not paid:
+            amount = doc.total_micros if doc.total_micros is not None else read_money(
+                _first(doc.entities, TOTAL_KEYS), currency)
+            if amount is None:
+                continue
+            paid = max(0, amount - sum(c["amount_micros"] for c in _credits(doc, credits_by_invoice, currency)))
+        if not paid:
+            continue
+        lines = lines_by_workspace[doc.workspace_id]
+        cents = round(paid / _CENT)
+        near = sorted({index for c in range(cents - 2, cents + 3)
+                       for index in lines_by_amount.get((doc.workspace_id, not receivable, c), ())})
+        for index in near:
+            line = lines[index]
+            marker = (line.statement_work_item_id, index)
+            if marker in used_lines or line.on != settlement.paid_on:
+                continue
+            named = named_in_line.get((doc.workspace_id, index))
+            if named is None:
+                named = numbers_named(f"{line.description} {line.reference}", known_numbers)
+                named_in_line[(doc.workspace_id, index)] = named
+            if _line_matches(line, amount=paid, not_before=None, number=doc.document_number, counterparty=cp_name,
+                             outgoing=not receivable, named=named):
+                used_lines.add(marker)
+                break
 
 
 # ---------------------------------------------------------------------------
@@ -465,7 +560,21 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
     lines_by_workspace: dict[uuid.UUID, list[StatementLine]] = {}
     for doc in statements:
         lines_by_workspace.setdefault(doc.workspace_id, []).extend(statement_lines(doc, fmt))
+    # The lines by amount (in paise or cents), so an invoice looks only at lines of its amount: a year
+    # of statements has thousands of lines, and every invoice used to read them all.
+    lines_by_amount: dict[tuple[uuid.UUID, bool, int], list[int]] = {}
+    for workspace_id, lines in lines_by_workspace.items():
+        for index, line in enumerate(lines):
+            for outgoing, value in ((True, line.debit_micros), (False, line.credit_micros)):
+                if value is not None:
+                    lines_by_amount.setdefault((workspace_id, outgoing, round(value / _CENT)), []).append(index)
     used_lines: set[tuple[uuid.UUID, int]] = set()
+    # Every invoice number the workspaces know: a line that names one pays that invoice, not another.
+    known_numbers = frozenset(_joined(d.document_number) for d in docs
+                              if d.role == ROLE_INVOICE and d.document_number) - {""}
+    named_in_line: dict[tuple[uuid.UUID, int], frozenset[str]] = {}
+    _use_lines_of_recorded_payments(inputs, docs, lines_by_workspace, lines_by_amount, credits_by_invoice,
+                                    known_numbers, used_lines, named_in_line)
 
     receipt_dates_by_invoice: dict[uuid.UUID, date] = {}
     for line in inputs.match_lines:
@@ -497,16 +606,8 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
             due = invoice_date
 
         # Credits against this invoice reduce what is owed.
-        credits: list[dict[str, Any]] = []
-        credited = 0
-        if doc.document_number:
-            for credit in credits_by_invoice.get((doc.workspace_id, nz_number(doc.document_number)), []):
-                credit_amount = credit.total_micros or read_money(_first(credit.entities, TOTAL_KEYS), currency) or 0
-                credit_amount = abs(credit_amount)
-                credited += credit_amount
-                credits.append({"kind": "CREDIT", "work_item_id": str(credit.work_item_id),
-                                "document": credit.filename, "on": (credit.document_date or credit.received_on),
-                                "amount_micros": credit_amount})
+        credits = _credits(doc, credits_by_invoice, currency)
+        credited = sum(c["amount_micros"] for c in credits)
         outstanding = max(0, (amount or 0) - credited) if amount is not None else None
 
         settlement = inputs.settlements.get(doc.work_item_id)
@@ -516,12 +617,21 @@ def build(inputs: LedgerInputs) -> list[PromiseRow]:
         paid_source = settlement.source if settlement and settlement.state == v.SETTLEMENT_PAID else None
         statement_evidence: Optional[dict[str, Any]] = None
         if paid_on is None and outstanding:
-            for index, line in enumerate(lines_by_workspace.get(doc.workspace_id, [])):
+            lines = lines_by_workspace.get(doc.workspace_id, [])
+            cents = round(outstanding / _CENT)
+            near = sorted({index for c in range(cents - 2, cents + 3)
+                           for index in lines_by_amount.get((doc.workspace_id, not receivable, c), ())})
+            for index in near:  # in the statements' order, as before
+                line = lines[index]
                 marker = (line.statement_work_item_id, index)
                 if marker in used_lines:
                     continue
+                named = named_in_line.get((doc.workspace_id, index))
+                if named is None:
+                    named = numbers_named(f"{line.description} {line.reference}", known_numbers)
+                    named_in_line[(doc.workspace_id, index)] = named
                 if _line_matches(line, amount=outstanding, not_before=invoice_date, number=doc.document_number,
-                                 counterparty=cp_name, outgoing=not receivable):
+                                 counterparty=cp_name, outgoing=not receivable, named=named):
                     used_lines.add(marker)
                     paid_on = line.on or invoice_date
                     paid_source = v.SOURCE_STATEMENT
