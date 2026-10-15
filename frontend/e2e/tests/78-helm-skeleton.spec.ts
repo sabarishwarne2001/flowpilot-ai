@@ -5,9 +5,11 @@
  * A new Business customer uploads two supplier invoices. In the browser the owner finds the
  * Documents | Helm switch in the header (a radio group), switches to Helm, starts Helm on the
  * workspace, confirms who the company is and its cash, adds two mandates from the library (each
- * starts in Propose mode) and re-plans. The second invoice asks to be paid into a new bank account:
- * the Guard blocks its payment and says why. The radar marks one as the same bill again: the owner approves
- * Helm's proposal to hold it, the worker runs it after the Guard checks it again, and its
+ * starts in Propose mode) and re-plans. The second invoice asks to be paid into a new bank account,
+ * and the radar marks one of the pair as the same bill again (which one depends on which the worker
+ * read last): when they are different bills the Guard blocks paying the changed account and says
+ * why; when they are the same bill Helm plans to pay only the other. The owner approves Helm's
+ * proposal to hold the duplicate, the worker runs it after the Guard checks it again, and its
  * certificate's fingerprint verifies. A member sees no switch, and the API refuses them Helm.
  */
 import { test, expect, settle } from "../support/fixtures";
@@ -35,6 +37,26 @@ async function actions(bookId: string): Promise<Action[]> {
   );
   expect(cockpit.status, cockpit.text.slice(0, 300)).toBe(200);
   return [...cockpit.body.actions, ...cockpit.body.recent];
+}
+
+/** The invoice numbers the radar marked: the probable duplicate, and the one whose bank account changed. */
+async function flagged(): Promise<{ duplicate: string; changed: string }> {
+  const numberOf = new Map<string, string>();
+  for (const item of await listWorkItems(customer.session, customer.wsId)) {
+    const match = /INV-E2E-\d+/.exec(String(item.original_filename ?? ""));
+    if (match) numberOf.set(String(item.id), match[0]);
+  }
+  const radar = await api<{ items: Array<{ kind: string; subject_work_item_id: string }> }>(
+    customer.session, "GET", `/workspaces/${customer.wsId}/anomalies`,
+  );
+  const risk = await api<{ items: Array<{ kind: string; work_item_id: string }> }>(
+    customer.session, "GET", `/workspaces/${customer.wsId}/payment-risk`,
+  );
+  const duplicate = numberOf.get(radar.body.items.find((f) => f.kind === "DUPLICATE_DOCUMENT")?.subject_work_item_id ?? "");
+  const changed = numberOf.get(risk.body.items.find((f) => f.kind === "BANK_ACCOUNT_CHANGED")?.work_item_id ?? "");
+  expect(duplicate, "the radar's duplicate finding").toBeTruthy();
+  expect(changed, "the bank-account flag").toBeTruthy();
+  return { duplicate: duplicate as string, changed: changed as string };
 }
 
 test.describe("Helm skeleton — a tenant of its own", () => {
@@ -66,7 +88,7 @@ test.describe("Helm skeleton — a tenant of its own", () => {
       .toBe(true);
   });
 
-  test("switch to Helm, start it, add mandates, re-plan, see the Guard block a payment and approve a hold", async ({ page }) => {
+  test("switch to Helm, start it, add mandates, re-plan, see what the Guard passes and blocks, and approve a hold", async ({ page }) => {
     test.skip(process.env.E2E_LLM !== "1", NEEDS_MODEL);
     await signInAs(page, customer.email);
     await page.goto(customer.ws());
@@ -126,15 +148,28 @@ test.describe("Helm skeleton — a tenant of its own", () => {
     const rows = page.getByTestId("helm-action");
     await expect(rows.first()).toBeVisible();
 
-    // INV-E2E-1002 asks to be paid into a new bank account: the Guard blocks its payment and says why.
-    const blocked = rows.filter({ hasText: "Pay Acme Industrial Supplies" }).filter({ hasText: "Blocked by the Guard" }).first();
-    await expect(blocked).toBeVisible();
-    await expect(blocked.getByRole("button", { name: /^Approve: / })).toHaveCount(0);
-    await blocked.getByRole("button", { name: "Why, and what the Guard checked" }).click();
-    await expect(blocked).toContainText("bank account changed");
+    // INV-E2E-1002, uploaded second, asks to be paid into a new bank account. Which of the pair the
+    // radar marks as the same bill again depends on which the worker read last, so ask it.
+    const { duplicate, changed } = await flagged();
+    const pays = rows.filter({ hasText: "Pay Acme Industrial Supplies" });
+    if (duplicate !== changed) {
+      // The changed account is on the bill Helm would pay: the Guard blocks its payment and says why.
+      const blocked = pays.filter({ hasText: "Blocked by the Guard" }).first();
+      await expect(blocked).toBeVisible();
+      await expect(blocked.getByRole("button", { name: /^Approve: / })).toHaveCount(0);
+      await blocked.getByRole("button", { name: "Why, and what the Guard checked" }).click();
+      await expect(blocked).toContainText("bank account changed");
+    } else {
+      // Both findings are on one bill: Helm never plans to pay a probable duplicate, so only the
+      // other bill is proposed, and the Guard passes it.
+      await expect(pays).toHaveCount(1);
+      await expect(pays.first()).toContainText("Guard passed · needs approval");
+      await pays.first().getByRole("button", { name: "Why, and what the Guard checked" }).click();
+      await expect(pays.first()).toContainText(`Due ${duplicate === "INV-E2E-1002" ? "15" : "20"} Oct 2026`);
+    }
 
-    // The radar marks one of the pair as the same bill again: Helm proposes holding it, a person approves.
-    const hold = rows.filter({ hasText: /Hold INV-E2E-100\d: probable duplicate/ }).first();
+    // Helm proposes holding the probable duplicate; a person approves.
+    const hold = rows.filter({ hasText: `Hold ${duplicate}: probable duplicate` }).first();
     await expect(hold).toContainText("Guard passed · needs approval");
     const bookId = new URL(page.url()).searchParams.get("book") ?? (await page.evaluate(() => {
       for (let i = 0; i < localStorage.length; i++) {
@@ -158,7 +193,7 @@ test.describe("Helm skeleton — a tenant of its own", () => {
     // Done recently, undoable, with a certificate whose fingerprint verifies.
     await page.reload();
     await settle(page);
-    const recent = page.getByRole("region", { name: "Done recently" }).getByTestId("helm-action").filter({ hasText: /Hold INV-E2E-100\d: probable duplicate/ }).first();
+    const recent = page.getByRole("region", { name: "Done recently" }).getByTestId("helm-action").filter({ hasText: `Hold ${duplicate}: probable duplicate` }).first();
     await expect(recent).toContainText("Done");
     await expect(recent.getByRole("button", { name: "Undo" })).toBeVisible();
     await recent.getByRole("button", { name: "Why, and what the Guard checked" }).click();
