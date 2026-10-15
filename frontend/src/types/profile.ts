@@ -52,7 +52,7 @@ export const AVATAR_MIN_DIMENSION = 32;
 export const AVATAR_MAX_DIMENSION = 1024;
 
 /** Campaign session 3 (N-062). One notification category, and whether it is emailed to me. */
-export type NotificationCategoryKey = "security" | "billing" | "usage" | "workflow";
+export type NotificationCategoryKey = "security" | "billing" | "usage" | "workflow" | "helm" | "helm_briefing";
 
 export interface NotificationCategoryPreference {
   readonly key: NotificationCategoryKey;
