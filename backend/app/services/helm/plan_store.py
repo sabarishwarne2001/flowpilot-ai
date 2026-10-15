@@ -252,18 +252,27 @@ def _notify(db: Session, book: HelmBook, plan: HelmPlan, composition: planner.Co
 
 def enqueue(db: Session, book: HelmBook, *, triggered_by: str = v.TRIGGER_LEDGER, delay_s: int = v.PLAN_DEBOUNCE_SECONDS,
             force: bool = False) -> None:
-    """Ask for a plan soon: debounced per book and minute, so a burst of changes plans once."""
+    """Ask for a plan soon: debounced per book and minute, so a burst of changes plans once. When the
+    minute's plan job has already started (or finished), it may have read the book before this change:
+    the change gets a run of its own instead of being folded into it."""
     from datetime import timedelta
 
+    from app.models.job import Job, JobStatus
     from app.services import job_service
 
     now = datetime.now(timezone.utc)
     bucket = now.strftime("%Y%m%d%H%M")
+    key = f"{v.JOB_PLAN}:{book.id}:{triggered_by}:{bucket}{':force' if force else ''}"
+    started = db.execute(select(Job.status).where(
+        Job.job_type == v.JOB_PLAN, Job.organization_id == book.organization_id, Job.idempotency_key == key,
+        Job.status.in_((JobStatus.CLAIMED, JobStatus.SUCCEEDED, JobStatus.DEAD))).limit(1)).first()
+    if started is not None:
+        key = f"{key}:{now:%S%f}"
     job_service.enqueue(
         db, job_type=v.JOB_PLAN, organization_id=book.organization_id,
         payload={"book_id": str(book.id), "organization_id": str(book.organization_id), "triggered_by": triggered_by,
                  "force": force},
-        idempotency_key=f"{v.JOB_PLAN}:{book.id}:{triggered_by}:{bucket}{':force' if force else ''}",
+        idempotency_key=key,
         available_at=now + timedelta(seconds=delay_s),
     )
 
