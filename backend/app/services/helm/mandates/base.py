@@ -71,7 +71,7 @@ class Chip:
     param: str
     value: Any
     display: str
-    kind: str  # money | percent | days | count | bool | list | text | weekdays
+    kind: str  # money | percent | days | count | bool | list | text | weekdays | choice | condition
 
 
 @dataclass
@@ -256,6 +256,27 @@ class Template:
     #: to a payable: when it no longer does, the planner proposes releasing the hold (`release_hold`).
     hold_code: Optional[str] = None
     still_holds: Optional[Callable[[Snapshot, Payable, ActiveMandate], bool]] = None
+    #: A template many mandates share with different rules (the custom condition) holds each invoice
+    #: under its own mandate's code, so one mandate never releases another's hold.
+    hold_code_for: Optional[Callable[[ActiveMandate], str]] = None
+    #: The mandate's title from its parameters (a custom condition is called what its owner named it).
+    title_from: Optional[Callable[[Any], str]] = None
+    #: What the editor needs beyond the readback's chips (the custom condition's fields and operators).
+    editor: Optional[dict[str, Any]] = None
+
+
+def hold_code_of(template: Template, mandate: ActiveMandate) -> Optional[str]:
+    """The code this mandate's holds carry (`Payable.hold_code`), which its release looks for."""
+    return template.hold_code_for(mandate) if template.hold_code_for is not None else template.hold_code
+
+
+class Problems(ValueError):
+    """Raised by a template's parameter model: every problem is already a whole sentence in plain words,
+    and the registry passes them on as they are (never as a Pydantic error string)."""
+
+    def __init__(self, problems: Sequence[str]):
+        super().__init__(" ".join(problems))
+        self.problems = list(problems)
 
 
 #: Backtest finding categories beyond the value-held ones (vocabulary.VALUE_CATEGORIES): facts a
@@ -267,6 +288,7 @@ CATEGORY_MSME_LATE = "MSME_LATE"
 CATEGORY_RENEWAL = "RENEWAL_MISSED"
 CATEGORY_DOCUMENT = "DOCUMENT_EXPIRED"
 CATEGORY_RECEIVABLE = "RECEIVABLE_LATE"
+CATEGORY_CUSTOM = "CUSTOM_CONDITION"  # an invoice that matched an owner's custom condition
 
 
 def evidence_of(payable: Any) -> list[dict[str, Any]]:
@@ -302,6 +324,6 @@ __all__ = [
     "GROUPS", "GROUP_CONTRACTS", "GROUP_CUSTOM", "GROUP_INDIA", "GROUP_OPERATIONS", "GROUP_PROTECT",
     "GROUP_RECEIVABLES", "GROUP_RUN", "HOLDING", "OptimizerTerms", "Readback", "Risk", "Template", "UNKNOWN",
     "CATEGORY_CASH_FLOOR", "CATEGORY_CONTROL", "CATEGORY_DOCUMENT", "CATEGORY_MSME_LATE", "CATEGORY_PAYMENT_PROTECTED",
-    "CATEGORY_RECEIVABLE", "CATEGORY_RENEWAL", "evidence_of", "release_candidate", "seen_on",
-    "check", "in_scope", "payables_in_scope", "readback",
+    "CATEGORY_CUSTOM", "CATEGORY_RECEIVABLE", "CATEGORY_RENEWAL", "Problems", "evidence_of", "hold_code_of",
+    "release_candidate", "seen_on", "check", "in_scope", "payables_in_scope", "readback",
 ]

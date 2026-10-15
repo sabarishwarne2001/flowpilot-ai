@@ -30,6 +30,7 @@ RELEASE_WHY = {
     "PRICE_ABOVE_AGREED": "No line is above the agreed price any more (a corrected invoice or a credit note).",
     "BANK_ACCOUNT_CHANGED": "The new bank account was verified.",
     "NO_MATCHED_PO": "It now has a matching purchase order (or is no longer above the amount).",
+    "CUSTOM_CONDITION": "It no longer matches the custom condition that held it.",
 }
 
 
@@ -147,10 +148,10 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
         template = TEMPLATES[mandate.template]
         candidates.extend(template.propose(snapshot, mandate))
         # A hold this mandate placed whose reason is gone: propose releasing it.
-        if template.hold_code and template.still_holds is not None:
+        code = base.hold_code_of(template, mandate)
+        if code and template.still_holds is not None:
             for payable in base.payables_in_scope(snapshot, mandate):
-                if payable.held_by_helm_for(template.hold_code) and not template.still_holds(snapshot, payable,
-                                                                                             mandate):
+                if payable.held_by_helm_for(code) and not template.still_holds(snapshot, payable, mandate):
                     candidates.append(base.release_candidate(payable, mandate, RELEASE_WHY.get(
                         template.hold_code, "Its reason is gone.")))
 
