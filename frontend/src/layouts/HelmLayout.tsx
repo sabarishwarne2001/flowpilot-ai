@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   Gauge,
+  History,
   Lock,
   Menu,
   Route as RouteIcon,
@@ -42,6 +43,7 @@ export const HELM_NAV: readonly HelmNavItem[] = [
   { page: "plan", name: "Plan", icon: RouteIcon },
   { page: "mandates", name: "Mandates", icon: ScrollText },
   { page: "ledger", name: "Promise ledger", icon: BookOpen },
+  { page: "time-machine", name: "Time machine", icon: History },
   { page: "certificates", name: "Certificates", icon: BadgeCheck },
   { page: "settings", name: "Settings", icon: Settings2 },
 ];
