@@ -245,7 +245,7 @@ def _notify(db: Session, book: HelmBook, plan: HelmPlan, composition: planner.Co
                 db, organization_id=book.organization_id, roles=(OrganizationRole.OWNER, OrganizationRole.ADMIN),
                 title=f"Helm: {book.name} needs attention", message=" ".join(lines)[:1900],
                 notification_type=NotificationType.SYSTEM, priority=NotificationPriority.WARNING,
-                category=v.NOTIFICATION_CATEGORY, action="Open the Helm cockpit")
+                category=v.NOTIFICATION_CATEGORY, action=v.NOTIFICATION_ACTION)
     except Exception:  # noqa: BLE001
         logger.exception("helm.plan_notify_failed", extra={"plan_id": str(plan.id)})
 

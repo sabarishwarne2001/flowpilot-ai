@@ -278,6 +278,8 @@ PLAN_DEBOUNCE_SECONDS: Final = 20
 
 #: The notification category every Helm notice uses (notification preferences).
 NOTIFICATION_CATEGORY: Final = "helm"
+#: The button on Helm's notices and their emails (organization_notification_service.APP_ACTIONS): the cockpit.
+NOTIFICATION_ACTION: Final = "helm"
 BRIEFING_CATEGORY: Final = "helm_briefing"
 
 

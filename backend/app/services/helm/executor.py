@@ -342,7 +342,8 @@ def _notify_hold(db: Session, action: HelmAction, book: HelmBook) -> None:
                 roles=(OrganizationRole.OWNER, OrganizationRole.ADMIN, OrganizationRole.BILLING),
                 title=f"Helm held {money.say(action.amount_micros, action.currency)}",
                 message=action.explanation[:1900], notification_type=NotificationType.SYSTEM,
-                priority=NotificationPriority.WARNING, category=v.NOTIFICATION_CATEGORY, action="Open Helm")
+                priority=NotificationPriority.WARNING, category=v.NOTIFICATION_CATEGORY,
+                action=v.NOTIFICATION_ACTION)
     except Exception:  # noqa: BLE001
         logger.exception("helm.hold_notify_failed", extra={"action_id": str(action.id)})
 

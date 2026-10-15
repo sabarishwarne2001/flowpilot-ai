@@ -143,7 +143,7 @@ def notify(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) ->
     count = notices.emit_to_roles(
         db, organization_id=action.organization_id, roles=(OrganizationRole.OWNER, OrganizationRole.ADMIN),
         title=action.title[:150], message=action.explanation[:1900], notification_type=NotificationType.SYSTEM,
-        priority=NotificationPriority.WARNING, category=v.NOTIFICATION_CATEGORY, action="Open Helm")
+        priority=NotificationPriority.WARNING, category=v.NOTIFICATION_CATEGORY, action=v.NOTIFICATION_ACTION)
     return {"notified": count}
 
 
