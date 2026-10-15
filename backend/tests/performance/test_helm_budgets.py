@@ -8,6 +8,7 @@ of Helm's steps is timed on real Postgres and held to its budget:
   ledger rebuild (the job a document change runs)   <= 1 s per changed document, measured on one change
   snapshot (every input the plan reads)              recorded
   plan for the open payables over 30 days            <= 10 s for 1,000 open payables
+  a what-if (snapshot and two compositions)          <= 10 s for 1,000 open payables (a person waits)
   1,000 seeded futures of cash                       <= 3 s
   bank import of a statement with N/2 lines          recorded (matching included)
   every supplier statement reconciled                recorded
@@ -201,6 +202,14 @@ def test_helm_meets_its_budget_at_scale(db_session, tenant, capsys):
     _timed("simulation_1000_futures", lambda: simulation.simulate(snapshot, seed=simulation.seed_for(snapshot.digest)))
     _timed("plan", lambda: plan_store.run(db_session, book, triggered_by=v.TRIGGER_PERSON, force=True, as_of=today))
     db_session.commit()
+    # A what-if: a snapshot and two compositions (today's plan and the scenario's), saving nothing.
+    from app.services.helm import what_if
+
+    asked = _timed("what_if", lambda: what_if.run(db_session, _owner(db_session, tenant), book,
+                                                  {"cash_change_micros": -500_000 * money.MICROS,
+                                                   "delay_receivables_days": 15}))
+    db_session.rollback()
+    assert asked["saved"] is False and asked["scenario"]["cash_paths"]
     _timed("reconcile_all_statements", lambda: [reconcile.reconcile(s, snapshot.payables)
                                                 for s in snapshot.supplier_statements])
     assert len(snapshot.supplier_statements) == SUPPLIERS
@@ -233,6 +242,7 @@ def test_helm_meets_its_budget_at_scale(db_session, tenant, capsys):
     if DOCUMENTS <= 2000:
         assert MEASURED["ledger_incremental"] <= 1.0 * MULTIPLIER, MEASURED
     assert MEASURED["plan"] <= 10.0 * MULTIPLIER * scale, MEASURED
+    assert MEASURED["what_if"] <= 10.0 * MULTIPLIER * scale, MEASURED
     assert MEASURED["simulation_1000_futures"] <= 3.0 * MULTIPLIER, MEASURED
 
 
