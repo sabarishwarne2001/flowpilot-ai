@@ -1,13 +1,16 @@
 /**
  * HELM: importing a bank statement (owner addition A), in the browser.
  *
- * A Business customer uploads INV-E2E-1001 and 1002 (Acme Industrial Supplies, USD 1,250 each).
- * Helm plans to pay 1001 and the owner approves it, so it is on the payment run. The owner then adds
- * the bank account (only its last four digits are kept) and imports a CSV export:
+ * A Business customer uploads INV-E2E-1001 and 1002 (Acme Industrial Supplies, USD 1,250 each). The
+ * radar flags one as a probable duplicate and the other's bank account as changed (which way round
+ * depends on the order the worker reads them); the owner verifies the account by phone and
+ * dismisses that flag. Helm plans to pay the invoice that is not a duplicate and the owner approves
+ * it, so it is on the payment run. The owner then adds the bank account (only its last four digits
+ * are kept) and imports a CSV export:
  *
- *   the payment to Acme naming INV-E2E-1001 on the run day  -> Helm matches it by itself;
- *   a wire of USD 1,250 with no name                         -> suggested: it may have paid 1002;
- *   a monthly fee                                            -> no invoice: the owner sets it aside.
+ *   the payment to Acme naming the scheduled invoice, on the run day -> Helm matches it by itself;
+ *   a wire of USD 1,250 with no name                                  -> suggested: the other one;
+ *   a monthly fee                                                     -> no invoice: set aside.
  *
  * The owner confirms the suggestion, sets the fee aside, and reopens Helm's own match: its payment
  * record is undone and the line waits again. The closing balance is the account's cash.
@@ -23,6 +26,9 @@ const TERMINAL = new Set(["COMPLETED", "FAILED", "ERROR", "NEEDS_REVIEW", "REVIE
 let customer: Customer;
 let bookId: string;
 let runDate: string;
+/** The invoice Helm scheduled, and the other one. */
+let paid: string;
+let other: string;
 
 interface Action {
   readonly id: string;
@@ -31,6 +37,7 @@ interface Action {
   readonly state: string;
   readonly kind: string;
   readonly run_date: string | null;
+  readonly work_item_id: string | null;
 }
 
 test.describe("Helm bank statements — import, match, and a person decides the rest", () => {
@@ -65,6 +72,21 @@ test.describe("Helm bank statements — import, match, and a person decides the 
       activate: true,
     });
     expect(mandate.status, mandate.text.slice(0, 300)).toBe(201);
+    // The owner verifies the changed bank account by phone: the flag is dismissed, as on the radar page.
+    await expect
+      .poll(async () => {
+        const risk = await api<{ items: Array<{ id: string; kind: string; status: string }> }>(
+          customer.session, "GET", `/workspaces/${customer.wsId}/payment-risk`);
+        return (risk.body.items ?? []).some((f) => f.kind === "BANK_ACCOUNT_CHANGED");
+      }, { timeout: 60_000, intervals: [1_000, 2_000] })
+      .toBe(true);
+    const risk = await api<{ items: Array<{ id: string; kind: string; status: string }> }>(
+      customer.session, "GET", `/workspaces/${customer.wsId}/payment-risk`);
+    for (const flag of risk.body.items.filter((f) => f.kind === "BANK_ACCOUNT_CHANGED" && f.status === "OPEN")) {
+      const dismissed = await api(customer.session, "POST", `/workspaces/${customer.wsId}/payment-risk/${flag.id}/dismiss`,
+        { reason: "Verified the new account by phone with Acme" });
+      expect(dismissed.status, dismissed.text.slice(0, 300)).toBe(200);
+    }
     // Plan, then approve the payment the Guard passes: it goes on the payment run.
     let pay: Action | undefined;
     await expect
@@ -75,12 +97,20 @@ test.describe("Helm bank statements — import, match, and a person decides the 
       }, { timeout: 90_000, intervals: [2_000, 3_000] })
       .toBe(true);
     runDate = (pay as Action).run_date as string;
+    const numbers = new Map<string, string>();
+    for (const item of await listWorkItems(customer.session, customer.wsId)) {
+      const found = /INV-E2E-\d+/.exec(String(item.original_filename ?? ""));
+      if (found) numbers.set(String(item.id), found[0]);
+    }
+    paid = numbers.get(String((pay as Action).work_item_id)) as string;
+    other = paid === "INV-E2E-1001" ? "INV-E2E-1002" : "INV-E2E-1001";
+    expect(paid).toMatch(/INV-E2E-100[12]/);
     const approved = await api(customer.session, "POST", `${base}/actions/${(pay as Action).id}/approve`);
     expect(approved.status, approved.text.slice(0, 300)).toBe(200);
     await expect
       .poll(async () => {
         const run = await api<{ lines?: unknown[]; runs?: unknown[] }>(customer.session, "GET", `${base}/books/${bookId}/payment-run`);
-        return run.text.includes("INV-E2E-1001");
+        return run.text.includes(paid);
       }, { timeout: 60_000, intervals: [1_000, 2_000] })
       .toBe(true);
   });
@@ -101,7 +131,7 @@ test.describe("Helm bank statements — import, match, and a person decides the 
     const csv = [
       "Chase Business Checking",
       "Date,Description,Reference,Debit,Credit,Balance",
-      `${runDate},ACH ACME INDUSTRIAL SUPPLIES INV-E2E-1001,ACH1,1250.00,,18750.00`,
+      `${runDate},ACH ACME INDUSTRIAL SUPPLIES ${paid},ACH1,1250.00,,18750.00`,
       `${runDate},WIRE OUT 77812,W2,1250.00,,17500.00`,
       `${runDate},MONTHLY SERVICE FEE,F3,15.00,,17485.00`,
     ].join("\n");
@@ -110,7 +140,7 @@ test.describe("Helm bank statements — import, match, and a person decides the 
     expect((await previewed).status()).toBe(200);
     const preview = page.getByTestId("helm-bank-preview");
     await expect(preview.getByRole("combobox", { name: "Money out" })).toHaveValue("Debit");
-    await expect(preview.getByRole("table")).toContainText("ACH ACME INDUSTRIAL SUPPLIES INV-E2E-1001");
+    await expect(preview.getByRole("table")).toContainText(`ACH ACME INDUSTRIAL SUPPLIES ${paid}`);
 
     const imported = page.waitForResponse((r) => r.url().endsWith("/bank-statements") && r.request().method() === "POST");
     await preview.getByRole("button", { name: "Import this statement" }).click();
@@ -120,7 +150,7 @@ test.describe("Helm bank statements — import, match, and a person decides the 
     // The wire: suggested, with its reasons; the owner confirms it paid 1002.
     const wire = page.getByTestId("helm-bank-line").filter({ hasText: "WIRE OUT 77812" });
     await expect(wire).toContainText("the amount is exactly");
-    await wire.getByRole("button", { name: /It paid INV-E2E-1002/ }).click();
+    await wire.getByRole("button", { name: new RegExp(`It paid ${other}`) }).click();
     await expect(page.getByTestId("helm-bank-line").filter({ hasText: "WIRE OUT 77812" })).toHaveCount(0);
 
     // The fee is not an invoice payment.
@@ -132,15 +162,15 @@ test.describe("Helm bank statements — import, match, and a person decides the 
     await expect(page.getByText("Nothing waits for you.")).toBeVisible();
 
     const done = page.getByTestId("helm-bank-matched");
-    await expect(done.filter({ hasText: "INV-E2E-1001" })).toContainText("(Helm");
-    await expect(done.filter({ hasText: "INV-E2E-1002" })).toContainText("(a person");
+    await expect(done.filter({ hasText: paid })).toContainText("(Helm");
+    await expect(done.filter({ hasText: other })).toContainText("(a person");
     await expect(done.filter({ hasText: "MONTHLY SERVICE FEE" })).toContainText("Not an invoice payment: Bank fee");
     // Helm's match is recorded by the worker, with a certificate.
-    await expect(done.filter({ hasText: "INV-E2E-1001" })).toContainText("recorded", { timeout: 60_000 });
+    await expect(done.filter({ hasText: paid })).toContainText("recorded", { timeout: 60_000 });
 
     // Reopening Helm's match undoes its payment record; the line waits again.
-    await done.filter({ hasText: "INV-E2E-1001" }).getByRole("button", { name: /^Reopen the line/ }).click();
-    await expect(page.getByTestId("helm-bank-line").filter({ hasText: "INV-E2E-1001" })).toBeVisible();
+    await done.filter({ hasText: paid }).getByRole("button", { name: /^Reopen the line/ }).click();
+    await expect(page.getByTestId("helm-bank-line").filter({ hasText: paid })).toBeVisible();
 
     // The closing balance is the account's cash.
     await expect(page.getByTestId("helm-bank-account")).toContainText("17,485.00");
