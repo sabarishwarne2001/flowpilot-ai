@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-14 (flagship session: Helm, in progress)_
+_Last updated: 2026-10-15 (flagship session: Helm, in progress)_
 
 ## Current phase — Flagship session: Helm, the flagship engine
 Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
@@ -15,12 +15,14 @@ below. Never restart.**
 - [x] 0. Start-up: docs read, engines studied, live stack up (Postgres 16 + pgvector 0.8.0 on
   :5433 for e2e and :5434 for backend tests, Redis, API, worker `--loop all --profile all`, model
   stand-in), `docs/helm/ARCHITECTURE.md` written, draft PR opened.
-- [ ] 1. Skeleton: migration `h1a1_helm`; payables ledger, settlement and cash; mandates 1, 2, 5, 7;
+- [x] 1. Skeleton: migration `h1a1_helm`; payables ledger, settlement and cash; mandates 1, 2, 5, 7;
   the MILP and the Guard with certificates; `helm.plan`; mode switch, minimal cockpit, approving one
-  action; one browser test. Push, checkpoint here, whole backend suite.
-- [ ] 2. Widen the ledger: receivables, POs and deliveries, discounts, notices, compliance
-  documents, MSME detection, counterparty behaviour.
-- [ ] 3. The rest of the library (3, 4, 6, 8–12) and the simulation.
+  action; one browser test (`78-helm-skeleton`). Push, checkpoint here, whole backend suite (run:
+  4,576 passed, 5 failed: all five were Helm breaking platform contracts, fixed and re-run green).
+- [x] 2. Widen the ledger: receivables, POs and deliveries, discounts, notices, compliance
+  documents, MSME detection, counterparty behaviour (built with the skeleton; consistent snapshot
+  reads proven live).
+- [x] 3. The rest of the library (3, 4, 6, 8–12) and the simulation; hold releases and waivers.
 - [ ] 4. Time machine (backtest, forecast, value held) and the sample company
   (`backend/scripts/helm_demo_company.py`).
 - [ ] 5. Sentence drafting, readback, the validator, the gallery, autonomy and caps, approvals.
@@ -34,7 +36,16 @@ below. Never restart.**
   up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
   `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
 
-**Progress:** _start-up done; skeleton next._
+**Progress (checkpoint 1, 2026-10-15):** boxes 1–3 done and pushed. Fixed, each proven by a
+failing test first: a plan could read half of a ledger rebuild; a failing hand left its action
+stuck EXECUTING; undo lost a settlement's evidence; Helm's notice switches were shown to members and
+the briefing could not be turned off; `helm_plans.conflict` stored JSON null; the dispute email
+crashed the escape contract; the ledger paged on a non-unique key. **Next:** box 4 (the backtest
+in `app/services/helm/backtest.py` + `history.py` and the sample company in
+`app/services/helm/sample_company.py` are written but not yet committed or tested: run the sample
+build on the e2e database, reconcile `Planted` with the backtest's findings, then write the
+backtest tests and `backend/scripts/helm_demo_company.py`). The full backend suite takes ~45 min
+on this sandbox; never edit backend code while it runs (lazily imported modules load mid-run).
 
 ## Previous phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
 Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
