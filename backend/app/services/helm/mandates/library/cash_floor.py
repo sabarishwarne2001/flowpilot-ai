@@ -122,14 +122,18 @@ def _backtest(history, mandate: base.ActiveMandate) -> list[base.Finding]:
     for cash in history.cash:
         if cash.currency != floor.currency or not history.within(cash.as_of) or cash.amount_micros >= floor.amount_micros:
             continue
-        statement = cash.source == v.CASH_SOURCE_STATEMENT
+        statement = cash.source in (v.CASH_SOURCE_STATEMENT, v.CASH_SOURCE_BANK)
+        missing = len(cash.evidence.get("accounts_without_balance") or []) if cash.evidence else 0
+        honesty = (v.HONESTY_POTENTIAL if missing else v.HONESTY_CONFIRMED) if statement else v.HONESTY_LIKELY
+        source = "a bank statement" if statement else "a typed position"
+        if missing:
+            source += f"; {missing} bank account{'s' if missing != 1 else ''} had no balance yet, so the total may be low"
         out.append(base.Finding(
-            mandate=KEY, on=cash.as_of, action="observe", honesty=v.HONESTY_CONFIRMED if statement else
-            v.HONESTY_LIKELY, category=base.CATEGORY_CASH_FLOOR, currency=cash.currency, value_micros=0,
+            mandate=KEY, on=cash.as_of, action="observe", honesty=honesty,
+            category=base.CATEGORY_CASH_FLOOR, currency=cash.currency, value_micros=0,
             summary=(f"Cash was {money.say(cash.amount_micros, cash.currency)} on {money.day(cash.as_of)}, "
                      f"{money.say(floor.amount_micros - cash.amount_micros, cash.currency)} below the floor "
-                     f"({'a bank statement' if statement else 'a typed position'}). Helm would have timed payments "
-                     "to keep it above."),
+                     f"({source}). Helm would have timed payments to keep it above."),
             evidence=[cash.evidence] if cash.evidence else []))
     return out
 

@@ -88,7 +88,16 @@ SETTLEMENT_SOURCES: Final = (SOURCE_PERSON, SOURCE_STATEMENT, SOURCE_HELM)
 
 CASH_SOURCE_STATEMENT: Final = "STATEMENT"
 CASH_SOURCE_MANUAL: Final = "MANUAL"
-CASH_SOURCES: Final = (CASH_SOURCE_STATEMENT, CASH_SOURCE_MANUAL)
+#: A bank statement import's closing balance (owner addition A), tied to its import and account.
+CASH_SOURCE_BANK: Final = "BANK"
+CASH_SOURCES: Final = (CASH_SOURCE_STATEMENT, CASH_SOURCE_MANUAL, CASH_SOURCE_BANK)
+
+# Bank statement lines (owner addition A).
+BANK_LINE_UNMATCHED: Final = "UNMATCHED"
+BANK_LINE_SUGGESTED: Final = "SUGGESTED"
+BANK_LINE_MATCHED: Final = "MATCHED"
+BANK_LINE_IGNORED: Final = "IGNORED"
+BANK_LINE_STATUSES: Final = (BANK_LINE_UNMATCHED, BANK_LINE_SUGGESTED, BANK_LINE_MATCHED, BANK_LINE_IGNORED)
 
 # --- counterparties ---------------------------------------------------------------------------
 ROLE_SUPPLIER: Final = "SUPPLIER"

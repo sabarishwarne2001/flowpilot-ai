@@ -218,16 +218,25 @@ class HelmSettlement(Base):
 
 
 class HelmCashPosition(Base):
-    """Cash on hand in one currency on a date: a statement's closing balance or a typed figure."""
+    """Cash on hand in one currency on a date: a statement's closing balance, a typed figure, or a bank
+    statement import's closing balance for one account (owner addition A)."""
 
     __tablename__ = "helm_cash_positions"
     __table_args__ = (
         _book_fk("helm_cash_positions"),
         _work_item_fk("helm_cash_positions"),
+        ForeignKeyConstraint(["bank_account_id", "organization_id"],
+                             ["helm_bank_accounts.id", "helm_bank_accounts.organization_id"],
+                             name="fk_helm_cash_positions_account_org", ondelete="CASCADE"),
+        ForeignKeyConstraint(["bank_import_id", "organization_id"],
+                             ["helm_bank_imports.id", "helm_bank_imports.organization_id"],
+                             name="fk_helm_cash_positions_import_org", ondelete="CASCADE"),
         CheckConstraint(f"source IN ({v.sql_in(v.CASH_SOURCES)})", name="ck_helm_cash_positions_source"),
         CheckConstraint("currency ~ '^[A-Z]{3}$'", name="ck_helm_cash_positions_currency"),
         CheckConstraint("source <> 'STATEMENT' OR work_item_id IS NOT NULL",
                         name="ck_helm_cash_positions_statement_has_document"),
+        CheckConstraint("source <> 'BANK' OR (bank_import_id IS NOT NULL AND bank_account_id IS NOT NULL)",
+                        name="ck_helm_cash_positions_bank_has_import"),
         Index("ix_helm_cash_positions_book_currency", "book_id", "currency", "as_of"),
     )
 
@@ -242,6 +251,118 @@ class HelmCashPosition(Base):
     work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
     note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     entered_by_user_id: Mapped[Optional[uuid.UUID]] = _user()
+    bank_account_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    bank_import_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    created_at: Mapped[datetime] = _ts()
+
+
+def _account_fk(table: str) -> ForeignKeyConstraint:
+    return ForeignKeyConstraint(
+        ["bank_account_id", "organization_id"], ["helm_bank_accounts.id", "helm_bank_accounts.organization_id"],
+        name=f"fk_{table}_account_org", ondelete="CASCADE",
+    )
+
+
+class HelmBankAccount(Base):
+    """A bank account a book imports statements for (owner addition A). Only its last four digits are
+    kept; the column mapping its bank's exports use is saved once a person confirms it."""
+
+    __tablename__ = "helm_bank_accounts"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_helm_bank_accounts_id_org"),
+        UniqueConstraint("book_id", "name", name="uq_helm_bank_accounts_book_name"),
+        _book_fk("helm_bank_accounts"),
+        CheckConstraint("currency ~ '^[A-Z]{3}$'", name="ck_helm_bank_accounts_currency"),
+        CheckConstraint("last4 IS NULL OR last4 ~ '^[0-9A-Za-z]{1,4}$'", name="ck_helm_bank_accounts_last4"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    organization_id: Mapped[uuid.UUID] = _org()
+    book_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    last4: Mapped[Optional[str]] = mapped_column(String(4), nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    column_mapping: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB(none_as_null=True), nullable=True)
+    created_by_user_id: Mapped[Optional[uuid.UUID]] = _user()
+    created_at: Mapped[datetime] = _ts()
+    updated_at: Mapped[datetime] = _ts()
+
+
+class HelmBankImport(Base):
+    """One imported statement file. The same file imported twice into one account is refused."""
+
+    __tablename__ = "helm_bank_imports"
+    __table_args__ = (
+        UniqueConstraint("id", "organization_id", name="uq_helm_bank_imports_id_org"),
+        UniqueConstraint("bank_account_id", "sha256", name="uq_helm_bank_imports_account_file"),
+        _book_fk("helm_bank_imports"),
+        _account_fk("helm_bank_imports"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    organization_id: Mapped[uuid.UUID] = _org()
+    book_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    bank_account_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    filename: Mapped[str] = mapped_column(String(255), nullable=False)
+    sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    lines_read: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    lines_new: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    lines_matched: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    problems: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    period_start: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    period_end: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    closing_balance_micros: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    closing_on: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    imported_by_user_id: Mapped[Optional[uuid.UUID]] = _user()
+    created_at: Mapped[datetime] = _ts()
+
+
+class HelmBankLine(Base):
+    """One bank statement line, and what became of it: matched to an invoice (by Helm or a person),
+    suggested, ignored, or waiting for a person."""
+
+    __tablename__ = "helm_bank_lines"
+    __table_args__ = (
+        UniqueConstraint("bank_account_id", "fingerprint", name="uq_helm_bank_lines_account_fingerprint"),
+        _book_fk("helm_bank_lines"),
+        _account_fk("helm_bank_lines"),
+        ForeignKeyConstraint(["import_id", "organization_id"],
+                             ["helm_bank_imports.id", "helm_bank_imports.organization_id"],
+                             name="fk_helm_bank_lines_import_org", ondelete="CASCADE"),
+        _workspace_fk("helm_bank_lines"),
+        # The migration writes ON DELETE SET NULL (work_item_id) (Postgres 15 and later): deleting the matched
+        # invoice clears only work_item_id, so workspace_id stays and the line stays masked to people who
+        # cannot read that workspace. SQLAlchemy can neither write nor read back the column list, so the
+        # model says SET NULL, which is also what the schema comparison reads from the database.
+        ForeignKeyConstraint(["work_item_id", "workspace_id"], ["work_items.id", "work_items.workspace_id"],
+                             name="fk_helm_bank_lines_work_item_workspace", ondelete="SET NULL"),
+        CheckConstraint(f"status IN ({v.sql_in(v.BANK_LINE_STATUSES)})", name="ck_helm_bank_lines_status"),
+        CheckConstraint("amount_micros <> 0", name="ck_helm_bank_lines_amount"),
+        Index("ix_helm_bank_lines_book_status", "book_id", "status", "on_date"),
+        Index("ix_helm_bank_lines_work_item", "work_item_id"),
+    )
+
+    id: Mapped[uuid.UUID] = _uuid_pk()
+    organization_id: Mapped[uuid.UUID] = _org()
+    book_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    bank_account_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    import_id: Mapped[uuid.UUID] = mapped_column(PgUUID(as_uuid=True), nullable=False)
+    line_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    on_date: Mapped[date] = mapped_column(Date, nullable=False)
+    description: Mapped[str] = mapped_column(String(500), nullable=False, server_default=text("''"))
+    reference: Mapped[str] = mapped_column(String(120), nullable=False, server_default=text("''"))
+    amount_micros: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    balance_micros: Mapped[Optional[int]] = mapped_column(BigInteger, nullable=True)
+    currency: Mapped[str] = mapped_column(String(3), nullable=False)
+    fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
+    status: Mapped[str] = mapped_column(String(10), nullable=False, server_default=text("'UNMATCHED'"))
+    workspace_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    work_item_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    action_id: Mapped[Optional[uuid.UUID]] = mapped_column(PgUUID(as_uuid=True), nullable=True)
+    match: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    note: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
+    decided_by_user_id: Mapped[Optional[uuid.UUID]] = _user()
+    decided_at: Mapped[Optional[datetime]] = _ts(nullable=True)
     created_at: Mapped[datetime] = _ts()
 
 

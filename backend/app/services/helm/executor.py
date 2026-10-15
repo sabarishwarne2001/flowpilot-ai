@@ -147,7 +147,17 @@ def reject(db: Session, *, action: HelmAction, actor: Actor, reason: str) -> Hel
     if result is not None:
         _audit(db, action, "REJECTED", actor_user_id=uuid.UUID(actor.user_id) if actor.user_id else None,
                details={"reason": reason[:500]})
+        _bank_line_stopped(db, action, reason[:500], by=uuid.UUID(actor.user_id) if actor.user_id else None)
     return action
+
+
+def _bank_line_stopped(db: Session, action: HelmAction, reason: str, *, by: Optional[uuid.UUID] = None) -> None:
+    """A payment record from a bank line that ended without recording the payment sends the line back to a
+    person (owner addition A)."""
+    if action.kind == v.ACTION_MARK_PAID and (action.params or {}).get("bank_line_id"):
+        from app.services.helm import bank
+
+        bank.on_stopped(db, action, reason, by=by)
 
 
 def _claim(db: Session, action_id: uuid.UUID) -> Optional[HelmAction]:
@@ -236,6 +246,7 @@ def execute(db: Session, *, action_id: uuid.UUID, actor: Actor = SYSTEM) -> Opti
         action.updated_at = now
         db.flush()
         _audit(db, action, "BLOCKED", actor_user_id=None, details={"failed": [c.id for c in result.failed]})
+        _bank_line_stopped(db, action, "; ".join(c.detail for c in result.failed) or "a check failed")
         plan_store.enqueue(db, book, triggered_by=v.TRIGGER_EXECUTION, delay_s=1, force=True)
         return action
     from app.services.helm.hands import HandError
@@ -251,6 +262,7 @@ def execute(db: Session, *, action_id: uuid.UUID, actor: Actor = SYSTEM) -> Opti
         action.updated_at = now
         db.flush()
         _audit(db, action, "UPDATED", actor_user_id=None, details={"failed": exc.code})
+        _bank_line_stopped(db, action, exc.message)
         return action
     action.state = v.ACTION_EXECUTED
     action.executed_at = now
@@ -302,11 +314,17 @@ def _apply(db: Session, *, action: HelmAction, book: HelmBook, snapshot, actor: 
         return {"previous": previous, "settlement": v.SETTLEMENT_APPROVED}
     if action.kind == v.ACTION_MARK_PAID:
         paid_on = date.fromisoformat(params["paid_on"]) if params.get("paid_on") else date.today()
+        # A payment a bank statement line shows (owner addition A) is evidenced by that line.
+        bank_line = params.get("bank_line_id")
+        evidence = ({"bank_line_id": bank_line, "bank_import_id": params.get("bank_import_id"),
+                     "account": params.get("account"), "narration": params.get("narration"),
+                     "matched_by": params.get("matched_by")} if bank_line else {"marked_by": actor.user_id})
         previous = settlements.set_state(
             db, organization_id=action.organization_id, workspace_id=action.workspace_id,
-            work_item_id=action.work_item_id, state=v.SETTLEMENT_PAID, source=v.SOURCE_PERSON, actor_user_id=who,
+            work_item_id=action.work_item_id, state=v.SETTLEMENT_PAID,
+            source=v.SOURCE_STATEMENT if bank_line else v.SOURCE_PERSON, actor_user_id=who,
             action_id=action.id, paid_on=paid_on, paid_amount_micros=action.amount_micros,
-            paid_reference=params.get("reference"), evidence={"marked_by": actor.user_id})
+            paid_reference=params.get("reference"), evidence=evidence)
         return {"previous": previous, "settlement": v.SETTLEMENT_PAID, "paid_on": paid_on.isoformat()}
     if action.kind == v.ACTION_DRAFT_DISPUTE:
         from app.services.helm import hands
@@ -349,11 +367,15 @@ def _notify_hold(db: Session, action: HelmAction, book: HelmBook) -> None:
 
 
 def undo(db: Session, *, action: HelmAction, actor: Actor) -> HelmAction:
-    """Undo a hold, a schedule or a task. Sent emails cannot be undone; the screen says so."""
+    """Undo a hold, a schedule or a task. Sent emails cannot be undone; the screen says so. Undoing a payment
+    record also takes back the value held that rested on that payment."""
     from app.services.helm import gate
 
     if not gate.can_approve(actor.role, action.kind):
         raise ActionError("HELM_FORBIDDEN", "Only organization owners and admins undo this action.", status_code=403)
+    if not actor.can_read_workspace:
+        raise ActionError("HELM_NO_ACCESS", "You cannot read this document's workspace, so you cannot undo its "
+                          "action. Ask an organization owner for access.", status_code=403)
     if action.state == v.ACTION_UNDONE:
         return action
     if action.state != v.ACTION_EXECUTED:
@@ -380,10 +402,19 @@ def undo(db: Session, *, action: HelmAction, actor: Actor) -> HelmAction:
         if task is not None and task.status == v.TASK_OPEN:
             task.status, task.resolved_at, task.resolved_by_user_id = v.TASK_CANCELLED, now, who
             task.decision_note = "Cancelled: the Helm action that opened it was undone."
+    withdrawn: list[dict[str, Any]] = []
+    if action.kind == v.ACTION_MARK_PAID and action.work_item_id:
+        from app.services.helm import value
+
+        withdrawn = value.withdraw(db, work_item_id=action.work_item_id)
     result["undone_at"] = now.isoformat()
     action.result = result
     db.flush()
-    _audit(db, action, "UNDONE", actor_user_id=who)
+    if action.kind == v.ACTION_MARK_PAID and (action.params or {}).get("bank_line_id"):
+        from app.services.helm import bank
+
+        bank.on_undone(db, action, by=who)
+    _audit(db, action, "UNDONE", actor_user_id=who, details={"value_withdrawn": withdrawn} if withdrawn else None)
     if action.workspace_id:
         from app.services.helm import ledger_store
 

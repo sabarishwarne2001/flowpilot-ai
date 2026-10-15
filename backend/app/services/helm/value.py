@@ -14,6 +14,10 @@ Four kinds of outcome count, and nothing else:
 Each event's `dedupe_key` is derived from what it is about (category + document), so a rebuild, a
 second sweep or two workers never count one outcome twice (a unique index refuses the second row).
 Projections — what Helm *might* save — are never written here; the cockpit labels them "potential".
+
+A discount captured or a late fee avoided rests on the payment record. When that record is undone
+(`withdraw`), both come off the ledger; the next sweep records them again only if other evidence still
+shows the payment.
 """
 
 from __future__ import annotations
@@ -23,7 +27,7 @@ from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
@@ -34,8 +38,24 @@ from app.services.helm import vocabulary as v
 from app.services.helm.ledger_store import book_workspace_ids
 
 
+#: Outcomes that count only because an invoice was paid (and when).
+PAYMENT_CATEGORIES = (v.VALUE_DISCOUNT_CAPTURED, v.VALUE_LATE_FEE_AVOIDED)
+
+
 def dedupe_key(category: str, work_item_id: Any) -> str:
     return ledger.sha256(f"value|{category}|{work_item_id}")
+
+
+def withdraw(db: Session, *, work_item_id: uuid.UUID) -> list[dict[str, Any]]:
+    """Take off the ledger the outcomes that rested on this invoice's payment record, which was just undone.
+    Returns what was taken off, for the audit trail. Flushes."""
+    rows = db.execute(delete(HelmValueEvent).where(HelmValueEvent.dedupe_key.in_(
+        [dedupe_key(category, work_item_id) for category in PAYMENT_CATEGORIES]))
+        .returning(HelmValueEvent.id, HelmValueEvent.category, HelmValueEvent.amount_micros, HelmValueEvent.currency,
+                   HelmValueEvent.occurred_on)).all()
+    db.flush()
+    return [{"id": str(row.id), "category": row.category, "amount_micros": int(row.amount_micros),
+             "currency": row.currency, "occurred_on": row.occurred_on.isoformat()} for row in rows]
 
 
 def _record(db: Session, book: HelmBook, *, category: str, work_item_id: uuid.UUID, workspace_id: uuid.UUID,
@@ -168,4 +188,4 @@ def totals(db: Session, book: HelmBook) -> dict[str, Any]:
             "events": count, "rule": "Only outcomes backed by evidence, each counted once."}
 
 
-__all__ = ["dedupe_key", "sweep", "totals"]
+__all__ = ["PAYMENT_CATEGORIES", "dedupe_key", "sweep", "totals", "withdraw"]

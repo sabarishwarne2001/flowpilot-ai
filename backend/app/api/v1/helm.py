@@ -3,6 +3,14 @@
 
     GET    /organizations/{oid}/helm                                  access, limits, books, workspaces
     GET    /organizations/{oid}/helm/workspaces/{wid}/card            the workspace Overview's Helm card
+    GET    /organizations/{oid}/helm/books/{bid}/bank-accounts        bank accounts (last four digits only)
+    POST   /organizations/{oid}/helm/books/{bid}/bank-accounts
+    PATCH  /organizations/{oid}/helm/books/{bid}/bank-accounts/{aid}  rename, or save its column mapping
+    POST   /organizations/{oid}/helm/books/{bid}/bank-statements/preview   columns, lines, the mapping to confirm
+    POST   /organizations/{oid}/helm/books/{bid}/bank-statements      import: new lines, cash, matches
+    GET    /organizations/{oid}/helm/books/{bid}/bank-imports
+    GET    /organizations/{oid}/helm/books/{bid}/bank-lines           ?status=WAITING|MATCHED|IGNORED
+    POST   /organizations/{oid}/helm/bank-lines/{lid}/match | ignore | reopen
     GET    /organizations/{oid}/helm/library                          the mandate gallery
     POST   /organizations/{oid}/helm/books                            start Helm on a workspace (or all, Enterprise)
     GET    /organizations/{oid}/helm/books/{bid}                      one book
@@ -42,12 +50,13 @@ trial refuse writes before the route runs (`get_organization_context`).
 
 from __future__ import annotations
 
+import json
 import uuid
 from datetime import date
 from decimal import Decimal
 from typing import Any, Literal, Optional
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, File, Form, Query, Response, UploadFile
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -142,6 +151,34 @@ class DraftIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sentence: str = Field(..., min_length=1, max_length=500)
+
+
+class BankAccountIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1, max_length=120)
+    #: Any form of the number; only its last four characters are kept.
+    number: Optional[str] = Field(default=None, max_length=64)
+    currency: str = Field(..., min_length=3, max_length=3)
+
+
+class BankAccountPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: Optional[str] = Field(default=None, min_length=1, max_length=120)
+    mapping: Optional[dict[str, Any]] = None
+
+
+class BankLineMatchIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    work_item_id: uuid.UUID
+
+
+class BankLineIgnoreIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    note: Optional[str] = Field(default=None, max_length=300)
 
 
 class RejectIn(BaseModel):
@@ -492,6 +529,163 @@ def helm_certificate_download(organization_id: uuid.UUID, certificate_id: uuid.U
     return Response(content=text, media_type="application/json",
                     headers={"Content-Disposition": f'attachment; filename="helm-certificate-{certificate_id}.json"',
                              "X-Helm-Certificate-SHA256": found["sha256"]})
+
+
+# ---------------------------------------------------------------------------
+# Bank statements (owner addition A)
+# ---------------------------------------------------------------------------
+
+
+def _statement_bytes(file: UploadFile) -> tuple[str, bytes]:
+    from app.services.file_validation_service import FileValidationError, spool_upload_file
+    from app.services.helm import bank_parse
+    from app.services.helm.errors import HelmInvalid
+
+    try:
+        handle, _size = spool_upload_file(file, max_bytes=bank_parse.MAX_BYTES)
+    except FileValidationError as exc:
+        raise HelmInvalid(f"The file could not be read: {exc}", reason="STATEMENT_UPLOAD")
+    try:
+        handle.seek(0)
+        return (file.filename or "statement")[:255], handle.read()
+    finally:
+        handle.close()
+
+
+def _mapping_form(raw: Optional[str]) -> Optional[dict[str, Any]]:
+    from app.services.helm.errors import HelmInvalid
+
+    if not raw:
+        return None
+    try:
+        found = json.loads(raw)
+    except ValueError:
+        raise HelmInvalid("The column mapping is not readable.", reason="MAPPING_JSON")
+    if not isinstance(found, dict):
+        raise HelmInvalid("The column mapping is not readable.", reason="MAPPING_JSON")
+    return found
+
+
+@router.get(f"{P}/books/{{book_id}}/bank-accounts")
+def helm_bank_accounts(organization_id: uuid.UUID, book_id: uuid.UUID, db: Session = Depends(get_db),
+                       context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    return {"accounts": bank.list_accounts(db, who, service.book_for(db, who, book_id))}
+
+
+@router.post(f"{P}/books/{{book_id}}/bank-accounts", status_code=201)
+def helm_create_bank_account(organization_id: uuid.UUID, book_id: uuid.UUID, payload: BankAccountIn,
+                             db: Session = Depends(get_db),
+                             context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    result = bank.create_account(db, who, service.book_for(db, who, book_id), name=payload.name,
+                                 number=payload.number, currency=payload.currency)
+    db.commit()
+    return result
+
+
+@router.patch(f"{P}/books/{{book_id}}/bank-accounts/{{account_id}}")
+def helm_update_bank_account(organization_id: uuid.UUID, book_id: uuid.UUID, account_id: uuid.UUID,
+                             payload: BankAccountPatch, db: Session = Depends(get_db),
+                             context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    result = bank.update_account(db, who, service.book_for(db, who, book_id), account_id, name=payload.name,
+                                 mapping=payload.mapping)
+    db.commit()
+    return result
+
+
+@router.post(f"{P}/books/{{book_id}}/bank-statements/preview")
+def helm_preview_bank_statement(organization_id: uuid.UUID, book_id: uuid.UUID, file: UploadFile = File(...),
+                                account_id: Optional[uuid.UUID] = Form(default=None),
+                                mapping: Optional[str] = Form(default=None), db: Session = Depends(get_db),
+                                context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """The file's columns, a few lines read with the mapping (the person's, the account's saved one,
+    else a guess) and that mapping to confirm. Nothing is saved."""
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    filename, data = _statement_bytes(file)
+    return bank.preview(db, who, service.book_for(db, who, book_id), filename=filename, data=data,
+                        account_id=account_id, mapping=_mapping_form(mapping))
+
+
+@router.post(f"{P}/books/{{book_id}}/bank-statements", status_code=201)
+def helm_import_bank_statement(organization_id: uuid.UUID, book_id: uuid.UUID, file: UploadFile = File(...),
+                               account_id: uuid.UUID = Form(...), mapping: Optional[str] = Form(default=None),
+                               save_mapping: bool = Form(default=True), db: Session = Depends(get_db),
+                               context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """Import a CSV or Excel statement: new lines, the closing balance as cash, and the matches."""
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    filename, data = _statement_bytes(file)
+    result = bank.import_statement(db, who, service.book_for(db, who, book_id), account_id=account_id,
+                                   filename=filename, data=data, mapping=_mapping_form(mapping),
+                                   save_mapping=save_mapping)
+    db.commit()
+    return result
+
+
+@router.get(f"{P}/books/{{book_id}}/bank-imports")
+def helm_bank_imports(organization_id: uuid.UUID, book_id: uuid.UUID, db: Session = Depends(get_db),
+                      context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    return {"imports": bank.list_imports(db, who, service.book_for(db, who, book_id))}
+
+
+@router.get(f"{P}/books/{{book_id}}/bank-lines")
+def helm_bank_lines(organization_id: uuid.UUID, book_id: uuid.UUID,
+                    status: Optional[str] = Query(default=None, max_length=10),
+                    account_id: Optional[uuid.UUID] = Query(default=None), db: Session = Depends(get_db),
+                    context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    return bank.list_lines(db, who, service.book_for(db, who, book_id), status=status, account_id=account_id)
+
+
+@router.post(f"{P}/bank-lines/{{line_id}}/match")
+def helm_match_bank_line(organization_id: uuid.UUID, line_id: uuid.UUID, payload: BankLineMatchIn,
+                         db: Session = Depends(get_db),
+                         context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    result = bank.confirm(db, who, line_id, payload.work_item_id)
+    db.commit()
+    return result
+
+
+@router.post(f"{P}/bank-lines/{{line_id}}/ignore")
+def helm_ignore_bank_line(organization_id: uuid.UUID, line_id: uuid.UUID, payload: BankLineIgnoreIn,
+                          db: Session = Depends(get_db),
+                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    result = bank.ignore(db, who, line_id, payload.note)
+    db.commit()
+    return result
+
+
+@router.post(f"{P}/bank-lines/{{line_id}}/reopen")
+def helm_reopen_bank_line(organization_id: uuid.UUID, line_id: uuid.UUID, db: Session = Depends(get_db),
+                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    from app.services.helm import bank
+
+    who = _viewer(db, context)
+    result = bank.reopen(db, who, line_id)
+    db.commit()
+    return result
 
 
 @router.post(f"{P}/backtests", status_code=201)

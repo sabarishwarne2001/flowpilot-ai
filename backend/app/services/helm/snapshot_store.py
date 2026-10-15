@@ -74,12 +74,67 @@ def account_state(db: Session, organization_id: uuid.UUID) -> tuple[bool, Option
 
 
 def cash_positions(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as_of: date) -> dict[str, snap.Cash]:
-    """Per currency, the newest of: an admin's typed figure, a STATEMENT's closing balance."""
+    """Per currency, the newest of: an admin's typed figure, a STATEMENT's closing balance, and the bank
+    accounts' imported balances. Each imported account counts with its own latest balance, and two
+    accounts in one currency are added together, never one overwriting the other; their total is only
+    as current as its oldest part. On the same day a typed figure wins."""
+    history = cash_history(db, book, workspace_ids, as_of)
     best: dict[str, snap.Cash] = {}
-    for cash in sorted(cash_history(db, book, workspace_ids, as_of),
+    for cash in sorted((c for c in history if c.source != v.CASH_SOURCE_BANK),
                        key=lambda c: (c.as_of, c.source == v.CASH_SOURCE_MANUAL)):
         best[cash.currency] = cash  # newest wins; on the same day a typed figure wins over a statement
+    latest: dict[str, snap.Cash] = {}
+    for cash in history:  # oldest first, so the last seen per account is its latest
+        if cash.source == v.CASH_SOURCE_BANK and cash.evidence.get("bank_account_id"):
+            latest[cash.evidence["bank_account_id"]] = cash
+    by_currency: dict[str, list[snap.Cash]] = {}
+    for cash in latest.values():
+        by_currency.setdefault(cash.currency, []).append(cash)
+    for currency, parts in by_currency.items():
+        oldest = min(p.as_of for p in parts)
+        total = snap.Cash(currency=currency, amount_micros=sum(p.amount_micros for p in parts), as_of=oldest,
+                          source=v.CASH_SOURCE_BANK, age_days=max(0, (as_of - oldest).days),
+                          evidence={"accounts": [{"bank_account_id": p.evidence["bank_account_id"],
+                                                  "amount_micros": p.amount_micros, "as_of": p.as_of.isoformat(),
+                                                  "cash_position_id": p.evidence.get("cash_position_id")}
+                                                 for p in sorted(parts, key=lambda p: p.evidence["bank_account_id"])]})
+        other = best.get(currency)
+        if other is None or total.as_of > other.as_of or (total.as_of == other.as_of
+                                                          and other.source != v.CASH_SOURCE_MANUAL):
+            best[currency] = total
     return best
+
+
+def combined_bank_cash(history: list[snap.Cash]) -> list[snap.Cash]:
+    """The company's cash on each day a bank balance is known: per currency, the sum of every bank
+    account's latest balance on that day (the rule `cash_positions` uses for today), so a replay never
+    reads one account's balance as all of the company's cash. An account with no balance yet on that
+    day is named in the evidence (`accounts_without_balance`), so the total is not a confirmed fact.
+    Typed figures and statement balances pass through unchanged."""
+    out = [c for c in history if c.source != v.CASH_SOURCE_BANK or not c.evidence.get("bank_account_id")]
+    by_currency: dict[str, list[snap.Cash]] = {}
+    for cash in history:
+        if cash.source == v.CASH_SOURCE_BANK and cash.evidence.get("bank_account_id"):
+            by_currency.setdefault(cash.currency, []).append(cash)
+    for currency, parts in by_currency.items():
+        accounts = sorted({p.evidence["bank_account_id"] for p in parts})
+        latest: dict[str, snap.Cash] = {}
+        days = sorted({p.as_of for p in parts})
+        ordered = list(parts)  # oldest first, as cash_history gives them; the later import of a day wins
+        i = 0
+        for day in days:
+            while i < len(ordered) and ordered[i].as_of <= day:
+                latest[ordered[i].evidence["bank_account_id"]] = ordered[i]
+                i += 1
+            known = [latest[a] for a in accounts if a in latest]
+            out.append(snap.Cash(
+                currency=currency, amount_micros=sum(p.amount_micros for p in known), as_of=day,
+                source=v.CASH_SOURCE_BANK, age_days=min(p.age_days for p in parts if p.as_of == day),
+                evidence={"accounts": [{"bank_account_id": p.evidence["bank_account_id"],
+                                        "amount_micros": p.amount_micros, "as_of": p.as_of.isoformat(),
+                                        "cash_position_id": p.evidence.get("cash_position_id")} for p in known],
+                          "accounts_without_balance": [a for a in accounts if a not in latest]}))
+    return sorted(out, key=lambda c: (c.as_of, c.currency, c.source))
 
 
 def cash_history(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as_of: date) -> list[snap.Cash]:
@@ -87,13 +142,17 @@ def cash_history(db: Session, book: HelmBook, workspace_ids: list[uuid.UUID], as
     (the Time machine draws the past from these)."""
     candidates: list[snap.Cash] = []
     for row in db.execute(
-        select(HelmCashPosition).where(HelmCashPosition.book_id == book.id).order_by(HelmCashPosition.as_of)
+        select(HelmCashPosition).where(HelmCashPosition.book_id == book.id)
+        .order_by(HelmCashPosition.as_of, HelmCashPosition.created_at, HelmCashPosition.id)
     ).scalars():
         candidates.append(snap.Cash(currency=row.currency, amount_micros=row.amount_micros, as_of=row.as_of,
                                     source=row.source, age_days=max(0, (as_of - row.as_of).days),
                                     evidence={"cash_position_id": str(row.id), "note": row.note,
                                               "entered_by_user_id": str(row.entered_by_user_id)
-                                              if row.entered_by_user_id else None}))
+                                              if row.entered_by_user_id else None,
+                                              **({"bank_account_id": str(row.bank_account_id),
+                                                  "bank_import_id": str(row.bank_import_id)}
+                                                 if row.bank_account_id else {})}))
     if workspace_ids:
         statements = db.execute(
             select(WorkItem.id, WorkItem.workspace_id, WorkItem.original_filename, WorkItem.created_at,

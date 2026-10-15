@@ -89,7 +89,8 @@ def build(db: Session, book: HelmBook, *, start: date, end: date) -> History:
             flags.append(PastFlag(kind="BANK_ACCOUNT_CHANGED", work_item_id=str(row.work_item_id), status=row.status,
                                   raised_on=_day(row.created_at), summary=row.summary,
                                   reviewed=row.reviewed_at is not None))
-    cash = snapshot_store.cash_history(db, book, workspace_ids, end)
+    # The company total per day (every account added up), never one account read as all the cash.
+    cash = snapshot_store.combined_bank_cash(snapshot_store.cash_history(db, book, workspace_ids, end))
     return History(start=start, end=end, snapshot=current,
                    flags=tuple(sorted(flags, key=lambda f: (f.raised_on, f.kind, f.work_item_id))),
                    cash=tuple(c for c in cash if c.as_of <= end))

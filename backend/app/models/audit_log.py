@@ -124,6 +124,7 @@ class AuditResourceType(str, PyEnum):
     HELM_ACTION = "HELM_ACTION"
     HELM_BACKTEST = "HELM_BACKTEST"
     HELM_TASK = "HELM_TASK"
+    HELM_BANK = "HELM_BANK"
 
 
 class AuditAction(str, PyEnum):
