@@ -72,3 +72,22 @@ def test_the_library_says_which_values_are_examples(engines: Engines) -> None:
     assert required["keep_cash_above"] == ["floor"]
     assert required["po_required_above"] == ["threshold"]
     assert required["never_pay_duplicate"] == []
+
+
+def test_editing_an_active_mandate_is_not_a_duplicate_of_itself(engines: Engines) -> None:
+    book_id = _book(engines)
+    url, headers = engines.org_url(f"/helm/books/{book_id}/mandates"), engines.tenant.owner.headers
+    floor = {"floor": {"amount_micros": 250_000 * 1_000_000, "currency": "INR"}}
+    mandate = engines.client.post(url, json={"template": "keep_cash_above", "activate": True, "params": floor},
+                                  headers=headers).json()
+    # A second mandate the same as the active one is a duplicate...
+    twin = engines.client.post(f"{url}/preview", json={"template": "keep_cash_above", "params": floor},
+                               headers=headers).json()
+    assert twin["problems"] == ['This is the same as the active mandate "Keep cash above a floor".']
+    # ...but the mandate itself, being edited (Act mode, a cap), is not.
+    edited = engines.client.post(f"{url}/preview", json={
+        "template": "keep_cash_above", "params": floor, "mandate_id": mandate["id"],
+        "autonomy": {"mode": "act", "act_cap": {"amount_micros": 25_000 * 1_000_000, "currency": "INR"}}},
+        headers=headers)
+    assert edited.status_code == 200, edited.text
+    assert edited.json()["valid"] is True, edited.json()["problems"]

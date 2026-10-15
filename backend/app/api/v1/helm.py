@@ -123,6 +123,11 @@ class MandateIn(BaseModel):
     activate: bool = False
 
 
+class PreviewIn(MandateIn):
+    #: The mandate being edited, so the validator does not call it a duplicate of itself.
+    mandate_id: Optional[uuid.UUID] = None
+
+
 class MandatePatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -323,11 +328,13 @@ def helm_create_mandate(organization_id: uuid.UUID, book_id: uuid.UUID, payload:
 
 
 @router.post(f"{P}/books/{{book_id}}/mandates/preview")
-def helm_preview_mandate(organization_id: uuid.UUID, book_id: uuid.UUID, payload: MandateIn,
+def helm_preview_mandate(organization_id: uuid.UUID, book_id: uuid.UUID, payload: PreviewIn,
                          db: Session = Depends(get_db),
                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
     who = _viewer(db, context)
-    return service.preview_spec(db, who, service.book_for(db, who, book_id), payload.model_dump(exclude={"activate"}))
+    return service.preview_spec(db, who, service.book_for(db, who, book_id),
+                                payload.model_dump(exclude={"activate", "mandate_id"}),
+                                editing=str(payload.mandate_id) if payload.mandate_id else None)
 
 
 @router.post(f"{P}/books/{{book_id}}/mandates/draft")

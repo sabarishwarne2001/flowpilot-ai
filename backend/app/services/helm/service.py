@@ -448,13 +448,16 @@ def unstated_problems(names: list[str]) -> list[str]:
     return [f"Set the {name.replace('_', ' ')}: the value shown is an example, not yours." for name in names]
 
 
-def preview_spec(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any]) -> dict[str, Any]:
-    """Validate and read back a spec without saving it (the composer and the gallery)."""
+def preview_spec(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any], *,
+                 editing: Optional[str] = None) -> dict[str, Any]:
+    """Validate and read back a spec without saving it (the composer, the gallery, and an edit:
+    `editing` names the mandate being edited, which is not a duplicate of itself)."""
     try:
         spec = _spec_from(db, book, raw, status=v.MANDATE_DRAFT, owner=who.user_id)
     except registry.MandateError as exc:
         return {"valid": False, "problems": exc.problems, "spec": None, "readback": None}
-    problems = unstated_problems(unstated_params(raw)) + registry.validate(spec, _facts(db, book))
+    problems = unstated_problems(unstated_params(raw)) + registry.validate(spec, _facts(db, book),
+                                                                           ignore_mandate_id=editing)
     return {"valid": not problems, "problems": problems, "spec": spec.as_json(), "readback": readback_of(spec)}
 
 
