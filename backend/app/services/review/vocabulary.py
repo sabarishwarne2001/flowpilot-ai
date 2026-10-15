@@ -19,6 +19,7 @@ from app.models.review import (
     REVIEW_KIND_CORROBORATION,
     REVIEW_KIND_OBLIGATION,
     REVIEW_KIND_POSTING,
+    REVIEW_KIND_HELM,
     REVIEW_KINDS,
 )
 
@@ -37,6 +38,8 @@ KIND_CORROBORATION: Final[str] = REVIEW_KIND_CORROBORATION
 KIND_OBLIGATION: Final[str] = REVIEW_KIND_OBLIGATION
 #: ARCH47-S1:review-kind-posting
 KIND_POSTING: Final[str] = REVIEW_KIND_POSTING
+#: Flagship session: a task Helm opened (helm_tasks).
+KIND_HELM: Final[str] = REVIEW_KIND_HELM
 
 KINDS: Final[tuple[str, ...]] = REVIEW_KINDS
 
@@ -88,6 +91,8 @@ REASON_MATERIAL_DISCREPANCY: Final[str] = "MATERIAL_DISCREPANCY"
 REASON_OBLIGATION_UNCONFIRMED: Final[str] = "OBLIGATION_UNCONFIRMED"
 #: ARCH47-S1:review-reason-posting. arch47_step1_erp_posting's view produces it.
 REASON_POSTING_EXCEPTION: Final[str] = "POSTING_EXCEPTION"
+#: Flagship session: h1a1_helm's view produces it for Helm's tasks.
+REASON_HELM_TASK: Final[str] = "HELM_TASK"
 
 REASONS: Final[tuple[str, ...]] = (
     REASON_DISAGREEMENT,
@@ -103,6 +108,7 @@ REASONS: Final[tuple[str, ...]] = (
     REASON_MATERIAL_DISCREPANCY,
     REASON_OBLIGATION_UNCONFIRMED,
     REASON_POSTING_EXCEPTION,
+    REASON_HELM_TASK,
 )
 
 #: What the console's "Autonomy audits" tab shows: the ARCH-35 work, both the
@@ -148,6 +154,7 @@ __all__ = [
     "KIND_CORROBORATION",
     "KIND_OBLIGATION",
     "KIND_POSTING",
+    "KIND_HELM",
     "MAX_BULK_IDS",
     "MAX_PAGE_SIZE",
     "AUTONOMY_REASONS",

@@ -10,7 +10,7 @@ from datetime import datetime
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import DateTime, ForeignKey, Index, String, UniqueConstraint, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, String, UniqueConstraint, text
 from sqlalchemy.dialects.postgresql import ENUM as PgEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import UUID
@@ -176,6 +176,14 @@ class Workspace(Base, UUIDMixin, TimestampMixin):
         ForeignKey("uploaded_files.id", ondelete="SET NULL"),
         nullable=True,
         doc="Durable link to adopted logo in uploaded_files (ARCH-07 Step 6).",
+    )
+    #: Flagship session (Helm): the "Explore Helm with a sample company" workspace. Labelled in
+    #: the picker, never counted towards `limit.workspaces`, deletable like any other.
+    is_sample: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False,
+        default=False,
+        server_default=text("false"),
     )
 
     organization: Mapped["Organization"] = relationship(
