@@ -89,7 +89,7 @@ def draft_dispute(db: Session, *, action: HelmAction, book: HelmBook, snapshot) 
         supplier_name=(counterparty.name if counterparty else None) or (payable.counterparty_name if payable else None)
         or "Supplier",
         invoice_number=(payable.document_number if payable else None) or params.get("document_number") or "",
-        currency=action.currency or "", lines=params.get("lines") or [],
+        currency=action.currency or "", lines=[templates.DisputeLine.of(line) for line in params.get("lines") or []],
         overcharge_micros=int(action.amount_micros or 0))
     draft = {"subject": subject, "text": text_body, "to": counterparty.contact_email if counterparty else None}
     if action.autonomy == v.AUTONOMY_ACT and draft["to"] and book.kind != v.BOOK_SAMPLE:

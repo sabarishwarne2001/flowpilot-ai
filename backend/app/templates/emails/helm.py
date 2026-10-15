@@ -7,7 +7,8 @@ explanation says them (lakh and crore for INR). Each returns (subject, html_body
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from dataclasses import dataclass
+from typing import Any, Mapping, Optional, Sequence
 
 from app.services.helm import money
 from app.templates.emails.base import BASE_EMAIL_HTML_LAYOUT
@@ -24,23 +25,49 @@ REMINDER_TONES = {
 }
 
 
+@dataclass(frozen=True)
+class DisputeLine:
+    """One invoice line billed above the agreed price, as the dispute email states it."""
+
+    description: str
+    po_number: Optional[str]
+    agreed_micros: int
+    billed_micros: int
+
+    @classmethod
+    def of(cls, raw: Any) -> "DisputeLine":
+        if isinstance(raw, DisputeLine):
+            found: Mapping[str, Any] = raw.__dict__
+        else:
+            found = raw if isinstance(raw, Mapping) else {"description": str(raw)}
+        po = found.get("po_number")
+        return cls(description=str(found.get("description") or "Line"), po_number=str(po) if po else None,
+                   agreed_micros=_micros(found.get("agreed_micros")), billed_micros=_micros(found.get("billed_micros")))
+
+
+def _micros(value: Any) -> int:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
 def _wrap(subject: str, brand_name: str, content_html: str, footer: str) -> str:
     return BASE_EMAIL_HTML_LAYOUT.format(title=esc(subject), brand_name=esc(brand_name), content_html=content_html,
                                          footer_text=esc(footer))
 
 
 def render_dispute(*, organization_name: str, supplier_name: str, invoice_number: str, currency: str,
-                   lines: Sequence[dict[str, Any]], overcharge_micros: int) -> tuple[str, str, str]:
+                   lines: Sequence[DisputeLine], overcharge_micros: int) -> tuple[str, str, str]:
     subject = single_line(f"Invoice {invoice_number or ''}: billed above the agreed price".replace("  ", " "))
     rows_text = []
     rows_html = []
-    for line in lines:
-        agreed = money.say(int(line.get("agreed_micros") or 0), currency)
-        billed = money.say(int(line.get("billed_micros") or 0), currency)
-        po = f" (PO {line.get('po_number')})" if line.get("po_number") else ""
-        rows_text.append(f"- {line.get('description') or 'Line'}{po}: agreed {agreed} a unit, billed {billed}")
-        rows_html.append(f"<li>{esc(str(line.get('description') or 'Line'))}{esc(po)}: agreed {esc(agreed)} a unit, "
-                         f"billed {esc(billed)}</li>")
+    for line in (DisputeLine.of(raw) for raw in lines):
+        agreed = money.say(line.agreed_micros, currency)
+        billed = money.say(line.billed_micros, currency)
+        po = f" (PO {line.po_number})" if line.po_number else ""
+        rows_text.append(f"- {single_line(line.description)}{single_line(po)}: agreed {agreed} a unit, billed {billed}")
+        rows_html.append(f"<li>{esc(line.description)}{esc(po)}: agreed {esc(agreed)} a unit, billed {esc(billed)}</li>")
     total = money.say(overcharge_micros, currency)
     text = (f"Dear {supplier_name},\n\nInvoice {invoice_number} bills these lines above the price agreed on the "
             f"purchase order:\n" + "\n".join(rows_text) + f"\n\nIn all, {total} more than agreed. Please send a "
@@ -108,4 +135,5 @@ def render_briefing(*, brand_name: str, organization_name: str, book_name: str, 
     return subject, _wrap(subject, brand_name, content, footer), text
 
 
-__all__ = ["REMINDER_TONES", "render_briefing", "render_dispute", "render_document_request", "render_reminder"]
+__all__ = ["DisputeLine", "REMINDER_TONES", "render_briefing", "render_dispute", "render_document_request",
+           "render_reminder"]
