@@ -59,8 +59,13 @@ COMPARE = (">", ">=", "<", "<=", "=", "!=")
 OP_WORDS = {">": "is above", ">=": "is at least", "<": "is below", "<=": "is at most", "=": "is", "!=": "is not",
             "contains": "contains", "in": "is one of"}
 #: How a number of days reads in a sentence: "due in fewer than 5 days".
-DAY_WORDS = {">": "more than", ">=": "at least", "<": "fewer than", "<=": "at most", "=": "exactly",
-             "!=": "other than"}
+DAY_WORDS = {">": "more than", ">=": "at least", "<": "fewer than", "<=": "at most", "=": "exactly"}
+#: Days until due of 0 or less, as a person says it: "< 0" is "overdue", "<= -3" "at least 3 days overdue".
+DUE_TODAY = {"<": "it is overdue", "<=": "it is due today or overdue", ">": "it is due after today",
+             ">=": "it is not overdue", "=": "it is due today", "!=": "it is not due today"}
+OVERDUE = {"<": "it is more than {} overdue", "<=": "it is at least {} overdue",
+           ">": "it is fewer than {} overdue, or not overdue", ">=": "it is at most {} overdue, or not overdue",
+           "=": "it is exactly {} overdue", "!=": "it is not exactly {} overdue"}
 
 
 @dataclass(frozen=True)
@@ -75,6 +80,8 @@ class Fact:
     yes_no: tuple[str, str] = ("", "")
     unit: Optional[str] = None
     upper: bool = False
+    #: The smallest number of days it takes (days until due go below 0 once an invoice is overdue).
+    lowest: int = -MAX_DAYS
 
 
 FIELDS: dict[str, Fact] = {f.key: f for f in (
@@ -82,7 +89,8 @@ FIELDS: dict[str, Fact] = {f.key: f for f in (
     Fact("currency", "Currency", "the currency", TEXT, ("=", "!=", "in"), upper=True),
     Fact("counterparty", "Supplier name", "the supplier", TEXT, ("=", "!=", "contains", "in")),
     Fact("days_until_due", "Days until due", "the days until it is due", NUMBER, COMPARE, unit="days"),
-    Fact("days_since_invoice", "Days since the invoice date", "the invoice's age", NUMBER, COMPARE, unit="days"),
+    Fact("days_since_invoice", "Days since the invoice date", "the invoice's age", NUMBER, COMPARE, unit="days",
+         lowest=0),
     Fact("has_matched_po", "Has a matching purchase order", "a matching purchase order", BOOL, ("=", "!="),
           yes_no=("it has a matching purchase order", "it has no matching purchase order")),
     # The India pack's reading (msme.MsmeStatus.protected): micro or small, or registered with its
@@ -130,9 +138,9 @@ def _clean_value(found: Fact, op: str, value: Any) -> tuple[Any, Optional[str]]:
                 return {"amount_micros": amount, "currency": currency.strip().upper()}, None
         return None, "write the amount and its currency, for example 500000 INR."
     if found.type == NUMBER:
-        if isinstance(value, int) and not isinstance(value, bool) and -MAX_DAYS <= value <= MAX_DAYS:
+        if isinstance(value, int) and not isinstance(value, bool) and found.lowest <= value <= MAX_DAYS:
             return value, None
-        return None, f"write the number of days as a whole number between -{MAX_DAYS} and {MAX_DAYS}."
+        return None, f"write the number of days as a whole number between {found.lowest} and {MAX_DAYS}."
     if found.type == BOOL:
         if isinstance(value, bool):
             return value, None
@@ -322,8 +330,16 @@ def phrase(rule: Rule) -> str:
     if found.type == MONEY:
         return f"{found.noun} {OP_WORDS[rule.op]} {money.say(rule.value['amount_micros'], rule.value['currency'])}"
     if rule.field == "days_until_due":
+        if rule.value == 0:
+            return DUE_TODAY[rule.op]
+        if rule.value < 0:
+            return OVERDUE[rule.op].format(_days(-rule.value))
+        if rule.op == "!=":
+            return f"it is not due in exactly {_days(rule.value)}"
         return f"it is due in {DAY_WORDS[rule.op]} {_days(rule.value)}"
     if rule.field == "days_since_invoice":
+        if rule.op == "!=":
+            return f"the invoice is not exactly {_days(rule.value)} old"
         return f"the invoice is {DAY_WORDS[rule.op]} {_days(rule.value)} old"
     words = dict(found.choices)
     if found.type == CHOICE:
@@ -373,9 +389,12 @@ class Facts:
         self._first: Optional[dict[str, date]] = None
 
     def _first_seen(self, key: str) -> Optional[date]:
+        """The day this supplier's first invoice arrived (a credit note is not an invoice)."""
         if self._first is None:
             first: dict[str, date] = {}
             for p in self.snapshot.payables:
+                if p.amount_micros <= 0:
+                    continue
                 seen, key_of = base.seen_on(p), p.counterparty_key
                 if key_of and seen and (key_of not in first or seen < first[key_of]):
                     first[key_of] = seen
@@ -430,7 +449,9 @@ def _compare(left: int, op: str, right: int) -> bool:
 
 
 def satisfied(rule: Rule, actual: Any) -> bool:
-    """Does one condition hold for a fact? A fact Helm does not have never satisfies a comparison."""
+    """Does one condition hold for a fact? An amount in another currency, or a number of days Helm does
+    not have (no due date), never satisfies a comparison; a missing name is an empty one, so "the
+    supplier is not Acme" holds for an invoice with no supplier name and "contains" never does."""
     found = FIELDS[rule.field]
     if found.type == MONEY:
         amount, currency = actual

@@ -89,6 +89,35 @@ def test_it_reads_back_in_plain_words_for_each_outcome():
     assert [p.get("kind") for p in parts if "chip" in p] == ["choice", "condition", "condition"]
 
 
+@pytest.mark.parametrize("op,days,words", [
+    ("<", 5, "it is due in fewer than 5 days"), (">=", 1, "it is due in at least 1 day"),
+    ("!=", 5, "it is not due in exactly 5 days"),
+    ("<", 0, "it is overdue"), ("<=", 0, "it is due today or overdue"), (">", 0, "it is due after today"),
+    (">=", 0, "it is not overdue"), ("=", 0, "it is due today"), ("!=", 0, "it is not due today"),
+    ("<", -10, "it is more than 10 days overdue"), ("<=", -1, "it is at least 1 day overdue"),
+    (">", -3, "it is fewer than 3 days overdue, or not overdue"),
+    (">=", -3, "it is at most 3 days overdue, or not overdue"), ("=", -2, "it is exactly 2 days overdue"),
+    ("!=", -2, "it is not exactly 2 days overdue"),
+])
+def test_days_until_due_reads_as_overdue_or_today_where_that_is_what_it_means(op, days, words):
+    assert cc.phrase(cc.Rule("days_until_due", op, days)) == words
+
+
+def test_an_invoices_age_is_never_negative_and_reads_in_days():
+    assert problems(params(rule("days_since_invoice", ">", -1))) == [
+        "Condition 1, days since the invoice date: write the number of days as a whole number between 0 and 3650."]
+    assert cc.phrase(cc.Rule("days_since_invoice", "!=", 30)) == "the invoice is not exactly 30 days old"
+    assert cc.phrase(cc.Rule("days_since_invoice", ">", 30)) == "the invoice is more than 30 days old"
+
+
+def test_a_credit_note_does_not_make_a_suppliers_first_invoice_look_old():
+    credit = payable(1, counterparty_key="name:newco", counterparty_name="NewCo", amount_micros=-1 * LAKH,
+                     received_on=TODAY - timedelta(days=20))
+    first = payable(2, counterparty_key="name:newco", counterparty_name="NewCo", amount_micros=7 * LAKH,
+                    received_on=TODAY - timedelta(days=2))
+    assert _hits(params(rule("new_supplier", "=", True)), full_book(payables=[credit, first]), "p2")
+
+
 def test_the_gallery_example_must_be_replaced_and_is_locked_below_enterprise():
     assert registry.required_params(KEY) == ["name", "conditions"]
     business = next(t for t in registry.library(enterprise=False) if t["key"] == KEY)
