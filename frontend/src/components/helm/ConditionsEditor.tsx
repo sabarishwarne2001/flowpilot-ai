@@ -257,6 +257,12 @@ const ConditionRow: React.FC<{
           }
         }}
       >
+        {field ? null : (
+          // A drafted rule can name a fact Helm cannot test; the server says so, and this asks for one.
+          <option value={row.field} disabled>
+            Choose a fact
+          </option>
+        )}
         {spec.fields.map((f) => (
           <option key={f.key} value={f.key}>
             {f.label}
