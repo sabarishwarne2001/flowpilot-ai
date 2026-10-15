@@ -228,9 +228,17 @@ test.describe("Helm skeleton — a tenant of its own", () => {
     await expect(page.getByRole("heading", { name: "Plan", level: 1 })).toBeVisible();
     await expect(page.getByText("Nothing scheduled.", { exact: false })).toBeVisible();
 
-    // Back to Documents: the switch remembers where the person was.
+    // Back to Documents: the switch remembers where the person was. The Overview's Helm card says
+    // what Helm holds here and leads back to its cockpit.
     await page.getByRole("radiogroup", { name: "Mode" }).getByRole("radio", { name: "Documents" }).click();
     await expect(page).toHaveURL(new RegExp(`/${customer.orgSlug}/${customer.wsSlug}$`));
+    const card = page.getByTestId("helm-overview-card");
+    // (Whether a payment still waits depends on which bill the radar marked; see above.)
+    await expect(card).toContainText(duplicate !== changed ? "Nothing waits for a decision." : "1 action waits for a decision.");
+    await expect(card.getByRole("link", { name: duplicate !== changed ? "Open Helm" : "Review in Helm" })).toHaveAttribute(
+      "href",
+      new RegExp(`/${customer.orgSlug}/helm\\?book=`),
+    );
   });
 
   test("a member sees no mode switch and the API refuses them Helm", async ({ page, problems }) => {
@@ -245,6 +253,7 @@ test.describe("Helm skeleton — a tenant of its own", () => {
     await page.goto(customer.ws());
     await settle(page);
     await expect(page.getByRole("radiogroup", { name: "Mode" })).toHaveCount(0);
+    await expect(page.getByTestId("helm-overview-card")).toHaveCount(0); // nor Helm's card on the Overview
     await page.goto(`/${customer.orgSlug}/helm`);
     await expect(page.getByRole("heading", { name: "Helm is for owners, admins and billing" })).toBeVisible();
     await expect(page.getByRole("link", { name: "Open the review hub" })).toBeVisible();

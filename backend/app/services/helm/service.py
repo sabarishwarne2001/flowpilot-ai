@@ -955,6 +955,29 @@ def payment_run(db: Session, who: Viewer, book: HelmBook, *, on: Optional[date] 
 # ---------------------------------------------------------------------------
 
 
+def workspace_card(db: Session, who: Viewer, workspace_id: uuid.UUID) -> dict[str, Any]:
+    """The workspace Overview's small Helm card (brief §10.3): value held and actions waiting when the
+    workspace has a book; "start Helm here" on Business and up; the preview card on other plans."""
+    from app.models.workspace import Workspace
+    from app.services.helm import value
+
+    workspace = db.get(Workspace, workspace_id)
+    if workspace is None or workspace.organization_id != who.organization_id or not who.can_read(workspace_id):
+        raise HelmNotFound("Workspace not found.")
+    if not who.helm:
+        return {"state": "preview", "book_id": None, "value_held": {}, "waiting": 0}
+    book = db.execute(select(HelmBook).where(HelmBook.organization_id == who.organization_id,
+                                             HelmBook.workspace_id == workspace_id,
+                                             HelmBook.status == v.BOOK_ACTIVE)).scalars().first()
+    if book is None:
+        return {"state": "available", "book_id": None, "value_held": {}, "waiting": 0}
+    waiting = db.execute(select(func.count()).select_from(HelmAction).where(
+        HelmAction.book_id == book.id, HelmAction.state == v.ACTION_PROPOSED, HelmAction.needs_approval.is_(True),
+        HelmAction.guard_passed.is_(True))).scalar_one()
+    return {"state": "active", "book_id": str(book.id), "value_held": value.totals(db, book)["total"],
+            "waiting": int(waiting)}
+
+
 def sample_state(db: Session, who: Viewer) -> dict[str, Any]:
     """Whether the organization has the sample company, or is building it."""
     from app.models.job import Job, JobStatus

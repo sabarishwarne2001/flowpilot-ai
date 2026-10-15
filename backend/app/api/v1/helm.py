@@ -2,6 +2,7 @@
 (FastAPI runs it in the threadpool: no database work on the event loop).
 
     GET    /organizations/{oid}/helm                                  access, limits, books, workspaces
+    GET    /organizations/{oid}/helm/workspaces/{wid}/card            the workspace Overview's Helm card
     GET    /organizations/{oid}/helm/library                          the mandate gallery
     POST   /organizations/{oid}/helm/books                            start Helm on a workspace (or all, Enterprise)
     GET    /organizations/{oid}/helm/books/{bid}                      one book
@@ -207,6 +208,14 @@ def helm_overview(organization_id: uuid.UUID, db: Session = Depends(get_db),
         "preview": {"backtest_allowed": allowed, "next_backtest_at": next_at.isoformat() if next_at else None},
         "books": service.list_books(db, who), "workspaces": workspaces, "sample": service.sample_state(db, who),
     }
+
+
+@router.get(f"{P}/workspaces/{{workspace_id}}/card")
+def helm_workspace_card(organization_id: uuid.UUID, workspace_id: uuid.UUID, db: Session = Depends(get_db),
+                        context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """The workspace Overview's Helm card: owners, admins and billing only, like Helm itself."""
+    who = _viewer(db, context)
+    return service.workspace_card(db, who, workspace_id)
 
 
 @router.get(f"{P}/library")

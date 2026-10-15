@@ -26,6 +26,7 @@ import { GettingStarted } from "@/components/onboarding/GettingStarted";
 import { canInviteMembers } from "@/permissions/organizationPermissions";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
+import { HelmOverviewCard } from "@/components/helm/HelmOverviewCard";
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 
@@ -251,6 +252,16 @@ export const Dashboard: React.FC = () => {
           totalDocuments={metrics.total_work_items}
           canUpload={canUpload}
           canInvite={canInviteMembers(resolvedTenant.organizationRole)}
+        />
+      ) : null}
+
+      {resolvedTenant && workspaceId ? (
+        <HelmOverviewCard
+          organizationId={resolvedTenant.organization.organization_id}
+          orgSlug={orgSlug}
+          workspaceId={workspaceId}
+          workspaceName={resolvedTenant.workspace.workspace_name ?? workspaceSlug}
+          organizationRole={resolvedTenant.organizationRole}
         />
       ) : null}
 

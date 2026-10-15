@@ -27,6 +27,8 @@ export const helmKeys = {
   all: (organizationId: string) => ["helm", organizationId] as const,
   overview: (organizationId: string) => ["helm", organizationId, "overview"] as const,
   library: (organizationId: string) => ["helm", organizationId, "library"] as const,
+  workspaceCard: (organizationId: string, workspaceId: string) =>
+    ["helm", organizationId, "workspace-card", workspaceId] as const,
   book: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId] as const,
   cockpit: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId, "cockpit"] as const,
   mandates: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId, "mandates"] as const,
@@ -48,6 +50,16 @@ export const helmKeys = {
 
 export const getHelmOverview = async (organizationId: string): Promise<HelmOverview> =>
   (await apiClient.get<HelmOverview>(base(organizationId))).data;
+
+export interface HelmWorkspaceCard {
+  state: "active" | "available" | "preview";
+  book_id: string | null;
+  value_held: Record<string, number>;
+  waiting: number;
+}
+
+export const getHelmWorkspaceCard = async (organizationId: string, workspaceId: string): Promise<HelmWorkspaceCard> =>
+  (await apiClient.get<HelmWorkspaceCard>(`${base(organizationId)}/workspaces/${encodeURIComponent(workspaceId)}/card`)).data;
 
 export const getHelmLibrary = async (organizationId: string): Promise<HelmLibrary> =>
   (await apiClient.get<HelmLibrary>(`${base(organizationId)}/library`)).data;

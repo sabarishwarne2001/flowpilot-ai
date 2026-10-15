@@ -24,6 +24,10 @@ test.describe("Helm sample company — every plan can explore it", () => {
     await signInAs(page, customer.email);
     await page.goto(customer.ws());
     await settle(page);
+    // On the Overview, Helm's preview card.
+    const card = page.getByTestId("helm-overview-card");
+    await expect(card).toContainText("Business and Enterprise");
+    await expect(card.getByRole("link", { name: "Explore Helm" })).toBeVisible();
     await page.getByRole("radiogroup", { name: "Mode" }).getByRole("radio", { name: /^Helm/ }).click();
     await expect(page).toHaveURL(new RegExp(`/${customer.orgSlug}/helm/start$`));
 
