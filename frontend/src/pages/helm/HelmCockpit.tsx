@@ -106,6 +106,18 @@ export const HelmCockpit: React.FC = () => {
         ) : null}
       </div>
 
+      {!readOnly && !book.sample && (book.first_run?.step ?? 4) < 4 ? (
+        <p className="helm-panel flex flex-wrap items-center justify-between gap-2 p-3 text-sm">
+          <span>
+            Helm is not fully set up yet: step <span className="helm-figure">{(book.first_run?.step ?? 0) + 1}</span> of{" "}
+            <span className="helm-figure">4</span>.
+          </span>
+          <Link to={withBook(helmPath(orgSlug, "setup"))} className="helm-btn helm-btn-primary">
+            Finish setting up
+          </Link>
+        </p>
+      ) : null}
+
       {plan?.conflict ? (
         <section role="alert" className="helm-panel border-l-4 p-4" style={{ borderLeftColor: "hsl(var(--helm-drifting))" }}>
           <p className="flex items-start gap-2 font-semibold">

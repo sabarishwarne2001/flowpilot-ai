@@ -143,6 +143,7 @@ export const ROUTE_PATTERNS = {
   helmCertificate: "certificates/:certificateId",
   helmSettings: "settings",
   helmStart: "start",
+  helmSetup: "setup",
 
   workspaceShell: `/${P_ORG}/${P_WS}`,
   workspaceDashboard: "",
@@ -207,7 +208,16 @@ export const ROUTE_PATTERNS = {
 const seg = (value: string): string => encodeURIComponent(value);
 
 /** Helm's pages: `/:orgSlug/helm`, `/:orgSlug/helm/mandates`, … */
-export type HelmPage = "" | "plan" | "mandates" | "ledger" | "time-machine" | "certificates" | "settings" | "start";
+export type HelmPage =
+  | ""
+  | "plan"
+  | "mandates"
+  | "ledger"
+  | "time-machine"
+  | "certificates"
+  | "settings"
+  | "start"
+  | "setup";
 
 export const helmPath = (orgSlug: string, page: HelmPage = ""): string =>
   page ? `/${seg(orgSlug)}/helm/${page}` : `/${seg(orgSlug)}/helm`;

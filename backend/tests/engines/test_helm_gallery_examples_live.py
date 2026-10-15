@@ -72,6 +72,11 @@ def test_the_library_says_which_values_are_examples(engines: Engines) -> None:
     assert required["keep_cash_above"] == ["floor"]
     assert required["po_required_above"] == ["threshold"]
     assert required["never_pay_duplicate"] == []
+    # The first run's kinds of business, in plain words, with what Helm recommends for each.
+    kinds = {b["key"]: b for b in library["business_types"]}
+    assert kinds["distributor"]["label"] == "Distributor or wholesaler"
+    assert "msme_pay_within_limit" in kinds["distributor"]["recommended"]
+    assert "review_backlog_under" in kinds["accounting_firm"]["recommended"]
 
 
 def test_editing_an_active_mandate_is_not_a_duplicate_of_itself(engines: Engines) -> None:

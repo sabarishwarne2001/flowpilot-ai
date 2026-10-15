@@ -100,6 +100,7 @@ const HelmCertificates = lazy(() => import("@/pages/helm/HelmCertificates"));
 const HelmCertificate = lazy(() => import("@/pages/helm/HelmCertificates").then((m) => ({ default: m.HelmCertificate })));
 const HelmSettings = lazy(() => import("@/pages/helm/HelmSettings"));
 const HelmStart = lazy(() => import("@/pages/helm/HelmStart"));
+const HelmFirstRun = lazy(() => import("@/pages/helm/HelmFirstRun"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
@@ -484,6 +485,7 @@ function AppRoutes() {
                   <Route path={ROUTE_PATTERNS.helmCertificate} element={<HelmCertificate />} />
                   <Route path={ROUTE_PATTERNS.helmSettings} element={<HelmSettings />} />
                   <Route path={ROUTE_PATTERNS.helmStart} element={<HelmStart />} />
+                  <Route path={ROUTE_PATTERNS.helmSetup} element={<HelmFirstRun />} />
                   <Route path="*" element={<NotFound />} />
                 </Route>
               </Route>

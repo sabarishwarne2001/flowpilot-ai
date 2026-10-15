@@ -216,7 +216,11 @@ def helm_library(organization_id: uuid.UUID, db: Session = Depends(get_db),
     enterprise = gate.custom_held(db, context.organization_id)
     from app.services.helm.mandates.base import GROUPS
 
-    return {"groups": list(GROUPS), "templates": registry.library(enterprise=enterprise)}
+    # First run (brief §10.3): each kind of business in plain words, with the mandates recommended for it.
+    business_types = [{"key": key, "label": label, "recommended": registry.recommended(key)}
+                      for key, label in v.BUSINESS_TYPES.items()]
+    return {"groups": list(GROUPS), "templates": registry.library(enterprise=enterprise),
+            "business_types": business_types}
 
 
 @router.post(f"{P}/books", status_code=201)

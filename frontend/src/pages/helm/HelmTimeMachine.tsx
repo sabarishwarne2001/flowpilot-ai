@@ -83,7 +83,11 @@ const Findings: React.FC<{ readonly result: BacktestMandateResult; readonly work
   );
 };
 
-const Report: React.FC<{ readonly row: HelmBacktest; readonly workspaceSlug: string | null }> = ({ row, workspaceSlug }) => {
+/** A finished backtest: the summary, the three honesty classes, and each mandate's findings. */
+export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly workspaceSlug: string | null }> = ({
+  row,
+  workspaceSlug,
+}) => {
   const result = row.result ?? {};
   const mandates = result.mandates ?? [];
   const [open, setOpen] = useState<string | null>(mandates.find((m) => m.count > 0)?.template ?? null);
@@ -278,7 +282,7 @@ export const HelmTimeMachine: React.FC = () => {
           This replay could not finish: {chosen.data.error ?? "an unexpected error"}. Try again.
         </p>
       ) : (
-        <Report key={chosen.data.id} row={chosen.data} workspaceSlug={book.kind === "SAMPLE" || workspaceSlug ? workspaceSlug : null} />
+        <BacktestReport key={chosen.data.id} row={chosen.data} workspaceSlug={book.kind === "SAMPLE" || workspaceSlug ? workspaceSlug : null} />
       )}
 
       {(history.data ?? []).length > 1 ? (

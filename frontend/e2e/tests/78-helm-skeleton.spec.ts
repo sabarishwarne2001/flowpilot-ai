@@ -4,8 +4,9 @@
  *
  * A new Business customer uploads two supplier invoices. In the browser the owner finds the
  * Documents | Helm switch in the header (a radio group), switches to Helm, starts Helm on the
- * workspace, confirms who the company is and its cash, adds two mandates from the library (each
- * starts in Propose mode) and re-plans. The second invoice asks to be paid into a new bank account,
+ * workspace and walks the four-step first run: who the company is, its cash, two of the mandates
+ * recommended for its kind of business (each starts in Propose mode), and the replay that runs by
+ * itself. Then it re-plans. The second invoice asks to be paid into a new bank account,
  * and the radar marks one of the pair as the same bill again (which one depends on which the worker
  * read last): when they are different bills the Guard blocks paying the changed account and says
  * why; when they are the same bill Helm plans to pay only the other. The owner approves Helm's
@@ -107,31 +108,53 @@ test.describe("Helm skeleton — a tenant of its own", () => {
     await expect(page.getByRole("heading", { name: "Helm keeps your business promises" })).toBeVisible();
     await page.getByRole("button", { name: "Start Helm on Main" }).click();
 
-    // Settings: who we are (the invoices are billed to Caretakers Global Inc) and the cash.
-    await expect(page).toHaveURL(/\/helm\/settings\?book=/);
-    await expect(page.getByRole("heading", { name: "Settings", level: 1 })).toBeVisible();
-    const name = page.getByRole("textbox", { name: "Legal name 1" });
-    await name.fill("Caretakers Global Inc");
+    // The first run, step 1: who we are (the invoices are billed to Caretakers Global Inc).
+    await expect(page).toHaveURL(/\/helm\/setup\?book=/);
+    await expect(page.getByRole("heading", { name: "Set up Helm on Main", level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Who you are", level: 2 })).toBeFocused();
+    await page.getByRole("textbox", { name: "Legal name 1" }).fill("Caretakers Global Inc");
     const confirmed = page.waitForResponse((r) => /\/helm\/books\/[^/]+\/settings$/.test(r.url()) && r.request().method() === "PATCH");
-    await page.getByRole("button", { name: /^(Confirm|Save)$/ }).first().click();
+    await page.getByRole("button", { name: "These are us" }).click();
     expect((await confirmed).status()).toBe(200);
+
+    // Step 2: the cash, typed by a person.
+    await expect(page.getByRole("heading", { name: "Your cash", level: 2 })).toBeVisible();
     await page.getByRole("textbox", { name: "Currency" }).fill("USD");
     await page.getByRole("textbox", { name: "Amount" }).fill("20000");
     const cash = page.waitForResponse((r) => /\/cash-positions$/.test(r.url()) && r.request().method() === "POST");
-    await page.locator("form").filter({ has: page.getByRole("textbox", { name: "Amount" }) }).getByRole("button", { name: "Save" }).click();
+    await page.getByRole("button", { name: "Save the cash" }).click();
     expect((await cash).status()).toBe(201);
-    await expect(page.getByText("typed by a person")).toBeVisible();
 
-    // Mandates: two from the library, each active in Propose mode.
+    // Step 3: the kind of business, then two of the mandates recommended for it.
+    await expect(page.getByRole("heading", { name: "Your mandates", level: 2 })).toBeVisible();
+    await page.getByRole("radio", { name: "Something else" }).check();
+    const wanted = ["Pay every supplier on time", "Never pay a duplicate"];
+    for (const box of await page.getByRole("checkbox").all()) {
+      const label = await box.evaluate((el) => el.closest("label")?.textContent ?? "");
+      if (wanted.some((title) => label.startsWith(title))) {
+        await box.check();
+      } else {
+        await box.uncheck();
+      }
+    }
+    let created = 0;
+    page.on("response", (r) => {
+      if (/\/helm\/books\/[^/]+\/mandates$/.test(r.url()) && r.request().method() === "POST" && r.status() === 201) created += 1;
+    });
+    await page.getByRole("button", { name: "Add these in Propose mode" }).click();
+
+    // Step 4: the replay runs by itself and shows what Helm would have held.
+    await expect(page.getByRole("heading", { name: "What Helm would have held", level: 2 })).toBeVisible();
+    expect(created).toBe(2);
+    await expect(page.getByTestId("helm-backtest-report")).toBeVisible({ timeout: 60_000 });
+    await page.getByRole("button", { name: "Open the cockpit" }).click();
+    await expect(page).toHaveURL(/\/helm\?book=/);
+
+    // The cash is shown as typed by a person; both mandates are active, in Propose mode.
+    await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Settings" }).click();
+    await expect(page.getByText("typed by a person")).toBeVisible();
     await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Mandates" }).click();
     await expect(page.getByRole("heading", { name: "Mandates", level: 1 })).toBeVisible();
-    for (const title of ["Add Pay every supplier on time", "Add Never pay a duplicate"]) {
-      const add = page.getByRole("button", { name: title, exact: true });
-      await expect(add).toBeEnabled();
-      const created = page.waitForResponse((r) => /\/helm\/books\/[^/]+\/mandates$/.test(r.url()) && r.request().method() === "POST");
-      await add.click();
-      expect((await created).status()).toBe(201);
-    }
     await expect(page.getByTestId("helm-mandate")).toHaveCount(2);
     for (const card of await page.getByTestId("helm-mandate").all()) {
       await expect(card).toContainText("Active");

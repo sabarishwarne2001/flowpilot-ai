@@ -1,13 +1,158 @@
-import React from "react";
+import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Compass, Lock } from "lucide-react";
+import { Building2, Compass, History, Lock, Trash2 } from "lucide-react";
 
 import { useHelm } from "@/components/helm/HelmContext";
 import { helmPath, organizationBillingPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
-import { createHelmBook, helmKeys } from "@/services/api/helm";
+import {
+  buildHelmSample,
+  createHelmBook,
+  deleteHelmSample,
+  getHelmOverview,
+  helmKeys,
+  requestHelmBacktest,
+} from "@/services/api/helm";
+import { formatCalendarDate } from "@/utils/displayTime";
+
+/**
+ * "Explore Helm with a sample company" (brief §10.3), on every plan: an invented Pune distributor
+ * with nine months of documents, in a labelled sample workspace anyone can delete.
+ */
+const SampleCompany: React.FC = () => {
+  const { organizationId, orgSlug, overview, canDecide } = useHelm();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const sample = overview.sample;
+  // While the worker builds it, read the overview again every few seconds.
+  useQuery({
+    queryKey: helmKeys.overview(organizationId),
+    queryFn: () => getHelmOverview(organizationId),
+    enabled: sample.building,
+    refetchInterval: sample.building ? 3_000 : false,
+  });
+  const refresh = (): Promise<void> => queryClient.invalidateQueries({ queryKey: helmKeys.overview(organizationId) });
+  const build = useMutation({
+    mutationFn: () => buildHelmSample(organizationId),
+    onSuccess: () => void refresh(),
+    onError: (error) => toast.error(errorMessage(error, "Helm could not build the sample company.")),
+  });
+  const remove = useMutation({
+    mutationFn: () => deleteHelmSample(organizationId),
+    onSuccess: () => {
+      toast.success("The sample company is deleted.");
+      void refresh();
+    },
+    onError: (error) => toast.error(errorMessage(error, "Helm could not delete the sample company.")),
+  });
+  const [confirming, setConfirming] = useState(false);
+
+  return (
+    <section aria-labelledby="helm-start-sample" className="helm-panel p-5" data-testid="helm-sample">
+      <h2 id="helm-start-sample" className="flex items-center gap-2 text-sm font-semibold">
+        <Building2 className="h-4 w-4" aria-hidden="true" />
+        Explore Helm with a sample company
+      </h2>
+      <p className="helm-muted mt-1 text-sm">
+        {sample.name}, an invented distributor in Pune, with nine months of purchase orders, invoices, contracts and bank
+        statements. Helm reads them with the same engines as yours and shows what it would have held. It lives in its own
+        labelled workspace and does not count towards your plan.
+      </p>
+      {sample.book_id ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            className="helm-btn helm-btn-primary"
+            onClick={() => navigate(`${helmPath(orgSlug)}?book=${encodeURIComponent(sample.book_id as string)}`)}
+          >
+            Open {sample.name}
+          </button>
+          {canDecide ? (
+            confirming ? (
+              <>
+                <button type="button" className="helm-btn" disabled={remove.isPending} onClick={() => remove.mutate()}>
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                  Yes, delete it
+                </button>
+                <button type="button" className="helm-btn" onClick={() => setConfirming(false)}>
+                  Keep it
+                </button>
+              </>
+            ) : (
+              <button type="button" className="helm-btn" onClick={() => setConfirming(true)}>
+                <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                Delete the sample company
+              </button>
+            )
+          ) : null}
+        </div>
+      ) : sample.building || build.isPending ? (
+        <p className="mt-3 text-sm" role="status" aria-live="polite">
+          Building {sample.name}: Helm is reading its documents. This takes about a minute.
+        </p>
+      ) : canDecide ? (
+        <button type="button" className="helm-btn helm-btn-primary mt-3" onClick={() => build.mutate()}>
+          Explore Helm with a sample company
+        </button>
+      ) : (
+        <p className="helm-muted mt-3 text-sm">An organization owner or admin can add it.</p>
+      )}
+    </section>
+  );
+};
+
+/** Helm preview: one replay a week, of up to three months, of a workspace's own documents. */
+const PreviewReplay: React.FC = () => {
+  const { organizationId, orgSlug, overview, canDecide } = useHelm();
+  const navigate = useNavigate();
+  const candidates = overview.workspaces.filter((w) => !w.is_sample);
+  const [workspaceId, setWorkspaceId] = useState(candidates[0]?.id ?? "");
+  const replay = useMutation({
+    mutationFn: () => requestHelmBacktest(organizationId, { workspace_id: workspaceId, months: 3 }),
+    onSuccess: (queued) =>
+      navigate(
+        `${helmPath(orgSlug, "time-machine")}?book=${encodeURIComponent(queued.book_id)}&backtest=${encodeURIComponent(queued.id)}`,
+      ),
+    onError: (error) => toast.error(errorMessage(error, "Helm could not start the replay.")),
+  });
+  if (!canDecide || candidates.length === 0) {
+    return null;
+  }
+  const { backtest_allowed: allowed, next_backtest_at: next } = overview.preview;
+  return (
+    <section aria-labelledby="helm-start-replay" className="helm-panel p-5">
+      <h2 id="helm-start-replay" className="flex items-center gap-2 text-sm font-semibold">
+        <History className="h-4 w-4" aria-hidden="true" />
+        Replay your own documents
+      </h2>
+      <p className="helm-muted mt-1 text-sm">
+        See what Helm would have held over the last three months of a workspace's documents. Nothing is executed. Helm
+        preview runs one replay a week.
+      </p>
+      {allowed ? (
+        <div className="mt-3 flex flex-wrap items-end gap-2">
+          <label className="text-xs">
+            <span className="helm-label block">Workspace</span>
+            <select className="helm-input mt-1" value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)}>
+              {candidates.map((w) => (
+                <option key={w.id} value={w.id}>
+                  {w.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button type="button" className="helm-btn helm-btn-primary" disabled={!workspaceId || replay.isPending} onClick={() => replay.mutate()}>
+            Replay three months
+          </button>
+        </div>
+      ) : (
+        <p className="mt-3 text-sm">This week's replay is used. The next one is available {next ? `on ${formatCalendarDate(next)}` : "next week"}.</p>
+      )}
+    </section>
+  );
+};
 
 const FIVE_PARTS: { name: string; text: string }[] = [
   { name: "Promise ledger", text: "Every promise your documents make: what you owe, what is owed to you, agreed prices, deadlines." },
@@ -27,7 +172,7 @@ export const HelmStart: React.FC = () => {
     onSuccess: async (book) => {
       await queryClient.invalidateQueries({ queryKey: helmKeys.overview(organizationId) });
       toast.success(`Helm is reading ${book.name}. It starts in Propose mode: it suggests, a person decides.`);
-      navigate(`${helmPath(orgSlug, "settings")}?book=${encodeURIComponent(book.id)}`);
+      navigate(`${helmPath(orgSlug, "setup")}?book=${encodeURIComponent(book.id)}`);
     },
     onError: (error) => toast.error(errorMessage(error, "Helm could not start on this workspace.")),
   });
@@ -52,6 +197,10 @@ export const HelmStart: React.FC = () => {
         </ul>
       </div>
 
+      <SampleCompany />
+
+      {access.preview ? <PreviewReplay /> : null}
+
       {access.preview ? (
         <div className="helm-panel p-5">
           <p className="flex items-center gap-2 text-sm font-semibold">
@@ -74,7 +223,8 @@ export const HelmStart: React.FC = () => {
             Start Helm on a workspace
           </h2>
           <p className="helm-muted mt-1 text-xs">
-            Helm keeps one book per workspace. You confirm who you are and your cash next; then choose mandates.
+            Helm keeps one book per workspace. Four short steps follow: who you are, your cash, your mandates, and a
+            replay of what Helm would have held.
           </p>
           {candidates.length === 0 ? (
             <p className="mt-3 text-sm">Every workspace you can read already has Helm.</p>

@@ -294,6 +294,8 @@ export interface LibraryTemplate {
 export interface HelmLibrary {
   groups: string[];
   templates: LibraryTemplate[];
+  /** First run: each kind of business in plain words, with the mandates recommended for it. */
+  business_types: { key: string; label: string; recommended: string[] }[];
 }
 
 export interface MandatePreview {

@@ -87,7 +87,15 @@ const HelmSidebar: React.FC<{ readonly onNavigate?: () => void }> = ({ onNavigat
           </Link>
         );
       })}
-      <div className="mt-auto px-2 pb-1 pt-4">
+      <div className="mt-auto space-y-2 px-2 pb-1 pt-4">
+        <Link
+          to={helmPath(orgSlug, "start")}
+          className="helm-accent block text-xs hover:underline"
+          aria-current={current === "start" ? "page" : undefined}
+          onClick={onNavigate}
+        >
+          Another workspace, or the sample company
+        </Link>
         {access.preview ? (
           <p className="helm-muted flex items-start gap-1.5 text-xs leading-relaxed">
             <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
@@ -151,7 +159,8 @@ const HelmChrome: React.FC = () => {
   const { state } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
   const page = pageOf(pathname, orgSlug);
-  const pageName = page === "start" ? "Start" : HELM_NAV.find((item) => item.page === page)?.name ?? "Cockpit";
+  const pageName =
+    page === "start" ? "Start" : page === "setup" ? "Setup" : HELM_NAV.find((item) => item.page === page)?.name ?? "Cockpit";
   useDocumentTitle(pageName, `Helm · ${organizationName}`);
 
   const documentsPath =
