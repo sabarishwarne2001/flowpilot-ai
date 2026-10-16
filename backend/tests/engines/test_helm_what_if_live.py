@@ -147,6 +147,8 @@ def test_a_bad_scenario_is_refused_in_words_and_only_this_books_invoices_can_be_
                                                                                     book):
     for body, words in (({}, "Tell Helm what to change"),
                         ({"delay_receivables_days": 91}, "Customers can be delayed by 0 to 90 days."),
+                        ({"delay_receivables_days": "soon"}, "The delay is a whole number of days."),
+                        ({"horizon_days": 1.5, "delay_receivables_days": 5}, "How far ahead to look is a whole number"),
                         ({"delay_receivables_days": 10, "horizon_days": 365}, "Helm looks 7 to 90 days ahead"),
                         ({"cash_change_micros": -5 * M, "currency": "USD"}, "This book has no USD cash position"),
                         ({"hold_promise_ids": ["not-an-id"]}, "Invoice 1 of the list to hold is not an invoice "

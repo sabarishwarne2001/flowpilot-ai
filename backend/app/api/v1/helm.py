@@ -208,19 +208,21 @@ class BacktestIn(BaseModel):
 
 
 class WhatIfIn(BaseModel):
-    """A scenario. Ranges are checked by `helm/what_if.parse`, which refuses in plain words."""
+    """A scenario. Values are deliberately loose here: `helm/what_if.parse` checks each type and range
+    and refuses in plain words ("The delay is a whole number of days."), not in a validator's."""
 
     model_config = ConfigDict(extra="forbid")
 
-    #: A one-off change to today's cash, signed, in millionths of the currency.
-    cash_change_micros: Optional[int] = None
+    #: A one-off change to today's cash: a signed whole number of millionths of the currency.
+    cash_change_micros: Optional[Any] = None
     #: The cash change's currency; may be left out when the book holds cash in one currency.
-    currency: Optional[str] = Field(default=None, max_length=8)
-    delay_receivables_days: Optional[int] = None
+    currency: Optional[Any] = None
+    #: Customers pay this many days later than usual (0 to 90).
+    delay_receivables_days: Optional[Any] = None
     #: Invoices we owe (their promise ids) to hold out of the plan.
-    hold_promise_ids: Optional[list[str]] = Field(default=None, max_length=200)
+    hold_promise_ids: Optional[list[Any]] = Field(default=None, max_length=200)
     #: How far ahead to compare the flight paths (7 to 90 days; the cockpit's 90 when left out).
-    horizon_days: Optional[int] = None
+    horizon_days: Optional[Any] = None
 
 
 class PaidIn(BaseModel):
