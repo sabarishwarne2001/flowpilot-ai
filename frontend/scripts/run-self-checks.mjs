@@ -66,7 +66,11 @@ try {
   // Campaign session 3 (N-064): dates, times, numbers and money go through the display layer
   // (src/utils/displayTime.ts), which reads the person's language and clock and the workspace's
   // date format. A bare toLocale*String() or new Intl.*Format() reads the browser instead.
-  const BYPASS = /\.toLocale(?:Date|Time)?String\(|new Intl\.(?:NumberFormat|DateTimeFormat)\(/;
+  // Website and payments session: also Intl's other formatters and navigator.language itself.
+  // formatRelativeTime passed navigator.language straight to Intl.RelativeTimeFormat, which
+  // throws on a tag like "en-US@posix" and took the whole Helm cockpit down.
+  const BYPASS =
+    /\.toLocale(?:Date|Time)?String\(|new Intl\.(?:NumberFormat|DateTimeFormat|RelativeTimeFormat|ListFormat|PluralRules)\(|navigator\.languages?\b/;
   const ALLOWED = new Set([path.join("src", "utils", "displayTime.ts")]);
   const bypasses = [];
   const walk = (dir) => {

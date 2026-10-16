@@ -92,65 +92,10 @@ export const truncateText = (
 };
 
 /**
- * Format relative time.
- *
- * Example:
- * - Just now
- * - 5 minutes ago
- * - Yesterday
+ * Format relative time ("5 minutes ago"): the display layer's, which reads the person's
+ * validated language (utils/displayTime.ts).
  */
-export const formatRelativeTime = (
-  dateInput: string | number | Date,
-): string => {
-  const date = new Date(dateInput);
-
-  if (Number.isNaN(date.getTime())) {
-    return "Invalid Date";
-  }
-
-  const seconds = Math.floor(
-    (Date.now() - date.getTime()) / 1000,
-  );
-
-  const formatter = new Intl.RelativeTimeFormat(
-    navigator.language,
-    {
-      numeric: "auto",
-    },
-  );
-
-  if (seconds < 60) {
-    return formatter.format(-seconds, "second");
-  }
-
-  const minutes = Math.floor(seconds / 60);
-
-  if (minutes < 60) {
-    return formatter.format(-minutes, "minute");
-  }
-
-  const hours = Math.floor(minutes / 60);
-
-  if (hours < 24) {
-    return formatter.format(-hours, "hour");
-  }
-
-  const days = Math.floor(hours / 24);
-
-  if (days < 30) {
-    return formatter.format(-days, "day");
-  }
-
-  const months = Math.floor(days / 30);
-
-  if (months < 12) {
-    return formatter.format(-months, "month");
-  }
-
-  const years = Math.floor(months / 12);
-
-  return formatter.format(-years, "year");
-};
+export { formatRelativeTime } from "@/utils/displayTime";
 
 /**
  * Capitalize the first letter.
