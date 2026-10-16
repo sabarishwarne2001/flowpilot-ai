@@ -21,6 +21,9 @@ class ApiKeyScope(str, Enum):
     WEBHOOKS_WRITE = "webhooks:write"
     WEBHOOKS_ADMIN = "webhooks:admin"
     BILLING_READ = "billing:read"
+    # --- Helm (Enterprise: capability.helm_api, checked again in Helm's own gate) ---
+    HELM_READ = "helm:read"
+    HELM_WRITE = "helm:write"
     # --- ARCH-21 Public Gateway Scopes ---
     PUBLIC_DOCUMENTS_READ = "public_documents:read"
     PUBLIC_QUERY_WRITE = "public_query:write"

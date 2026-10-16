@@ -63,6 +63,13 @@ WEBHOOK_EVENT_TYPES: Final[FrozenSet[str]] = frozenset(
         # the delivery row for the single endpoint the rule names, and the
         # ARCH-09 delivery loop signs and retries it like any other.
         "workflow.triggered",
+        # Helm (Enterprise, capability.helm_api; app/services/helm/webhooks.py). PUBLIC: a tenant's
+        # own systems are the intended consumer. Payloads carry ids and figures only (amounts in
+        # micros with their currency, dates, counts, states), never document text or a masked fact;
+        # the API serves the rest to whoever may read it.
+        "helm.plan.ready",
+        "helm.action.executed",
+        "helm.mandate.breached",
     }
 )
 

@@ -30,6 +30,10 @@ export const WEBHOOK_EVENT_TYPES = [
   "procurement.approved",
   "procurement.disputed",
   "anomaly.detected",
+  // Helm (Enterprise): ids and figures only.
+  "helm.plan.ready",
+  "helm.action.executed",
+  "helm.mandate.breached",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
