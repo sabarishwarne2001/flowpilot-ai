@@ -250,6 +250,9 @@ def main() -> None:
         png(mark, 192, public / "icon-192.png")
         png(mark, 512, public / "icon-512.png")
 
+    # The browser tests upload a real PNG as a sample image document and as an organization logo.
+    png(mark, 256, ROOT / "frontend/e2e/support/servabo-mark.png")
+
     headline = TOKENS["positioning"]
     for dark in (False, True):
         suffix = "dark" if dark else "light"
