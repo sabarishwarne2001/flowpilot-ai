@@ -99,6 +99,9 @@ _HELM_KEY_ROUTES: tuple[tuple[str, str], ...] = (
     ("POST", "/backtests"),
     ("GET", "/books/{book_id}/backtests"),
     ("GET", "/backtests/{backtest_id}"),
+    ("GET", "/backtests/{backtest_id}/pdf"),
+    # A what-if saves nothing; like the mandate preview it is a POST, so it takes helm:write.
+    ("POST", "/books/{book_id}/what-if"),
 )
 
 _HELM_DECISION = ("No API key scope covers approving, rejecting or undoing a Helm action. That is a person's "
