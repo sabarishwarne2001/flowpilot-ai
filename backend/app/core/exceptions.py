@@ -2,7 +2,7 @@
 Domain exception taxonomy for FlowPilot AI.
 
 Every business-level failure raised by the service layer inherits from
-FlowPilotError.
+ServaboError.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from typing import Optional
 # Root
 # ============================================================================
 
-class FlowPilotError(Exception):
+class ServaboError(Exception):
     """Base exception for every FlowPilot AI domain failure."""
     pass
 
@@ -24,7 +24,7 @@ class FlowPilotError(Exception):
 # Rate Limiting (ARCH-08 Step 6)
 # ============================================================================
 
-class RateLimitExceededError(FlowPilotError):
+class RateLimitExceededError(ServaboError):
     """Raised when an operation exceeds its configured rate limit window."""
 
     def __init__(
@@ -46,7 +46,7 @@ class RateLimitExceededError(FlowPilotError):
 # Spend controls (ARCH-10 Step 3)
 # ============================================================================
 
-class SpendControlError(FlowPilotError):
+class SpendControlError(ServaboError):
     """Base exception for per-tenant spend ceiling failures."""
     pass
 
@@ -159,7 +159,7 @@ class SpendLimitExceededError(SpendControlError):
 # Organizations (commercial tenant)
 # ============================================================================
 
-class OrganizationError(FlowPilotError):
+class OrganizationError(ServaboError):
     """Base exception for all organization-related failures."""
     pass
 
@@ -237,7 +237,7 @@ class LastOwnerError(OrganizationMemberError):
 # Workspaces (collaboration boundary)
 # ============================================================================
 
-class WorkspaceError(FlowPilotError):
+class WorkspaceError(ServaboError):
     """Base exception for all workspace-related failures."""
     pass
 
@@ -275,7 +275,7 @@ class WorkspaceMemberError(WorkspaceError):
 # Tenant status
 # ============================================================================
 
-class TenantSuspendedError(FlowPilotError):
+class TenantSuspendedError(ServaboError):
     """
     Raised when an organization or workspace is suspended or archived.
     """
@@ -286,7 +286,7 @@ class TenantSuspendedError(FlowPilotError):
 # Slugs (public tenant identifiers)
 # ============================================================================
 
-class SlugError(FlowPilotError):
+class SlugError(ServaboError):
     """Base exception for tenant identifier failures."""
     pass
 
@@ -310,7 +310,7 @@ class SlugUnavailableError(SlugError):
 # Invitations
 # ============================================================================
 
-class InvitationError(FlowPilotError):
+class InvitationError(ServaboError):
     """Base exception for all workspace invitation operations."""
     pass
 
@@ -413,7 +413,7 @@ class InvitationResendTooSoonError(InvitationError):
 # Users (account, profile)
 # ============================================================================
 
-class UserError(FlowPilotError):
+class UserError(ServaboError):
     """Base exception for all account- and profile-related failures."""
     pass
 
@@ -445,7 +445,7 @@ class ReauthenticationFailedError(UserError):
 # Ownership Transfer (ARCH-05 Step 6)
 # ============================================================================
 
-class OwnershipTransferError(FlowPilotError):
+class OwnershipTransferError(ServaboError):
     """Base exception for all ownership-transfer workflow failures."""
     pass
 

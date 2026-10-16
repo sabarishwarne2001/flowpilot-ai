@@ -149,7 +149,7 @@ export const useUIStore = create<UIState>()(
       },
     ),
     {
-      name: "FlowPilotUIStore",
+      name: "ServaboUIStore",
     },
   ),
 );

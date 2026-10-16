@@ -18,7 +18,7 @@ from app.core.exceptions import (
     CannotTransferToSelfError,
     EmailImmutableError,
     WeakPasswordError,
-    FlowPilotError,
+    ServaboError,
     InvalidInvitationTokenError,
     InvalidSlugError,
     InvitationAlreadyExistsError,
@@ -189,7 +189,7 @@ _EXCEPTION_MAPPING: dict[type[Exception], tuple[int, str]] = {
     BrandingError: (400, "BRANDING_ERROR"),
 
     # --- Root --------------------------------------------------------------
-    FlowPilotError: _DEFAULT_MAPPING,
+    ServaboError: _DEFAULT_MAPPING,
 }
 
 

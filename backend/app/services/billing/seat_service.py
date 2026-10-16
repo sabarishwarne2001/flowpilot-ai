@@ -47,7 +47,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.models.billable_seat import BillableSeat
 from app.models.billing_account import BillingAccount
 from app.models.organization import (
@@ -666,7 +666,7 @@ def _write_seats_at_gateway(
     return int(synced_seats), bool(applied)
 
 
-class SeatsInUseError(SeatError, FlowPilotError):
+class SeatsInUseError(SeatError, ServaboError):
     """Fewer seats than members plus pending invitations were asked for."""
 
     status_code = 409
@@ -678,14 +678,14 @@ class SeatsInUseError(SeatError, FlowPilotError):
         self.details = {"seats_used": seats_used}
 
 
-class NoPaidSubscriptionError(SeatError, FlowPilotError):
+class NoPaidSubscriptionError(SeatError, ServaboError):
     """Seats are bought on a paid subscription; this organization has none."""
 
     status_code = 409
     code = "NO_PAID_SUBSCRIPTION"
 
 
-class SeatPriceChangedError(SeatError, FlowPilotError):
+class SeatPriceChangedError(SeatError, ServaboError):
     """The seat price changed between the quote the person saw and the purchase."""
 
     status_code = 409

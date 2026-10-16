@@ -23,7 +23,7 @@ from app.core.exception_handlers import (
     integrity_error_handler,
     request_validation_exception_handler,
 )
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from sqlalchemy.exc import IntegrityError
 from app.core.logging_config import setup_logging
 from app.core.production_guard import HARDENED_ENVIRONMENTS
@@ -174,7 +174,7 @@ async def lifespan(app: FastAPI):
 _serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
 
 
-class FlowPilotAPI(FastAPI):
+class ServaboAPI(FastAPI):
     """F-106. Wraps the whole built stack, outside every registered middleware.
 
     A send to a client that has hung up becomes a no-op, so the request still
@@ -187,7 +187,7 @@ class FlowPilotAPI(FastAPI):
         return ClientGoneMiddleware(super().build_middleware_stack())
 
 
-app = FlowPilotAPI(
+app = ServaboAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
     description="Backend API for FlowPilot AI",
@@ -248,7 +248,7 @@ app.add_middleware(RequestTraceMiddleware)
 # Link rather than replacing it, so the gateway's rel="describedby"
 # and this layer's rel="sunset" coexist.
 app.add_middleware(DeprecationMiddleware)
-app.add_exception_handler(FlowPilotError, domain_exception_handler)
+app.add_exception_handler(ServaboError, domain_exception_handler)
 # F-021: a 422 must not echo the submitted value (it may be a secret).
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 # F-214: a constraint met by a concurrent duplicate is a 409, not a 500.

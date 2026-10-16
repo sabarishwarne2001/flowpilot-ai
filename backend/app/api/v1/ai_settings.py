@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app import crud
 from app.api import deps
 from app.core.ai_models import AI_MODELS, requires_own_key
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.schemas.ai_connection_test import AIConnectionTestResponse
 from app.schemas.ai_settings import AISettingsResponse, AISettingsUpdate
 from app.schemas.available_providers import AvailableProvidersResponse
@@ -75,7 +75,7 @@ def upsert_ai_settings(
     return settings_obj
 
 
-class OwnKeyRequiredError(FlowPilotError):
+class OwnKeyRequiredError(ServaboError):
     """The model runs on the organization's own provider key, which it has not added (N-054)."""
 
     status_code = 422

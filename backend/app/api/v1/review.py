@@ -43,7 +43,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.schemas.review import (
     ReviewAssignRequest,
     ReviewAssigneeResponse,
@@ -63,7 +63,7 @@ logger = logging.getLogger("app.api.v1.review")
 router = APIRouter(tags=["Review Hub"])
 
 
-class ReviewConflictError(FlowPilotError):
+class ReviewConflictError(ServaboError):
     """ARCH48-S1:review-conflict. A 409 in the ARCH-01 envelope, `{code, message, details}`.
 
     One subclass per refusal code (the domain handler reads `code` from the

@@ -27,7 +27,7 @@
  * NOT EVERY BACKEND REFUSAL IS IN THIS TABLE
  * ==========================================
  *
- * Several routes raise `HTTPException` directly rather than a `FlowPilotError`
+ * Several routes raise `HTTPException` directly rather than a `ServaboError`
  * subclass, which produces `{"detail": "..."}` with no code at all —
  * `assistant_stream.py`'s 402 and every 403 in `billing.py` among them.
  * `parseErrorEnvelope` assigns those a fallback code, so `code` is `string |

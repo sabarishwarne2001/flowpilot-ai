@@ -99,7 +99,7 @@ export interface QuotaRefusal {
  *
  * `GlobalRateLimitMiddleware` emits `Retry-After` in delta-seconds, and
  * `RateLimitExceededError` carries `retry_after` through
- * `FlowPilotError.response_headers`. The deadline is stored as an absolute
+ * `ServaboError.response_headers`. The deadline is stored as an absolute
  * timestamp rather than a remaining count so that a countdown can be rendered
  * without the store ticking — the component owns the interval, the store owns
  * the fact.

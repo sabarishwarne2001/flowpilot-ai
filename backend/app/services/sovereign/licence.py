@@ -37,7 +37,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
 
 from app.core import licence_keys, signing
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 logger = logging.getLogger("app.services.sovereign.licence")
 
@@ -73,7 +73,7 @@ class LicenceFormatError(ValueError):
     pass
 
 
-class LicenceRequired(FlowPilotError):
+class LicenceRequired(ServaboError):
     status_code = 402
     code = "LICENCE_REQUIRED"
 

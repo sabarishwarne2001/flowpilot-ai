@@ -1,6 +1,6 @@
 """ARCH-25 — branding and custom domain failures.
 
-Every class here subclasses `FlowPilotError`. Status code and error codes are
+Every class here subclasses `ServaboError`. Status code and error codes are
 stored as class attributes and instance attributes for clean inspection by
 FastAPI exception handlers.
 
@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 
-class BrandingError(FlowPilotError):
+class BrandingError(ServaboError):
     """Base class for every ARCH-25 failure."""
 
     status_code: int = 400
