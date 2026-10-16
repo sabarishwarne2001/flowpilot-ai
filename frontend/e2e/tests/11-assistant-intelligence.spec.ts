@@ -121,7 +121,15 @@ test.describe("Cases", () => {
       await settle(page);
     }
     const template = page.getByRole("combobox", { name: "Template" });
-    const options = await template.locator("option").allTextContents();
+    // The list refetches after publishing: wait for the published template rather than reading the
+    // options once (CI read them before the refetch landed and saw only the placeholder).
+    let options: string[] = [];
+    await expect
+      .poll(async () => {
+        options = await template.locator("option").allTextContents();
+        return options.some((option) => option && !/template…/i.test(option));
+      }, { message: "a published template to open a case with", timeout: 15_000 })
+      .toBe(true);
     const usable = options.find((option) => option && !/template…/i.test(option));
     expect(usable, `a published template to open a case with (options: ${options.join(" | ")})`).toBeTruthy();
     await template.selectOption({ label: usable as string });
