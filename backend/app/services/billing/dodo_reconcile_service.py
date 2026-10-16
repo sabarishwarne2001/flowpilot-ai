@@ -353,6 +353,59 @@ def upsert_statement(values: dict[str, Any]):
     ).returning(table.c.id)
 
 
+def _duplicate_of_live_subscription(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    snapshot: DodoSubscriptionSnapshot,
+    existing: Optional[Subscription],
+    now: datetime,
+) -> Optional[ReconcileOutcome]:
+    """A second live Dodo subscription for an organization that already has one (website and
+    payments session, C3).
+
+    One live subscription per organization (`uq_subscriptions_live_account`). Two checkouts
+    completed in two tabs make two at Dodo, and both charge the customer. Writing the second
+    violated the unique index on every attempt until the event dead-lettered, and nobody was told.
+    As on the Stripe path, it is not written, the event settles as ignored, and the operator is
+    alerted at once to cancel and refund it (RUNBOOK §9.8).
+    """
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES
+
+    if existing is not None:
+        return None
+    status, _, _ = map_status(snapshot, None, now)
+    if status not in LIVE_SUBSCRIPTION_STATUSES:
+        return None
+    live = subscription_service.live_subscription_for_organization(db, organization_id=organization_id)
+    if live is None or live.gateway_subscription_id == snapshot.id:
+        return None
+
+    from app.services import operator_alert_service
+
+    recorded = str(live.gateway_subscription_id or live.stripe_subscription_id)
+    operator_alert_service.duplicate_subscription(
+        db,
+        organization_id=organization_id,
+        gateway=GATEWAY_NAME,
+        customer_id=snapshot.customer_id,
+        recorded_subscription_id=recorded,
+        duplicate_subscription_id=snapshot.id,
+        duplicate_status=str(snapshot.status),
+    )
+    logger.warning(
+        "billing.duplicate_live_subscription",
+        extra={"organization_id": str(organization_id), "recorded_subscription_id": recorded,
+               "duplicate_subscription_id": snapshot.id, "gateway": GATEWAY_NAME},
+    )
+    return ReconcileOutcome.ignored(
+        "duplicate_live_subscription",
+        organization_id=str(organization_id),
+        gateway_subscription_id=snapshot.id,
+        recorded_subscription_id=recorded,
+    )
+
+
 def _reconcile_plan(
     db: Session,
     *,
@@ -361,8 +414,14 @@ def _reconcile_plan(
     organization_id: uuid.UUID,
 ) -> ReconcileOutcome:
     now = entitlement_service.utcnow()
-    account = _adopt_account(db, organization_id=organization_id, snapshot=snapshot)
     existing = _existing(db, snapshot.id)
+    # Before adoption: a racing checkout may also have made a second Dodo customer.
+    duplicate = _duplicate_of_live_subscription(
+        db, organization_id=organization_id, snapshot=snapshot, existing=existing, now=now
+    )
+    if duplicate is not None:
+        return duplicate
+    account = _adopt_account(db, organization_id=organization_id, snapshot=snapshot)
     previous_status = existing.status if existing is not None else None
     previous_tier_key = existing.quota_tier_key if existing is not None else None
 
