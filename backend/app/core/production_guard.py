@@ -62,7 +62,7 @@ _PLACEHOLDER_MARKERS = (
     "letmein", "dev-secret", "test-secret",
 )
 _WEAK_DATABASE_PASSWORDS = frozenset(
-    {"postgres", "password", "flowpilot", "changeme", "admin", "root", "secret", "123456", "12345678"}
+    {"postgres", "password", "servabo", "changeme", "admin", "root", "secret", "123456", "12345678"}
 )
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"})
 
@@ -100,7 +100,7 @@ def normalise_environment(raw: object) -> str:
 def _derive(jwt_secret: str, label: str) -> bytes:
     return hmac.new(
         jwt_secret.encode("utf-8"),
-        f"flowpilot/development-derived/{label}".encode("utf-8"),
+        f"servabo/development-derived/{label}".encode("utf-8"),
         hashlib.sha256,
     ).digest()
 

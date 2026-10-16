@@ -49,7 +49,7 @@ def _unverified_claims(token):
 @pytest.fixture()
 def account(db) -> User:
     user = User(
-        email=f"sec1-{uuid.uuid4().hex[:8]}@flowpilot.test",
+        email=f"sec1-{uuid.uuid4().hex[:8]}@servabo.test",
         hashed_password=security.get_password_hash("a-perfectly-fine-password"),
         is_active=True,
         email_verified_at=datetime.now(timezone.utc),

@@ -1,5 +1,5 @@
 /**
- * In-App Notification Center Data Transfer Objects (DTOs) for FlowPilot AI.
+ * In-App Notification Center Data Transfer Objects (DTOs) for Servabo.
  */
 
 /** The server's `NotificationType`: the categories the inbox filters by. */

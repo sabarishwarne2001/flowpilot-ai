@@ -278,7 +278,7 @@ if (Test-Path $frontendDevEnv) {
 # 2026-10-16) lives in volumes named flowpilot_*. Keep using them, so nothing looks lost; README
 # "Local data from before the rename" says how to move to the new names. Remove next release.
 function Use-PreRenameDockerData {
-    if ($env:COMPOSE_PROJECT_NAME) { return $false }
+    if ($env:COMPOSE_PROJECT_NAME) { return }
     docker volume inspect flowpilot_postgres_data 2>&1 | Out-Null
     $hasOld = ($LASTEXITCODE -eq 0)
     docker volume inspect servabo_postgres_data 2>&1 | Out-Null
@@ -288,16 +288,15 @@ function Use-PreRenameDockerData {
         foreach ($c in @('flowpilot-db', 'flowpilot-redis', 'flowpilot-minio', 'flowpilot-minio-init')) {
             docker rm -f $c 2>&1 | Out-Null
         }
-        return $true
+        Write-Warn2 'Using your Docker data from before the rename (volumes flowpilot_*); see README.'
     }
-    return $false
 }
 # <<< one-release names
 Write-Step '4/8  Docker backing services'
 
 Push-Location $BackendDir
 try {
-    if (Use-PreRenameDockerData) { Write-Warn2 'Using your Docker data from before the rename (volumes flowpilot_*); see README.' }
+    Use-PreRenameDockerData
     if ($Reset) {
         Write-Warn2 'Reset requested: destroying volumes.'
         docker compose down -v 2>&1 | Out-Null

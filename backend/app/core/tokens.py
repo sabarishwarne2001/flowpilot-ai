@@ -37,7 +37,7 @@ def hash_token(token: str) -> str:
     """
     Computes the stored form of a secure token.
 
-    Every token in FlowPilot is persisted as the SHA-256 of its UTF-8 bytes,
+    Every token in Servabo is persisted as the SHA-256 of its UTF-8 bytes,
     hex encoded, and never in plaintext: invitations, email verification,
     password reset, and refresh sessions all use this one function. A read of
     any token table therefore yields nothing usable.

@@ -53,9 +53,9 @@ export const CREDENTIAL_FIELDS: Record<
     {
       key: "prefix",
       label: "Key prefix",
-      hint: "Defaults to flowpilot/",
+      hint: "Defaults to servabo/",
       type: "text",
-      defaultValue: "flowpilot/",
+      defaultValue: "servabo/",
     },
     { key: "access_key_id", label: "Access key ID", type: "text" },
     { key: "secret_access_key", label: "Secret access key", type: "secret" },

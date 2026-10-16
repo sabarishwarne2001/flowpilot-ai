@@ -1,5 +1,5 @@
 /**
- * Legacy path forwarding for FlowPilot AI.
+ * Legacy path forwarding for Servabo.
  *
  * Before ARCH-01 every route was flat — /work-items, /settings, /. Those paths
  * encode the assumption that a user has exactly one workspace, so the URL need

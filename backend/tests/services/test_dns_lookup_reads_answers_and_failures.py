@@ -24,7 +24,7 @@ from app.services.identity import dns_service
 
 pytestmark = pytest.mark.no_db
 
-TOKEN = "flowpilot-verify=8f14e45fceea167a5a36dedd4bea2543"
+TOKEN = "servabo-verify=8f14e45fceea167a5a36dedd4bea2543"
 
 
 def _txt(*strings: str) -> dns.rdata.Rdata:

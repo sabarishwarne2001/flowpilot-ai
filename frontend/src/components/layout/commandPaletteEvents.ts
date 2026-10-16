@@ -5,7 +5,7 @@
  * does not import the palette (and its list rendering) just to open it, and
  * the palette stays the only owner of its own open state.
  */
-export const OPEN_COMMAND_PALETTE_EVENT = "flowpilot:open-command-palette";
+export const OPEN_COMMAND_PALETTE_EVENT = "servabo:open-command-palette";
 
 export const openCommandPalette = (): void => {
   window.dispatchEvent(new Event(OPEN_COMMAND_PALETTE_EVENT));

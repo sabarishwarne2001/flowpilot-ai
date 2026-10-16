@@ -52,7 +52,7 @@ resolve this before a session, a token, or even a certificate exists.
 Three things bound the exposure:
 
 1. The answer is not a secret. It reveals whether a hostname is a verified
-   FlowPilot tenant domain — which is already observable by resolving the
+   Servabo tenant domain — which is already observable by resolving the
    DNS record and looking at the certificate Caddy serves.
 2. It mutates nothing. One indexed read.
 3. It is addressed as `http://web:8000` on the compose network. It is not

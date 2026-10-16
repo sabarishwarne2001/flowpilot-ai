@@ -1,5 +1,5 @@
 """
-Domain exception taxonomy for FlowPilot AI.
+Domain exception taxonomy for Servabo.
 
 Every business-level failure raised by the service layer inherits from
 ServaboError.
@@ -16,7 +16,7 @@ from typing import Optional
 # ============================================================================
 
 class ServaboError(Exception):
-    """Base exception for every FlowPilot AI domain failure."""
+    """Base exception for every Servabo domain failure."""
     pass
 
 
@@ -367,7 +367,7 @@ class InvitationAccountExistsError(InvitationError):
 
 class InvitationSignupUnavailableError(InvitationError):
     """
-    F-226. The invitation was delivered through a mail server FlowPilot does not
+    F-226. The invitation was delivered through a mail server Servabo does not
     run, so its token cannot prove the address: the one-step sign-up is closed
     and the invitee signs up (and verifies) the ordinary way.
     """

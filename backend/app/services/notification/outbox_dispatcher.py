@@ -365,7 +365,7 @@ async def _send_email(
     )
 
     if category.essential:
-        # Campaign session 3 (N-062). Security and billing mail is FlowPilot
+        # Campaign session 3 (N-062). Security and billing mail is Servabo
         # writing to a person about their account, like a password reset: it
         # goes through the platform relay, never a tenant's own SMTP, which an
         # administrator can misconfigure (or point elsewhere) and which is

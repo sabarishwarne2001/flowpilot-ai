@@ -674,7 +674,7 @@ def certificate_expiry_report(certificates: Sequence[str],
 
 #: ARCH-28 tranche 3. The decision, recorded here rather than in a wiki.
 #:
-#: FlowPilot AI does NOT ship `xmlsec1` in the runtime image and does NOT
+#: Servabo does NOT ship `xmlsec1` in the runtime image and does NOT
 #: support encrypted SAML assertions. The reasons, in order of weight:
 #:
 #:   1. `xmlsec1` is a C library reached through `python3-saml`/`pyXMLSec`. It
@@ -699,18 +699,18 @@ XMLSEC1_POLICY: str = "REFUSE_ENCRYPTED_ASSERTIONS"
 
 _IDP_REMEDIES: dict[str, str] = {
     "Microsoft Entra ID": (
-        "Entra admin center > Enterprise applications > FlowPilot AI > "
+        "Entra admin center > Enterprise applications > Servabo > "
         "Single sign-on > SAML Certificates > Edit > set 'Assertion "
         "encryption' to Disabled, then Save. Signing option must remain "
         "'Sign SAML assertion' or 'Sign SAML response and assertion'."
     ),
     "Okta": (
-        "Okta Admin > Applications > FlowPilot AI > General > SAML Settings > "
+        "Okta Admin > Applications > Servabo > General > SAML Settings > "
         "Edit > Show Advanced Settings > set 'Assertion Encryption' to "
         "Unencrypted. 'Response' and 'Assertion Signature' stay Signed."
     ),
     "Google Workspace": (
-        "Admin console > Apps > Web and mobile apps > FlowPilot AI > "
+        "Admin console > Apps > Web and mobile apps > Servabo > "
         "SAML attribute mapping. Google Workspace does not encrypt assertions "
         "by default; if a third-party proxy is re-encrypting them, remove it "
         "from the SSO path."
@@ -738,7 +738,7 @@ def describe_xmlsec1_policy() -> dict[str, Any]:
         "rationale": (
             "Encrypted assertions require a native XML security library on the "
             "one endpoint that parses unauthenticated attacker-controlled XML. "
-            "FlowPilot AI refuses them and documents the IdP-side remedy."
+            "Servabo refuses them and documents the IdP-side remedy."
         ),
         "idp_remedies": dict(_IDP_REMEDIES),
     }
@@ -751,10 +751,10 @@ def encrypted_assertion_diagnostic(*, idp_display_name: Optional[str] = None) ->
     environment variable that does not exist.
     """
     lines = [
-        "FlowPilot AI received an encrypted SAML assertion and refused it.",
+        "Servabo received an encrypted SAML assertion and refused it.",
         "",
         "WHY: encrypted assertions require the xmlsec1 native library, which "
-        "FlowPilot AI deliberately does not ship. This is a fixed platform "
+        "Servabo deliberately does not ship. This is a fixed platform "
         "policy, not a configuration gap — no environment variable, feature "
         "flag or plan tier enables it, and installing xmlsec1 on the host "
         "will not change this behaviour.",

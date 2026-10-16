@@ -9,7 +9,7 @@
  * back at once.
  *
  * The gateway's side (the declined renewal, its retries, the card fixed) is played by
- * `backend/scripts/e2e_stand_in.py` through FlowPilot's own reconcile code; the portal page itself
+ * `backend/scripts/e2e_stand_in.py` through Servabo's own reconcile code; the portal page itself
  * is the gateway's and is stood in at the network edge.
  */
 import type { Page } from "@playwright/test";

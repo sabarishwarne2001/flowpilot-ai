@@ -10,7 +10,7 @@ WHY `HostNotClaimedError` IS 404 AND NOT 403
 An unrecognised `Host` gets "not found", never "forbidden". 403 confirms the
 hostname is known to the platform and merely off-limits, which turns the
 middleware into a hostname oracle: an attacker sweeping a customer's DNS
-namespace could distinguish `ai.acme.com` (a FlowPilot tenant) from
+namespace could distinguish `ai.acme.com` (a Servabo tenant) from
 `ai.example.com` (not one) by status code alone. 404 tells them nothing.
 """
 

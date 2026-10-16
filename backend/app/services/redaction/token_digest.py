@@ -68,7 +68,7 @@ __all__ = [
 
 #: Domain separation. Changing this string invalidates every existing digest,
 #: which is a schema change, not a tweak.
-DIGEST_INFO: bytes = b"flowpilot/arch32/redaction-token-digest/v1"
+DIGEST_INFO: bytes = b"servabo/arch32/redaction-token-digest/v1"
 
 _SEPARATORS = re.compile(r"[\s\-\u00a0\u2010-\u2015_.,/\\()\[\]]+")
 

@@ -22,7 +22,7 @@ LEGACY_ROUNDS = 12
 
 def make_user(db, *, hashed: str) -> User:
     user = User(
-        email=f"sec1-{uuid.uuid4().hex[:8]}@flowpilot.test",
+        email=f"sec1-{uuid.uuid4().hex[:8]}@servabo.test",
         hashed_password=hashed,
         is_active=True,
         email_verified_at=datetime.now(timezone.utc),
@@ -149,7 +149,7 @@ class TestRehashOnLogin:
     def test_unknown_account_returns_none(self, db):
         assert (
             auth_service.authenticate_user(
-                db, email="nobody@flowpilot.test", password=PASSWORD
+                db, email="nobody@servabo.test", password=PASSWORD
             )
             is None
         )
@@ -293,7 +293,7 @@ class TestLoginDurationFloor:
 
         started = time.perf_counter()
         auth_service.authenticate_user(
-            db, email="nobody@flowpilot.test", password=PASSWORD
+            db, email="nobody@servabo.test", password=PASSWORD
         )
         elapsed_ms = (time.perf_counter() - started) * 1000
 

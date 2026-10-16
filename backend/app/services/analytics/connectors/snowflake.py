@@ -218,7 +218,7 @@ class SnowflakeConnector(WarehouseConnector):
             result = self._execute(
                 config=config,
                 credential=credential,
-                statement="SELECT 1 AS flowpilot_probe",
+                statement="SELECT 1 AS servabo_probe",
                 timeout_seconds=30,
             )
         except ConnectorError as exc:
@@ -262,7 +262,7 @@ class SnowflakeConnector(WarehouseConnector):
         region = str(
             self.require(config, "stage_region", where="Snowflake config")
         )
-        prefix = str(config.get("stage_prefix") or "flowpilot/").strip("/")
+        prefix = str(config.get("stage_prefix") or "servabo/").strip("/")
         table_prefix = str(config.get("table_prefix") or "SERVABO_")
 
         delivered: list[str] = []

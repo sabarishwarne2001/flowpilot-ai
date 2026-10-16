@@ -1,5 +1,7 @@
 # Campaign map: everything left for sessions 3 and 4
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Written 2026-10-12, after sessions 1 and 2 were merged (PRs #19 and #20) and before session 3 started.
 Sessions 3 and 4 tick items here **in the same commit as the work**, so a re-run after a cut-off
 resumes from the first unticked box._

@@ -1,5 +1,5 @@
 /**
- * Query key factories for FlowPilot AI.
+ * Query key factories for Servabo.
  */
 
 import type { QueryClient } from "@tanstack/react-query";

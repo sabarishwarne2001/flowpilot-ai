@@ -1,5 +1,5 @@
 /**
- * Error model and response-envelope parsing for the FlowPilot AI API.
+ * Error model and response-envelope parsing for the Servabo API.
  *
  * Separated from client.ts deliberately. The parser is pure — it imports no
  * axios and no store — so it can be reasoned about and tested in isolation,
@@ -27,7 +27,7 @@
 import { API_ERROR_CODES } from "@/constants/errorCodes";
 
 /**
- * Standardized API error used across the FlowPilot AI frontend.
+ * Standardized API error used across the Servabo frontend.
  *
  * `code` is the branching contract. `message` is display prose and may be
  * reworded by the backend without notice, so never branch on it.

@@ -82,13 +82,13 @@ def test_public_api_url_is_honoured(build, monkeypatch) -> None:
 def test_explicit_entity_id_and_redirect_uri_are_honoured(build, monkeypatch) -> None:
     settings = build({
         **good_production_env(),
-        "SAML_SP_ENTITY_ID": "urn:flowpilot:sp",
+        "SAML_SP_ENTITY_ID": "urn:servabo:sp",
         "OIDC_REDIRECT_URI": "https://sso.example.com/callback",
     })
 
     entity_id, acs, _ = _sp_urls_for(monkeypatch, settings)
 
-    assert entity_id == "urn:flowpilot:sp"
+    assert entity_id == "urn:servabo:sp"
     assert acs == "https://app.example.com/api/v1/saml/acs"
     assert settings.oidc_redirect_uri == "https://sso.example.com/callback"
 

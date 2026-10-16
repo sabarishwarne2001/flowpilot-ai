@@ -1,5 +1,7 @@
 # FlowPilot AI — Release-readiness certification (Phase 3, final commercial hardening)
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Date: 2026-10-08 · Branch: `hardening/phase-3-final-commercial-hardening` · Head migration:
 `q1a1_retired_groq_models`. Supersedes the final-release certification of 2026-10-06 (kept in git
 history)._

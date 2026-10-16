@@ -354,7 +354,7 @@ def push_customer_name(db: Session, *, organization: Organization) -> bool:
     The customer is created with `customer_name` (ensure_billing_account); a later change of the
     legal name (or of the name, when no legal name is set) is sent here, so invoices and receipts
     stop printing the old one. Only a Stripe customer is updated: under Dodo (merchant of record)
-    the customer record is the vendor's, and FlowPilot never set its name. Like the billing email,
+    the customer record is the vendor's, and Servabo never set its name. Like the billing email,
     the local change stands if Stripe cannot be reached; the failure is logged. Returns whether the
     provider accepted the new name.
     """

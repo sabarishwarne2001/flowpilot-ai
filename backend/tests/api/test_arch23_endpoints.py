@@ -19,7 +19,7 @@ from tests.conftest import Fixture
 GROQ_KEY = "gsk_" + "a" * 48
 OPENAI_KEY = "sk-" + "b" * 48
 AZURE_KEY = "c" * 32
-AZURE_HOST = "flowpilot-test.openai.azure.com"
+AZURE_HOST = "servabo-test.openai.azure.com"
 AZURE_DEPLOYMENT = "gpt4o-test"
 
 

@@ -22,7 +22,7 @@ from app.core.exceptions import WeakPasswordError
 MIN_LENGTH = 12
 MAX_LENGTH = 128
 MIN_SCORE = 3
-_PRODUCT_WORDS = ("flowpilot", "flow pilot", "flowpilot ai")
+_PRODUCT_WORDS = ("servabo", "flow pilot", "servabo ai")
 
 
 def _user_inputs(email: Optional[str]) -> list[str]:

@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!--
-  ARCH47-S1:tally-xsd. FlowPilot's schema of the Tally Prime XML voucher import
+  ARCH47-S1:tally-xsd. Servabo's schema of the Tally Prime XML voucher import
   envelope, written for this milestone from Tally's documented import format
   (TALLYREQUEST "Import Data", REPORTNAME "Vouchers", TALLYMESSAGE / VOUCHER
   with ALLLEDGERENTRIES.LIST and ALLINVENTORYENTRIES.LIST). Tally publishes no
-  XSD of its own: this is NOT Tally's schema. It fixes the structure FlowPilot
+  XSD of its own: this is NOT Tally's schema. It fixes the structure Servabo
   writes (element order, required elements, the value formats Tally accepts);
   formats/tally.py adds the accounting rules (amounts sum to zero,
   ISDEEMEDPOSITIVE agrees with the sign).

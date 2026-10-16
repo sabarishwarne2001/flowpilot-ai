@@ -10,10 +10,10 @@
  * Daily work: two documents are compared by the corroborator, and two reviewers see each other in
  * live collaborative review of one queue.
  *
- * Stood in: the customer's DNS provider (`backend/scripts/e2e_dns.py` answers FlowPilot's real DNS
+ * Stood in: the customer's DNS provider (`backend/scripts/e2e_dns.py` answers Servabo's real DNS
  * lookup with the published record) and the SAML identity provider (`e2e_stand_in.py saml-idp` and
- * `saml-response`: a signing certificate, then a signed assertion answering FlowPilot's own
- * AuthnRequest, posted to FlowPilot's ACS by the browser as a provider's page does).
+ * `saml-response`: a signing certificate, then a signed assertion answering Servabo's own
+ * AuthnRequest, posted to Servabo's ACS by the browser as a provider's page does).
  */
 import fs from "node:fs";
 
@@ -27,7 +27,7 @@ import { addMember, newCustomer, signInAs, standIn, uploadViaApi, type Customer 
 async function ssoSignIn(browser: Browser, domain: string, email: string): Promise<Page> {
   const context = await browser.newContext({ baseURL: WEB_ORIGIN });
   const page = await context.newPage();
-  // FlowPilot sends the browser to the provider with a redirect. Playwright does not intercept a
+  // Servabo sends the browser to the provider with a redirect. Playwright does not intercept a
   // page reached by a redirect, so the redirect is read here (it must name the configured provider)
   // and followed as an ordinary navigation, which the provider's stand-in below then answers.
   await page.route(/\/api\/v1\/sso\/start/, async (route) => {
@@ -165,17 +165,17 @@ test.describe("Journey: an Enterprise customer", () => {
       const confirm = page.getByRole("alertdialog").or(page.getByRole("dialog"));
       if (await confirm.isVisible()) await confirm.getByRole("button").last().click();
       await expect(page.locator("main")).toContainText("Lockdown is on", { timeout: 10_000 });
-      await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.elsewhere.example.net/flowpilot");
+      await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.elsewhere.example.net/servabo");
       await page.getByRole("button", { name: "Test", exact: true }).click();
       await expect(page.getByTestId("egress-decision")).toContainText(/Refused/);
-      await page.getByRole("textbox", { name: "URL or host" }).fill(`https://hooks.${domain}/flowpilot`);
+      await page.getByRole("textbox", { name: "URL or host" }).fill(`https://hooks.${domain}/servabo`);
       await page.getByRole("button", { name: "Test", exact: true }).click();
       await expect(page.getByTestId("egress-decision")).not.toContainText(/Refused/);
 
       problems.allowHttp(/\/webhooks\//, [400, 422, 502], "the webhook host is outside the allow list");
       await page.goto(customer.org("webhooks"));
       await page.getByRole("button", { name: "New endpoint" }).click();
-      const outside = "https://hooks.elsewhere.example.net/flowpilot";
+      const outside = "https://hooks.elsewhere.example.net/servabo";
       await page.getByRole("textbox", { name: "Endpoint URL" }).fill(outside);
       await page.getByRole("checkbox", { name: "work_item.created" }).check();
       await page.getByRole("button", { name: /create|save|add endpoint/i }).last().click();

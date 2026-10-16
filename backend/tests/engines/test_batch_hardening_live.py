@@ -20,7 +20,7 @@ import zipfile
 
 from tests.engines.conftest import Engines
 
-FORMAT = "flowpilot-export-package/1"
+FORMAT = "servabo-export-package/1"
 
 
 def _verify_raw(engines: Engines, data: bytes, *, as_user=None):
@@ -41,7 +41,7 @@ def _zip(entries: dict[str, bytes]) -> bytes:
 
 def _synthetic(manifest: bytes, *, root: str = "Pkg-20260101-0000aaaa") -> bytes:
     """A package-shaped zip around `manifest`, whose SHA256SUMS matches its files."""
-    files = {f"{root}/manifest.json": manifest, f"{root}/README.txt": b"FLOWPILOT AI EXPORT PACKAGE\n"}
+    files = {f"{root}/manifest.json": manifest, f"{root}/README.txt": b"SERVABO AI EXPORT PACKAGE\n"}
     sums = "".join(f"{hashlib.sha256(body).hexdigest()}  {name[len(root) + 1:]}\n" for name, body in files.items())
     files[f"{root}/SHA256SUMS"] = sums.encode()
     return _zip(files)

@@ -64,7 +64,7 @@ def good_production_env() -> dict[str, str]:
         "FRONTEND_URL": "https://app.example.com",
         "LOG_LEVEL": "INFO",
         "STORAGE_BACKEND": "s3",
-        "S3_BUCKET": "flowpilot-prod",
+        "S3_BUCKET": "servabo-prod",
         "S3_ACCESS_KEY_ID": "AKIA" + secrets.token_hex(8).upper(),
         "S3_SECRET_ACCESS_KEY": secrets.token_urlsafe(30),
         "REDIS_URL": "redis://redis:6379/0",
@@ -192,7 +192,7 @@ def test_the_pepper_may_not_reuse_the_jwt_secret(env) -> None:
     assert "API_KEY_PEPPER" in text
 
 
-@pytest.mark.parametrize("weak", ["postgres", "password", "flowpilot", "changeme123", "short"])
+@pytest.mark.parametrize("weak", ["postgres", "password", "servabo", "changeme123", "short"])
 def test_a_default_or_weak_database_password_is_refused(env, weak) -> None:
     assert "POSTGRES_PASSWORD" in refusal(env, POSTGRES_PASSWORD=weak)
 

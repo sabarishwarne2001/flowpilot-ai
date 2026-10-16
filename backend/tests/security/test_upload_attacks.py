@@ -360,7 +360,7 @@ def test_presigned_download_links_live_at_most_fifteen_minutes(monkeypatch: pyte
     monkeypatch.setattr(settings, "S3_ACCESS_KEY_ID", "AKIAEXAMPLEEXAMPLE1")
     monkeypatch.setattr(settings, "S3_SECRET_ACCESS_KEY", __import__("pydantic").SecretStr("secretsecretsecretsecretsecret12"))
     driver = MinIOStorageDriver(
-        bucket="flowpilot-test", region="us-east-1", endpoint_url="http://minio.internal:9000", prefix="",
+        bucket="servabo-test", region="us-east-1", endpoint_url="http://minio.internal:9000", prefix="",
         max_pool_connections=2, multipart_threshold=8 * 1024 * 1024, multipart_chunksize=8 * 1024 * 1024, max_concurrency=1,
     )
     url = driver.presigned_get_url("org/abc/file.pdf", expires_in=export_service.DOWNLOAD_URL_TTL_SECONDS)

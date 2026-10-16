@@ -52,7 +52,7 @@ CONFIDENCE_BUCKETS: Final[tuple[tuple[str, float, float], ...]] = (
     ("95–100%", 0.95, 1.0),
 )
 
-PACKAGE_FORMAT: Final = "flowpilot-export-package/1"
+PACKAGE_FORMAT: Final = "servabo-export-package/1"
 
 __all__ = [
     "CONFIDENCE_BUCKETS",

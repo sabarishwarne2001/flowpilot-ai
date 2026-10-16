@@ -1,5 +1,5 @@
 /**
- * Stable API error codes emitted by the FlowPilot AI backend.
+ * Stable API error codes emitted by the Servabo backend.
  *
  * Mirrors the _EXCEPTION_MAPPING table in app/core/exception_handlers.py.
  * These codes are the contract; the accompanying message is human-facing prose

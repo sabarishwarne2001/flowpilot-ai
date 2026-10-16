@@ -1,5 +1,5 @@
 /**
- * Pure tenant resolution for FlowPilot AI.
+ * Pure tenant resolution for Servabo.
  */
 
 import type {
@@ -351,7 +351,7 @@ export const runTenantResolutionSelfCheck = (): string[] => {
     remembered.status === "ready" && remembered.workspace.id === "acme-sales",
   );
 
-  const emptyDefault = stubOrganization("flowpilot-dev", [], "MEMBER");
+  const emptyDefault = stubOrganization("servabo-dev", [], "MEMBER");
   const acmeWs = stubWorkspace("general", "acme");
   const acmeOrg = stubOrganization("acme", [acmeWs]);
   const twoOrgs = stubContext([emptyDefault, acmeOrg]);
@@ -389,7 +389,7 @@ export const runTenantResolutionSelfCheck = (): string[] => {
   expect(
     "an unreachable org slug falls back rather than reporting onboarding",
     foreignSlug.status === "no_workspace" &&
-      foreignSlug.organization.organization_id === "flowpilot-dev",
+      foreignSlug.organization.organization_id === "servabo-dev",
   );
 
   const foreignWorkspaceSlug = resolveTenant({

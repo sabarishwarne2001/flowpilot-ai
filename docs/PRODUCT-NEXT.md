@@ -1,6 +1,6 @@
 # What to build next (campaign session 4, §E)
 
-A short list, best first, of ideas that build on what FlowPilot already has. Each says what it is
+A short list, best first, of ideas that build on what Servabo already has. Each says what it is
 worth, what it costs to build, and what it costs to run. **None of them is built.** At launch,
 stability earns more than novelty: build one only after the launch checklist (HANDOFF "Owner launch
 checklist") is done and the first customers are happy.
@@ -10,15 +10,15 @@ it adds to the monthly bill (COSTS.md has the baseline).
 
 ## 1. Email-in: forward invoices to a workspace address
 
-**What:** each workspace gets an address (for example `ap-acme@in.flowpilot.ai`). Suppliers'
+**What:** each workspace gets an address (for example `ap-acme@in.servabo.app`). Suppliers'
 invoices forwarded there become documents, exactly as if uploaded, with the sender kept as their
 source.
 
 **Why first:** accounts-payable teams live in a shared inbox. Today someone must download each
 attachment and upload it again; every competitor in invoice capture offers this, and it is the
-feature most likely to turn a trial into daily use. Nothing in FlowPilot receives mail yet.
+feature most likely to turn a trial into daily use. Nothing in Servabo receives mail yet.
 
-**Build:** about 5 days. Postmark's inbound webhook (FlowPilot already sends through Postmark,
+**Build:** about 5 days. Postmark's inbound webhook (Servabo already sends through Postmark,
 N-027) posts each message as JSON; a new public route checks Postmark's signature, finds the
 workspace by address, refuses senders the workspace has not allowed, and hands each attachment to
 the existing upload path (`document_intake_service`), so plan limits, file checks and processing
@@ -66,7 +66,7 @@ turn it off. **Run:** free tier, or about 1 GB of memory if self-hosted on the s
 
 ## 5. Accounting-system connections that post bills for the customer
 
-**What:** FlowPilot already prepares ERP postings and delivers them to a configured target
+**What:** Servabo already prepares ERP postings and delivers them to a configured target
 (`erp.deliver_posting`, proven against the in-repo mock target). Ship ready-made connections for
 Xero and QuickBooks Online with their sign-in (OAuth) flow, so a small business clicks "Connect" instead
 of configuring an endpoint.

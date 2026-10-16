@@ -28,7 +28,7 @@ from app.services.identity.oidc_gateway import validate_id_token
 pytestmark = pytest.mark.no_db
 
 ISSUER = "https://idp.example.com"
-AUDIENCE = "flowpilot-client"
+AUDIENCE = "servabo-client"
 NONCE = "n-" + uuid.uuid4().hex
 
 

@@ -1,5 +1,5 @@
 /**
- * Client-side security primitives for FlowPilot AI.
+ * Client-side security primitives for Servabo.
  *
  * Pure functions, no imports. Everything here is reachable from the axios
  * interceptor, which runs outside React, and from route guards, which run
@@ -13,7 +13,7 @@
  * `Login.tsx` reads that parameter back and navigates to it. That is a value
  * which left the application, sat in a URL bar where anyone can edit it, and
  * came back. Treating it as a path is the entire vulnerability: an attacker
- * mails `/login?redirect=https://flowpilot-ai.evil/login`, the victim signs in
+ * mails `/login?redirect=https://servabo.evil/login`, the victim signs in
  * for real, and the app forwards them to a pixel-perfect clone that asks them
  * to sign in "again".
  *

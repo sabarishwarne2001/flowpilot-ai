@@ -1,7 +1,7 @@
 """ARCH47-S1:x12 — ASC X12 004010: 810 (invoice), 850 (purchase order), 856 (ship notice) and the 997.
 
 The X12 standards are licensed by ASC X12 and no schema is freely published.
-SPEC below encodes, element by element, the 004010 segments FlowPilot writes --
+SPEC below encodes, element by element, the 004010 segments Servabo writes --
 reference, data type (AN ID N0 N2 R DT TM), minimum and maximum length,
 mandatory or optional, code values -- and GRAMMAR the order of the segments in
 each transaction set, transcribed from public 004010 implementation guides.
@@ -139,7 +139,7 @@ class X12Error(ValueError):
 @dataclass(frozen=True)
 class Envelope:
     sender_qualifier: str = "ZZ"
-    sender_id: str = "FLOWPILOT"
+    sender_id: str = "SERVABO"
     receiver_qualifier: str = "ZZ"
     receiver_id: str = "PARTNER"
     usage: str = "P"                 # P production, T test
@@ -498,7 +498,7 @@ def parse_997(data: bytes | str) -> Ack997:
 
 
 def build_997(interchange: bytes | str, *, status: str = "A", control: int = 1, at: Optional[datetime] = None,
-              sender: str = "PARTNER", receiver: str = "FLOWPILOT") -> bytes:
+              sender: str = "PARTNER", receiver: str = "SERVABO") -> bytes:
     """A 997 answering an interchange (used by the mock partner in the gates and by a person's manual ack)."""
     ix = parse(interchange)
     gs = next(s for s in ix.segments if s[0] == "GS")

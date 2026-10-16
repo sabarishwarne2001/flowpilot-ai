@@ -72,7 +72,7 @@ HEADER_API_VERSION = "X-Servabo-API-Version"
 
 #: Where the published policy lives. One URL, referenced by every entry that
 #: does not override it, so moving the documentation is one edit.
-POLICY_URL = "https://docs.flowpilot.ai/public-api/deprecation-policy"
+POLICY_URL = "https://docs.servabo.app/public-api/deprecation-policy"
 
 
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ DEPRECATION_POLICY: tuple[DeprecationEntry, ...] = (
         path_prefix="/api/v1/audit-logs",
         deprecation=_utc(2026, 3, 1),
         sunset=_utc(2027, 3, 1),
-        successor="https://docs.flowpilot.ai/public-api/audit-logs#cursor",
+        successor="https://docs.servabo.app/public-api/audit-logs#cursor",
         note=(
             "Offset pagination was removed in ARCH-08 and has raised 422 since. "
             "The twelve-month sunset covers the cursor migration for clients "

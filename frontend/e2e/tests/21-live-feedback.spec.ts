@@ -307,7 +307,7 @@ test.describe("A page that cannot load (F-144)", () => {
     await page.getByRole("link", { name: /^Cases/ }).first().click();
 
     // One automatic reload is tried; the code is still missing, so the card explains it.
-    await expect(page.getByRole("heading", { name: "A new version of FlowPilot is available" })).toBeVisible({
+    await expect(page.getByRole("heading", { name: "A new version of Servabo is available" })).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.getByRole("button", { name: "Reload page" })).toBeVisible();
@@ -315,7 +315,7 @@ test.describe("A page that cannot load (F-144)", () => {
     await expect(page.getByRole("button", { name: /^Account menu for / })).toBeVisible();
     await page.unroute(chunk);
     await page.getByRole("link", { name: "Documents", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "A new version of FlowPilot is available" })).toHaveCount(0);
+    await expect(page.getByRole("heading", { name: "A new version of Servabo is available" })).toHaveCount(0);
     await expectHealthyPage(page);
   });
 });
@@ -425,10 +425,10 @@ test.describe("Browser tab titles (F-154)", () => {
 
   test("each tab names its page, workspace or organization", async ({ page }) => {
     await page.goto(ws("C", "work-items"));
-    await expect(page).toHaveTitle("Documents · Operations · FlowPilot AI");
+    await expect(page).toHaveTitle("Documents · Operations · Servabo");
     await page.goto(ws("C"));
-    await expect(page).toHaveTitle("Operations · FlowPilot AI");
+    await expect(page).toHaveTitle("Operations · Servabo");
     await page.goto(org("C", "members"));
-    await expect(page).toHaveTitle("Members · Caretakers Global Inc · FlowPilot AI");
+    await expect(page).toHaveTitle("Members · Caretakers Global Inc · Servabo");
   });
 });

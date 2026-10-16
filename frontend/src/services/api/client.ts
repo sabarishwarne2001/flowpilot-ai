@@ -1,5 +1,5 @@
 /**
- * Shared Axios instance and interceptors for the FlowPilot AI frontend.
+ * Shared Axios instance and interceptors for the Servabo frontend.
  *
  * FE-0 extends the ARCH-03 client from "401 with one refresh" to the full
  * status taxonomy. The refresh mutex below is unchanged in behaviour and
@@ -86,8 +86,8 @@ export type { ParsedApiError } from "@/services/api/errors";
  * ARCH-25 resolves a tenant from the Host header. Caddy serves the SPA and
  * proxies /api/* on each tenant custom domain with `header_up Host {host}`, so
  * a same-origin call from `ai.acme.com` arrives with Acme's host. An absolute
- * `https://app.flowpilot.ai/api/v1` sends that call to the PLATFORM host
- * instead: the branding manifest returns FlowPilot defaults, the refresh
+ * `https://app.servabo.app/api/v1` sends that call to the PLATFORM host
+ * instead: the branding manifest returns Servabo defaults, the refresh
  * cookie set on the tenant's origin is not sent, and nothing reports an error.
  *
  * Production therefore defaults to the relative `/api/v1`. `vite.config.ts`

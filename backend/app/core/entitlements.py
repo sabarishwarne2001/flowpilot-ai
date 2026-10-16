@@ -228,7 +228,7 @@ ANOMALY_RADAR_CAPABILITY: str = "capability.anomaly_radar"
 CALIBRATED_AUTONOMY_CAPABILITY: str = "capability.calibrated_autonomy"
 
 #: HM-S1:capability-developer-api. Programmatic access: issuing and rotating
-#: FlowPilot API keys, and authenticating any request with one. Enforced at
+#: Servabo API keys, and authenticating any request with one. Enforced at
 #: the key-management routes AND in `deps` where a key authenticates, so a key
 #: minted before a downgrade stops working rather than outliving the plan.
 DEVELOPER_API_CAPABILITY: str = "capability.developer_api"
@@ -497,7 +497,7 @@ _ENTITLEMENTS: tuple[Entitlement, ...] = (
     # HM-S1:capability-entitlements
     Entitlement(
         name=DEVELOPER_API_CAPABILITY,
-        description="Developer API: issue and rotate API keys and call FlowPilot programmatically.",
+        description="Developer API: issue and rotate API keys and call Servabo programmatically.",
     ),
     Entitlement(
         name=OUTGOING_WEBHOOKS_CAPABILITY,

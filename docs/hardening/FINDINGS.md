@@ -1,5 +1,7 @@
 # Findings
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 How to read this file:
 
 - **Severity.** P0 = stop-ship (data leak, money loss, cannot run). P1 = must fix

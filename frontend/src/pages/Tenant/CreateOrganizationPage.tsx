@@ -1,5 +1,5 @@
 /**
- * Tenant provisioning page for FlowPilot AI.
+ * Tenant provisioning page for Servabo.
  */
 
 import React, { useEffect, useMemo, useState } from "react";

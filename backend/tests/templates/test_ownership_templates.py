@@ -40,8 +40,8 @@ from app.templates.emails.ownership_transferred import (
     render_ownership_transferred,
 )
 
-BRAND = "FlowPilot"
-SUPPORT = "support@flowpilot.test"
+BRAND = "Servabo"
+SUPPORT = "support@servabo.test"
 NOW = datetime(2026, 8, 11, 9, 30, tzinfo=timezone.utc)
 EXPIRES = NOW + timedelta(days=7)
 

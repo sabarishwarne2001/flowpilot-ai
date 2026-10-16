@@ -60,7 +60,7 @@ def _value_for(name: str, annotation, text: str):
     args = typing.get_args(annotation)
     if annotation in (str, "str") or (origin is typing.Union and str in args) or "str" in str(annotation):
         if "url" in name or "link" in name or name.endswith("_href"):
-            return f"https://app.flowpilot.ai/x?{text}"
+            return f"https://app.servabo.app/x?{text}"
         if "email" in name:
             return f"person+{text[:20]}@example.com"
         return text

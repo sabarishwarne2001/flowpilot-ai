@@ -3,7 +3,7 @@
     pytest tests/engines/test_e2e_stand_in_live.py -q
 
 `scripts/e2e_stand_in.py` plays Stripe's side for the end-to-end journeys by handing events to
-FlowPilot's own reconcile code. This proves each command leaves FlowPilot in the state the real
+Servabo's own reconcile code. This proves each command leaves Servabo in the state the real
 event would: a subscription after checkout, a closed period and a dunning notice after a declined
 renewal, read-only once the retries run out, everything back once the card is fixed, Free after a
 cancellation, and a trial that has ended.

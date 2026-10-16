@@ -8,7 +8,7 @@ import re
 # supports dark. So: a viewport and a declared colour scheme with dark colours, a 600px table
 # column that Outlook keeps (inside a conditional comment only Outlook reads), styles inline on
 # every element as well as in <style>, and buttons drawn as a coloured table cell (see
-# _bulletproof_buttons). FlowPilot's blue is the app's (#1555e0, white text 6.2:1).
+# _bulletproof_buttons). Servabo's blue is the app's (#1555e0, white text 6.2:1).
 _BRAND_BLUE = "#1555e0"
 _FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif"
 

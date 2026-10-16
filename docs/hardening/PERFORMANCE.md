@@ -207,9 +207,9 @@ tracebacks, pool exhaustion, `/health` latency as the event-loop probe). 50 simu
 second ramp, 15 minutes, against one API process and one worker on the test machine:
 
 ```
-LOAD_USERS=/tmp/flowpilot-load-users.json locust -f perf/locustfile.py --headless \
-    --host http://127.0.0.1:8000 -u 50 -r 5 -t 15m --csv /tmp/flowpilot-load
-python perf/load_report.py --csv /tmp/flowpilot-load --api-log /tmp/flowpilot-e2e-logs/api.log
+LOAD_USERS=/tmp/servabo-load-users.json locust -f perf/locustfile.py --headless \
+    --host http://127.0.0.1:8000 -u 50 -r 5 -t 15m --csv /tmp/servabo-load
+python perf/load_report.py --csv /tmp/servabo-load --api-log /tmp/servabo-e2e-logs/api.log
 ```
 
 | | Before F-363 | After F-363 (2026-10-14) |

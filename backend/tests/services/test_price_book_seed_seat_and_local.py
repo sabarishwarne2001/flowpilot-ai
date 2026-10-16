@@ -138,7 +138,7 @@ def test_a_seat_disclosure_on_the_business_plan_is_priced(
 def test_the_local_model_is_priced_at_a_declared_zero(db_session: Session, event_type: str) -> None:
     _publish_seed(db_session)
     price = pricing_service.resolve(
-        db_session, event_type=event_type, provider="local", model="flowpilot-e2e-local"
+        db_session, event_type=event_type, provider="local", model="servabo-e2e-local"
     )
     assert price.unit_price_micros == Decimal("0")
     assert price.cost_basis_micros == Decimal("0")

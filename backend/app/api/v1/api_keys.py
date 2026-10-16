@@ -1,5 +1,5 @@
 """
-API Key management router for FlowPilot AI (ARCH-08 §B.1, §B.2, §B.12, §9.6).
+API Key management router for Servabo (ARCH-08 §B.1, §B.2, §B.12, §9.6).
 
     POST   /organizations/{organization_id}/api-keys
     GET    /organizations/{organization_id}/api-keys

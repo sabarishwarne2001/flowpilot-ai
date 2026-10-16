@@ -171,7 +171,7 @@ N-053 to N-056 (NEEDS-OWNER.md, each `DECIDED (campaign session 2)`).
   Platform staff see the queue and the dead-letter queue at **/admin/jobs** and can retry a dead job.
 - **Matching (N-055).** One case per invoice; later copies are listed on it.
 - **Running the backend tests locally:** point the app at the test database too
-  (`POSTGRES_DB=flowpilot_test pytest …`); otherwise code that opens its own `SessionLocal` (the
+  (`POSTGRES_DB=servabo_test pytest …`); otherwise code that opens its own `SessionLocal` (the
   worker gate) reads the development database and the trial worker tests fail.
 
 **For session 3 (consoles, identity, security):**
@@ -264,7 +264,7 @@ its reason).
   them). **On deploy:** the four host crons installed (session 4, F-355: the sweep deletes through
   the application's database unless `AUDIT_SWEEPER_DATABASE_URL` names a separate login; before,
   it skipped or was refused by the audit trigger every night)
-  (`backend/deploy/cron.d/flowpilot-sweepers`: arch07, arch09, identity, invitations).
+  (`backend/deploy/cron.d/servabo-sweepers`: arch07, arch09, identity, invitations).
 - **Display layer (N-064, F-298).** One module per side: `frontend/src/utils/displayTime.ts` and
   `backend/app/core/display_format.py`. The person's own zone and language win; the open
   workspace's clock and date format stand in. `npm run check:self` ("one display layer") fails on
@@ -318,7 +318,7 @@ its reason).
   main chunk's size are still in the map.
 - **Running tests locally:** never run two pytest sessions at once (the conftest truncates the
   test database at start); after a backend change restart the e2e API (`kill` the pid in
-  `/tmp/flowpilot-e2e-logs/pids/api.pid`, then `E2E_LLM=1 frontend/e2e/scripts/start-stack.sh`)
+  `/tmp/servabo-e2e-logs/pids/api.pid`, then `E2E_LLM=1 frontend/e2e/scripts/start-stack.sh`)
   before running browser specs.
 
 ## Session 4 → later sessions
@@ -368,7 +368,7 @@ planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in
   capabilities). Prices did not change (N-082). Use FLAGSHIP.md for the website's Helm page and its
   "what we never claim" list; screenshots come from the sample company (Meridian Wholesale), which
   any account can build from Helm → Start and delete afterwards.
-- **The rename to Servabo.** No new "FlowPilot" strings were added; Helm's own strings say "Helm".
+- **The rename to Servabo.** No new "Servabo" strings were added; Helm's own strings say "Helm".
   The sample company's documents name only invented companies.
 - **Payments stay out of Helm.** Helm never moves money (N-088): the payment run is a list a person
   pays from their bank, and bank statement imports bring the evidence back. Nothing in the payment
@@ -439,10 +439,10 @@ Tick them in a copy of this file or in your notes. Nothing here needs code chang
 8. Follow RUNBOOK §9.1 to §9.3: clone, `.env.production` from the template, pin images by digest
    (N-017), `docker compose up -d`, then `seed_quota_tiers.py` and `seed_price_book.py --version auto`
    (also on every later deploy, §9.3).
-9. **Backups (§9.4):** create `/etc/flowpilot/backup.key` and copy it into your password manager
+9. **Backups (§9.4):** create `/etc/servabo/backup.key` and copy it into your password manager
    **now**; set `SERVABO_BACKUP_MIRROR_CMD` to copy each backup to another provider; run one backup
    and one restore drill by hand and note the restore time.
-10. **Scheduled jobs and monitoring (§9.6):** install `/etc/flowpilot/sweepers.env` and the two cron
+10. **Scheduled jobs and monitoring (§9.6):** install `/etc/servabo/sweepers.env` and the two cron
     files, switch off the three point-in-time lines with the command given, create free
     Healthchecks.io checks (uptime with a 1-minute period, the backup, the restore drill, the
     retention sweep) and set `ALERT_WEBHOOK` for the sweeper watchdog. Check them once by hand.

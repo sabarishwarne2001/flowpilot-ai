@@ -295,7 +295,7 @@ ENGINE_VERSION: str = "arch32.redaction.v1"
 #: The only string written to the output's `/Info`. Not a version number the
 #: source could influence and not a timestamp — two runs of the same job must
 #: produce byte-identical output, which is the determinism gate.
-PRODUCER_STRING: str = "FlowPilot AI Redaction Engine"
+PRODUCER_STRING: str = "Servabo Redaction Engine"
 
 #: Keys whose presence anywhere in the OUTPUT's object tree fails the job.
 #: Every one of them is a place a PDF can carry text that no text extractor

@@ -1,5 +1,5 @@
 """
-Refresh session records for FlowPilot AI.
+Refresh session records for Servabo.
 """
 
 from __future__ import annotations

@@ -47,7 +47,7 @@ would be defeated by an alias; the AST walk is not.
 WHY AN UNKNOWN HOST GETS 404 AND NOT 403
 ----------------------------------------
 
-403 confirms the hostname is known to FlowPilot and merely off-limits. An
+403 confirms the hostname is known to Servabo and merely off-limits. An
 attacker sweeping a customer's DNS namespace could then distinguish
 `ai.acme.com` (a tenant) from `ai.example.com` (not one) by status code alone,
 turning this middleware into a customer-list oracle. 404 says nothing.
@@ -55,7 +55,7 @@ turning this middleware into a customer-list oracle. 404 says nothing.
 WHY THE PLATFORM ORIGIN IS NOT "RESOLVED" AT ALL
 ------------------------------------------------
 
-A request to `app.flowpilot.ai` sets `request.state.host_organization_id` to
+A request to `app.servabo.app` sets `request.state.host_organization_id` to
 None and continues. That is not a fallback — nothing is selected. The
 downstream session and role machinery is unchanged and remains the only thing
 that decides which organization a user may read. Host resolution ADDS a
@@ -159,8 +159,8 @@ def _is_platform_host(host: str) -> bool:
     if host in platform_hosts():
         return True
     # A subdomain of a reserved host is the platform too. Label-boundary
-    # comparison, so `notflowpilot.ai` is not treated as a subdomain of
-    # `flowpilot.ai` the way a bare `endswith` would have it.
+    # comparison, so `notservabo.app` is not treated as a subdomain of
+    # `servabo.app` the way a bare `endswith` would have it.
     return any(host.endswith(f".{entry}") for entry in platform_hosts())
 
 

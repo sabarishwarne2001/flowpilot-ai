@@ -1,5 +1,5 @@
 """
-Common utilities registry for FlowPilot AI.
+Common utilities registry for Servabo.
 
 Aggregates and exposes helper functions (such as file storage initializers 
 and secure path builders) under unified import namespaces.

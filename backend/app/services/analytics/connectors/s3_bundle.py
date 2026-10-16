@@ -204,15 +204,15 @@ class S3BundleConnector(WarehouseConnector):
         from botocore.exceptions import BotoCoreError, ClientError
 
         bucket = str(self.require(config, "bucket", where="S3 config"))
-        prefix = str(config.get("prefix") or "flowpilot/").strip("/")
-        key = f"{prefix}/.flowpilot-connection-probe"
+        prefix = str(config.get("prefix") or "servabo/").strip("/")
+        key = f"{prefix}/.servabo-connection-probe"
 
         started = time.monotonic()
         try:
             put_object_bytes(
                 bucket=bucket,
                 key=key,
-                payload=b"flowpilot-probe",
+                payload=b"servabo-probe",
                 region=str(self.require(config, "region", where="S3 config")),
                 access_key_id=str(
                     self.require(
@@ -264,7 +264,7 @@ class S3BundleConnector(WarehouseConnector):
     ) -> PushOutcome:
         bucket = str(self.require(config, "bucket", where="S3 config"))
         region = str(self.require(config, "region", where="S3 config"))
-        prefix = str(config.get("prefix") or "flowpilot/").strip("/")
+        prefix = str(config.get("prefix") or "servabo/").strip("/")
         access_key_id = str(
             self.require({**config, **credential}, "access_key_id", where="S3 credential")
         )

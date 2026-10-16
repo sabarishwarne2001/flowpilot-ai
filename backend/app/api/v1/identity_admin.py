@@ -409,7 +409,7 @@ def add_role_mapping(organization_id: str, config_id: str, payload: dict = Body(
         raise HTTPException(
             422,
             "An identity provider cannot grant OWNER. Ownership transfer is an "
-            "explicit, audited action in FlowPilot.")
+            "explicit, audited action in Servabo.")
 
     if role not in _GRANTABLE_ROLES:
         raise HTTPException(422, "organization_role must be ADMIN, BILLING or MEMBER.")

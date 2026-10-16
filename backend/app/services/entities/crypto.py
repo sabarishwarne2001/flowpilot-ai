@@ -54,7 +54,7 @@ def _derive(material: str) -> tuple[str, bytes]:
     from app.services.redaction.token_digest import _hkdf_sha256
 
     raw = material.encode("utf-8")
-    generation = hashlib.sha256(b"flowpilot/arch42/key-generation\x00" + raw).hexdigest()[:16]
+    generation = hashlib.sha256(b"servabo/arch42/key-generation\x00" + raw).hexdigest()[:16]
     return generation, _hkdf_sha256(raw, info=HMAC_INFO)
 
 

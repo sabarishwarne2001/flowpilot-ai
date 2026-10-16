@@ -548,7 +548,7 @@ def stream_export_archive(
         content=stream,
         media_type="application/zip",
         headers={
-            "Content-Disposition": f'attachment; filename="flowpilot-export-{record.id}.zip"',
+            "Content-Disposition": f'attachment; filename="servabo-export-{record.id}.zip"',
             "Cache-Control": "no-store",
             "X-Content-Type-Options": "nosniff",
         },

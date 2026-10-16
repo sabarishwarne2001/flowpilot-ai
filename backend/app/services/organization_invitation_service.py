@@ -644,7 +644,7 @@ def accept_invitation(
                     f"without an active owner."
                 )
 
-        # F-226. Accepting proves the address only when FlowPilot's own relay
+        # F-226. Accepting proves the address only when Servabo's own relay
         # delivered the token; through the organization's mail server, whoever
         # runs that server holds it too.
         if actor.email_verified_at is None and not invitation.delivered_off_platform:
@@ -709,7 +709,7 @@ def register_and_accept(
 ) -> tuple[User, AcceptedInvitation]:
     """F-222. Create the invited person's account and accept the invitation, in one transaction.
 
-    The invitation decides the address; the token, which FlowPilot's relay
+    The invitation decides the address; the token, which Servabo's relay
     emailed to it, proves the caller controls it, so the account starts
     verified (F-226: a token sent through the organization's own mail server
     proves nothing and is refused here). Nothing is
@@ -751,7 +751,7 @@ def register_and_accept(
 
     if existing is not None:
         # N-034 (owner decision 2026-10-10). Nobody ever proved this address, and
-        # the token FlowPilot's relay delivered to it does: the invitee takes the
+        # the token Servabo's relay delivered to it does: the invitee takes the
         # account over. A new password, the address verified, and every session
         # of whoever registered it ended.
         from app.models.user_session import SessionRevokedReason

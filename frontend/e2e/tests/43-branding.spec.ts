@@ -4,7 +4,7 @@
  * `Organization > Branding` saves a primary, accent, background and text colour and a colour
  * scheme, previews them, and says "Custom branding is live on your verified domains". The
  * host-resolved manifest served them, yet no page read them: a sign-in page on a verified domain
- * showed the organization's name and logo in FlowPilot's blue.
+ * showed the organization's name and logo in Servabo's blue.
  *
  * A verified domain cannot be pointed at this test stack, so the manifest a verified domain is
  * served (`GET /branding/manifest`, which the server tests prove returns the saved tokens for a
@@ -68,11 +68,11 @@ test.describe("Brand colours on a verified domain", () => {
     expectColour(await signUp.evaluate((node) => getComputedStyle(node).color), "#80efe6");
   });
 
-  test("on the platform's own address the sign-in page keeps FlowPilot's colours", async ({ page }) => {
+  test("on the platform's own address the sign-in page keeps Servabo's colours", async ({ page }) => {
     await page.goto("/login");
     const signIn = page.getByRole("button", { name: /^continue$/i });
     await expect(signIn).toBeVisible();
-    // FlowPilot's blue, 221 83% 48% since campaign session 4 (F-362: 53% failed WCAG AA contrast).
+    // Servabo's blue, 221 83% 48% since campaign session 4 (F-362: 53% failed WCAG AA contrast).
     expectColour(await signIn.evaluate((node) => getComputedStyle(node).backgroundColor), "#1555e0");
     expect((await page.locator("html").getAttribute("style")) ?? "").not.toContain("--primary");
   });

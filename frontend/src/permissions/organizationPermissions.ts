@@ -1,5 +1,5 @@
 /**
- * Organization-level authorization logic for the FlowPilot AI frontend.
+ * Organization-level authorization logic for the Servabo frontend.
  *
  * A faithful mirror of app/core/organization_permissions.py. Every function
  * here has a counterpart there with the same name and the same rule.

@@ -11,7 +11,7 @@ can be counted.
 
 `close_period` does both halves of that, once per period:
 
-1. assembles FlowPilot's statement of the closed period (`invoice_service.assemble`: the seats,
+1. assembles Servabo's statement of the closed period (`invoice_service.assemble`: the seats,
    what the plan included, per seat and pooled, and the overage priced from the pinned book),
    linked to the renewal invoice that carries its overage;
 2. adds each overage line to that renewal invoice while it is still a draft, so the customer is
@@ -68,7 +68,7 @@ def _overage_items(subscription: Subscription, result: invoice_service.AssemblyR
             key=f"overage:{subscription.id}:{invoice.period_start.isoformat()}:{line.limit_key}",
             amount_cents=_cents(line.amount_micros),
             description=f"{line.description} ({period})",
-            metadata={"flowpilot_invoice": invoice.number, "flowpilot_line": str(line.line_number),
+            metadata={"servabo_invoice": invoice.number, "servabo_line": str(line.line_number),
                       "limit_key": str(line.limit_key or "")},
         ))
     return items

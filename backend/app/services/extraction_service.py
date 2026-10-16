@@ -1,5 +1,5 @@
 """
-Document text extraction and format routing service for FlowPilot AI.
+Document text extraction and format routing service for Servabo.
 
 Extracts text from PDF and image documents. Electronic PDFs are parsed using
 pypdf, while scanned PDFs automatically fall back to PaddleOCR.

@@ -110,8 +110,8 @@ NS = {
     "xenc": "http://www.w3.org/2001/04/xmlenc#",
 }
 
-SP_ACS = "https://sp.flowpilot.test/api/v1/saml/acs"
-SP_ENTITY = "https://sp.flowpilot.test/api/v1/saml/metadata"
+SP_ACS = "https://sp.servabo.test/api/v1/saml/acs"
+SP_ENTITY = "https://sp.servabo.test/api/v1/saml/metadata"
 IDP_ENTITY = "https://idp.tenant-a.test/metadata"
 OTHER_IDP_ENTITY = "https://idp.tenant-b.test/metadata"
 
@@ -135,7 +135,7 @@ def _make_keypair(
     name = x509.Name(
         [
             x509.NameAttribute(NameOID.COMMON_NAME, common_name),
-            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "FlowPilot ARCH-28 Rig"),
+            x509.NameAttribute(NameOID.ORGANIZATION_NAME, "Servabo ARCH-28 Rig"),
         ]
     )
     now = datetime.datetime.now(datetime.timezone.utc)

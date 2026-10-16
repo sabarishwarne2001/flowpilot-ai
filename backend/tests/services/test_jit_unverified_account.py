@@ -3,7 +3,7 @@
     pytest tests/services/test_jit_unverified_account.py -q
 
 Just-in-time provisioning links a first single-sign-on login to an existing
-FlowPilot account with the same email. If that account's address was never
+Servabo account with the same email. If that account's address was never
 verified, whoever registered it (not necessarily the mailbox owner) kept its
 password, and so a way into the account the real owner now uses through their
 identity provider. Decided 2026-10-10 (founder authority): the identity

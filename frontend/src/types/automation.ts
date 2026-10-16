@@ -1,5 +1,5 @@
 /**
- * Automation Engine Data Transfer Objects (DTOs) for FlowPilot AI.
+ * Automation Engine Data Transfer Objects (DTOs) for Servabo.
  *
  * ARCH37-S2:catalog-vocabulary. Triggers and action types are catalog keys served by the API
  * (see types/automationFlow.ts). No trigger or action vocabulary lives here.

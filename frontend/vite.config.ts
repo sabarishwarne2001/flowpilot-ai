@@ -14,7 +14,7 @@ import path from "node:path";
  *
  * A bundle built with an absolute `VITE_API_URL` sends every call to that
  * absolute host instead. On the platform origin nothing looks wrong. On every
- * tenant domain the branding manifest silently returns FlowPilot's defaults,
+ * tenant domain the branding manifest silently returns Servabo's defaults,
  * and the refresh cookie scoped to the tenant's origin is never presented. No
  * request errors, so no log, test or dashboard would surface it; the first
  * report would be a customer's screenshot. A warning in a CI log is the same

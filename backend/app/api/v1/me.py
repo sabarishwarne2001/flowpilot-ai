@@ -1,5 +1,5 @@
 """
-Actor-scoped API router for FlowPilot AI.
+Actor-scoped API router for Servabo.
 
 Answers "who am I and what can I reach" without naming a tenant. Every route
 here requires authentication and nothing more.

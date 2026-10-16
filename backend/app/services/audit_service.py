@@ -1,5 +1,5 @@
 """
-Audit trail write service for FlowPilot AI (ARCH-07 §B.2 Option C, ARCH-08 §B.1, §B.7 Option C).
+Audit trail write service for Servabo (ARCH-07 §B.2 Option C, ARCH-08 §B.1, §B.7 Option C).
 
 Provides two entry points:
 - record(db, ...): flushes into the caller's active transaction (caller commits).

@@ -1,5 +1,5 @@
 """
-Authentication and account enrolment business logic for FlowPilot AI.
+Authentication and account enrolment business logic for Servabo.
 """
 
 from __future__ import annotations
@@ -126,5 +126,5 @@ def _persist_password_upgrade(db: Session, *, user: User, new_hash: str) -> None
 
 
 _DUMMY_HASH: str = security.get_password_hash(
-    "flowpilot-timing-equaliser-not-a-real-password"
+    "servabo-timing-equaliser-not-a-real-password"
 )

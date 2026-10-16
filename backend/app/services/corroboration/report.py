@@ -176,7 +176,7 @@ class PdfWriter:
             page.Resources = pikepdf.Dictionary(Font=fonts)
             page.Contents = pdf.make_stream(b"\n".join(ops + [foot]))
         pdf.docinfo["/Title"] = "Corroboration report"
-        pdf.docinfo["/Producer"] = "FlowPilot AI"
+        pdf.docinfo["/Producer"] = "Servabo"
         buffer = io.BytesIO()
         pdf.save(buffer, deterministic_id=True)
         return buffer.getvalue()
@@ -287,7 +287,7 @@ def to_pdf(bundle: dict) -> bytes:
                            size=8, indent=12, gap=1, rgb="0.2 0.2 0.45")
         if d.get("note"):
             w.para(f"Reviewer note: {d['note']}", size=8, indent=12, gap=1)
-    return w.finish(f"FlowPilot AI corroboration {run['id']}  -  fingerprint {run['fingerprint'][:16]}")
+    return w.finish(f"Servabo corroboration {run['id']}  -  fingerprint {run['fingerprint'][:16]}")
 
 
 def to_json(bundle: dict) -> bytes:

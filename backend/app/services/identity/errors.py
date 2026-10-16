@@ -92,6 +92,6 @@ class LastOwnerProtected(ScimConflict):
     def __init__(self):
         super().__init__(
             "Cannot deactivate the last remaining OWNER of this organization. "
-            "Transfer ownership in FlowPilot first.",
+            "Transfer ownership in Servabo first.",
             scim_type="mutability",
         )

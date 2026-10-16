@@ -4,7 +4,7 @@ import { Building2, ChevronDown, FolderKanban } from "lucide-react";
 /**
  * What each role can do, in plain words, on the two members pages.
  *
- * FlowPilot has two separate kinds of role. The organization role decides company-wide things
+ * Servabo has two separate kinds of role. The organization role decides company-wide things
  * (billing, members, sign-in and compliance); the workspace role decides what someone can do with
  * the documents of one workspace. The descriptions used to live only in hover tooltips, which a
  * keyboard, touch or screen-reader user never sees, and nothing said how the two relate.

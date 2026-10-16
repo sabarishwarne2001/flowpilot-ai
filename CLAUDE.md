@@ -1,4 +1,4 @@
-# FlowPilot AI — Working Rules for Claude Code
+# Servabo — Working Rules for Claude Code
 
 ## Project Overview
 Multi-tenant B2B AI document intelligence & workflow automation SaaS.

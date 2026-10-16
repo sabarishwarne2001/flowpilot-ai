@@ -1,4 +1,4 @@
-"""Dependencies Module for FlowPilot AI."""
+"""Dependencies Module for Servabo."""
 
 import logging
 import re
@@ -1035,7 +1035,7 @@ async def require_api_key(
     from app.core.rate_limit.policy import FailureMode, RateLimitPolicy, RateLimitScope
 
     if not token or not token.startswith(("svb_live_", "svb_test_")):
-        raise _gateway_unauthorized("A FlowPilot API key is required for the public API.")
+        raise _gateway_unauthorized("A Servabo API key is required for the public API.")
 
     # F-218. The key, organization and plan lookups, the Redis rate limit and the
     # billing gate are blocking I/O: they run in the threadpool, so one slow

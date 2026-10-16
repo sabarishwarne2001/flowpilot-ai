@@ -20,7 +20,7 @@ import ViewPlansAction from "@/components/billing/ViewPlansAction";
 import { useAuthStore } from "@/store/useAuthStore";
 
 /**
- * Workspace creation page for FlowPilot AI.
+ * Workspace creation page for Servabo.
  *
  * The missing half of the multi-workspace story. POST
  * /organizations/{id}/workspaces has existed since ARCH-01 backend Step 9b,

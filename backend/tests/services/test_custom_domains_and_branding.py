@@ -81,7 +81,7 @@ def _enable_custom_domains(monkeypatch):
     monkeypatch.setattr(
         settings,
         "PLATFORM_RESERVED_HOSTS",
-        ["flowpilot.ai", "app.flowpilot.ai"],
+        ["servabo.app", "app.servabo.app"],
         raising=False,
     )
     monkeypatch.setattr(settings, "ACME_AGENT_URL", "http://acme-agent:2019", raising=False)
@@ -153,14 +153,14 @@ def test_normalise_hostname_refuses_hostile_input(raw):
 
 @pytest.mark.no_db
 def test_reserved_hostnames_and_their_subdomains_are_refused(_enable_custom_domains):
-    for hostname in ("flowpilot.ai", "app.flowpilot.ai", "login.flowpilot.ai"):
+    for hostname in ("servabo.app", "app.servabo.app", "login.servabo.app"):
         with pytest.raises(DomainPolicyError):
             domain_service.assert_claimable_hostname(hostname)
 
 
 @pytest.mark.no_db
 def test_reserved_match_is_on_label_boundaries(_enable_custom_domains):
-    domain_service.assert_claimable_hostname("notflowpilot.ai")
+    domain_service.assert_claimable_hostname("notservabo.app")
 
 
 @pytest.mark.no_db
@@ -689,7 +689,7 @@ def _sender_lookup(monkeypatch, *, spf: bool, dkim: bool, resolved: bool = True)
             )
         return TxtLookupResult(
             domain=target,
-            records=["v=spf1 include:mail.flowpilot.ai ~all"] if spf else [],
+            records=["v=spf1 include:mail.servabo.app ~all"] if spf else [],
             resolved=True,
         )
 

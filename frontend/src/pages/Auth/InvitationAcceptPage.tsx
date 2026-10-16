@@ -90,7 +90,7 @@ const InvitationSummary: React.FC<{ readonly preview: WorkspaceInvitationPreview
   </div>
 );
 
-const TOKEN_STASH_KEY = "flowpilot.invitation.token";
+const TOKEN_STASH_KEY = "servabo.invitation.token";
 const TOKEN_STASH_TTL_MS = 30 * 60 * 1000;
 
 const stashToken = (token: string): void => {
@@ -449,7 +449,7 @@ export const InvitationAcceptPage: React.FC = () => {
             <div className="space-y-1.5">
               <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
               <p className={AUTH_SUBTITLE}>
-                Create your FlowPilot account to accept. The invitation confirms your
+                Create your Servabo account to accept. The invitation confirms your
                 address, so there is no separate verification email.
               </p>
             </div>
@@ -553,7 +553,7 @@ export const InvitationAcceptPage: React.FC = () => {
               </h1>
               <p className={AUTH_SUBTITLE}>
                 {errorMsg ||
-                  `${preview?.invited_email ?? "The invited address"} already has a FlowPilot account. Sign in with it to accept.`}
+                  `${preview?.invited_email ?? "The invited address"} already has a Servabo account. Sign in with it to accept.`}
               </p>
             </div>
             {preview && <InvitationSummary preview={preview} />}
@@ -605,7 +605,7 @@ export const InvitationAcceptPage: React.FC = () => {
               <h1 className={AUTH_TITLE}>Join {preview.organization_name}</h1>
               <p className={AUTH_SUBTITLE}>
                 {errorMsg ||
-                  `Sign in with ${preview.invited_email}, or create a FlowPilot account for it. A new account confirms the address with a verification email first.`}
+                  `Sign in with ${preview.invited_email}, or create a Servabo account for it. A new account confirms the address with a verification email first.`}
               </p>
             </div>
             <InvitationSummary preview={preview} />

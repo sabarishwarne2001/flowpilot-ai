@@ -33,7 +33,7 @@ removing the index would let two partners bill margin on one tenant.
 WHY A PARTNER MAY NOT PUT ITS OWN TENANT IN ITS OWN BOOK
 ========================================================
 
-`partners.owner_organization_id` is the reseller's own FlowPilot account. If
+`partners.owner_organization_id` is the reseller's own Servabo account. If
 it were assignable to that partner's book, the reseller would earn a
 rev-share on their own internal usage — the platform paying a commission on
 money it never received — and the recursion would be invisible in the ledger

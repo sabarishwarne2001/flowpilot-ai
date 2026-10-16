@@ -3,7 +3,7 @@
     pytest tests/engines/test_conversation_retention_purge_live.py -q
 
 `Organization > Compliance > Retention > Conversations (days)` is read by the nightly compliance
-sweep (`deploy/cron.d/flowpilot-sweepers` runs `scripts/sweep_compliance.py --all --purge --apply`)
+sweep (`deploy/cron.d/servabo-sweepers` runs `scripts/sweep_compliance.py --all --purge --apply`)
 for organizations that turned automatic purging on. Nothing proved it. Here an owner sets the
 period through the endpoint the page calls, two real assistant conversations exist (one started
 45 days ago, one 10 days ago), and the sweep runs exactly as the cron runs it:

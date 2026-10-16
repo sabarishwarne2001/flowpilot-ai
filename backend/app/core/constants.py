@@ -1,5 +1,5 @@
 """
-Application-wide constant definitions for FlowPilot AI.
+Application-wide constant definitions for Servabo.
 This module maintains read-only, deterministic metadata and system constraints.
 """
 

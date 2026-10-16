@@ -80,7 +80,7 @@ export const Register: React.FC = () => {
       // unwrap() is the request itself, and rejects when it does.
       await toast
         .promise(authApi.registerRequest(payload), {
-          loading: "Creating your FlowPilot account...",
+          loading: "Creating your Servabo account...",
 
           success: () => "Check your email to continue.",
 

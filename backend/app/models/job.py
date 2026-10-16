@@ -1,5 +1,5 @@
 """
-Database representation for Job entities in FlowPilot AI.
+Database representation for Job entities in Servabo.
 Generic system job queue for offloading async tasks (ARCH-09 §Step 10, ARCH-16 §Step 7).
 """
 

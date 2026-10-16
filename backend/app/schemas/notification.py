@@ -1,5 +1,5 @@
 """
-Pydantic v2 schemas for FlowPilot AI notifications.
+Pydantic v2 schemas for Servabo notifications.
 
 Defines request, response, and update models for in-app and external
 notifications while supporting future delivery channels such as Email,

@@ -1,5 +1,5 @@
 /**
- * AI settings API service for FlowPilot AI.
+ * AI settings API service for Servabo.
  *
  * Every function takes the workspace identifier explicitly. Backend ARCH-01
  * Step 9c-2 moved this router under /workspaces/{workspace_id}/ai-settings, so
@@ -63,7 +63,7 @@ export async function getSupportedModels(
 }
 
 /**
- * Campaign session 2 (N-054): which models run inside the plan (on FlowPilot's keys) and which
+ * Campaign session 2 (N-054): which models run inside the plan (on Servabo's keys) and which
  * need the organization's own provider key, and whether that key has been added.
  */
 export type ModelAvailability = "PLATFORM" | "OWN_KEY_READY" | "OWN_KEY_NEEDED";

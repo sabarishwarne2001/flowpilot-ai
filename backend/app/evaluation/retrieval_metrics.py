@@ -3,7 +3,7 @@
 Separate from `retrieval_evaluator.py` on purpose. That module measures
 *document*-level retrieval against filename lists, calls `hybrid_search` with a
 `collection_name=` argument the current signature does not accept, and reads a
-`flowpilot_evaluation` collection that the workspace-partitioned store no longer
+`servabo_evaluation` collection that the workspace-partitioned store no longer
 writes to. It is Sprint-5 era and it will be retired in Step 9. Rewriting it
 now would mean rewriting it again after the migration.
 

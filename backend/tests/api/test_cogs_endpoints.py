@@ -65,7 +65,7 @@ def _user(db: Session, *, email: str, superuser: bool, verified: bool = True) ->
 @pytest.fixture()
 def superadmin_token(db_session: Session) -> str:
     user = _user(
-        db_session, email=f"root-{uuid.uuid4().hex[:8]}@flowpilot.ai", superuser=True
+        db_session, email=f"root-{uuid.uuid4().hex[:8]}@servabo.app", superuser=True
     )
     db_session.commit()
     return security.create_access_token(subject=user.id)
@@ -84,7 +84,7 @@ def member_token(db_session: Session) -> str:
 def unverified_superadmin_token(db_session: Session) -> str:
     user = _user(
         db_session,
-        email=f"pending-{uuid.uuid4().hex[:8]}@flowpilot.ai",
+        email=f"pending-{uuid.uuid4().hex[:8]}@servabo.app",
         superuser=True,
         verified=False,
     )

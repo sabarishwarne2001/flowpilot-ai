@@ -3,7 +3,7 @@
 ARCH50-S1:release
 
     release/SHA256SUMS          "<sha256>  <path>" for every file of the release, sorted by path
-    release/SHA256SUMS.sig      {"format": "flowpilot-release-sig/1", "key_id": ..., "signature": ...}
+    release/SHA256SUMS.sig      {"format": "servabo-release-sig/1", "key_id": ..., "signature": ...}
                                 (Ed25519 over the exact bytes of SHA256SUMS)
     release/sbom.cdx.json       CycloneDX 1.5 JSON: every pinned Python requirement and every npm package in
                                 the lockfile, with purls and the licences the metadata declares
@@ -33,7 +33,7 @@ SUMS = "SHA256SUMS"
 SIG = "SHA256SUMS.sig"
 SBOM = "sbom.cdx.json"
 RELEASE = "release.json"
-SIG_FORMAT = "flowpilot-release-sig/1"
+SIG_FORMAT = "servabo-release-sig/1"
 EXCLUDED_PARTS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", ".pytest_cache", ".mypy_cache",
                   "release", ".servabo_backups", "uploads"}
 EXCLUDED_PREFIXES = ("backend/evidence/", "backend/.arch")
@@ -187,12 +187,12 @@ def build_sbom(root: Path, *, version: str, commit: Optional[str], at: Optional[
         components.append(comp)
     return {
         "bomFormat": "CycloneDX", "specVersion": "1.5",
-        "serialNumber": f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, f'flowpilot-ai/{version}/{commit}')}",
+        "serialNumber": f"urn:uuid:{uuid.uuid5(uuid.NAMESPACE_URL, f'servabo/{version}/{commit}')}",
         "version": 1,
         "metadata": {"timestamp": moment.isoformat().replace("+00:00", "Z"),
-                     "tools": [{"vendor": "FlowPilot AI", "name": "release_manifest", "version": "arch50"}],
-                     "component": {"type": "application", "name": "flowpilot-ai", "version": version,
-                                   "bom-ref": "flowpilot-ai", **({"properties": [{"name": "git:commit",
+                     "tools": [{"vendor": "Servabo", "name": "release_manifest", "version": "arch50"}],
+                     "component": {"type": "application", "name": "servabo", "version": version,
+                                   "bom-ref": "servabo", **({"properties": [{"name": "git:commit",
                                                                                    "value": commit}]}
                                                                  if commit else {})}},
         "components": components,

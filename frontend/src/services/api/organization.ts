@@ -1,5 +1,5 @@
 /**
- * Organization API service for FlowPilot AI.
+ * Organization API service for Servabo.
  *
  * The commercial tenant surface: provisioning, settings, the member directory,
  * role management, and ownership transfer.

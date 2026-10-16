@@ -32,7 +32,7 @@ def render_verify_email(
         recipient_email: The address being verified. Echoed back so a
             misdirected message is obvious to whoever receives it.
         verify_link: Fully-qualified frontend URL with the token in the
-            fragment, e.g. https://app.flowpilot.ai/verify-email#token=...
+            fragment, e.g. https://app.servabo.app/verify-email#token=...
         expiry_str: Human-readable expiry, already formatted by the caller.
         brand_name: Platform name for the header and footer.
 

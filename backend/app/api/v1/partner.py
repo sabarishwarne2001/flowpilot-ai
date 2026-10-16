@@ -135,8 +135,8 @@ def _partner_ctx(
         raise HTTPException(
             status_code=409,
             detail=(
-                f"This partner is {str(partner.status).lower()} by FlowPilot, so it is read-only: "
-                "contact FlowPilot to restore it."
+                f"This partner is {str(partner.status).lower()} by Servabo, so it is read-only: "
+                "contact Servabo to restore it."
             ),
         )
     return partner

@@ -485,7 +485,7 @@ const ManifestPanel: React.FC<{
 // ---------------------------------------------------------------------------
 
 /**
- * Campaign session 3: `readOnly` while FlowPilot has suspended or terminated the partner. The
+ * Campaign session 3: `readOnly` while Servabo has suspended or terminated the partner. The
  * server refuses every change then (409) except removing access (revoking a key); the console
  * says so up front instead of letting each action fail.
  */

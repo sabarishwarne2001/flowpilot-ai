@@ -133,7 +133,7 @@ def test_scheduled_warehouse_exports_skip_an_archived_organization(engines: Engi
         organization_id=engines.org,
         label=f"warehouse-{uuid.uuid4().hex[:6]}",
         credential=S3Credential(
-            bucket="acme-analytics", region="eu-west-1", prefix="flowpilot/",
+            bucket="acme-analytics", region="eu-west-1", prefix="servabo/",
             access_key_id="AKIAEXAMPLE0000000000", secret_access_key="s" * 40,
         ),
         actor_id=engines.tenant.owner.user.id,

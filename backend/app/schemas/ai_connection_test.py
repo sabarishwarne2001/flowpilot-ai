@@ -44,7 +44,7 @@ class AIConnectionTestResponse(BaseModel):
     response: Optional[str] = None
     token_usage: Optional[TokenUsage] = None
     #: "TENANT" when the organization's own (BYOK) key served the call,
-    #: "PLATFORM" when FlowPilot's key did.
+    #: "PLATFORM" when Servabo's key did.
     credential_source: Literal["TENANT", "PLATFORM"] = "PLATFORM"
     #: "route_rule" when an organization routing rule chose the model,
     #: "ai_settings_default" otherwise.

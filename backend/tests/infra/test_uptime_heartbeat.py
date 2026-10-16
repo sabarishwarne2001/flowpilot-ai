@@ -80,7 +80,7 @@ def test_cron_runs_it_every_minute() -> None:
     assert "* * * * *" in cron and "servabo-uptime-heartbeat" in cron
 
 
-# FlowPilot was renamed Servabo (2026-10-16): a host configured before the rename keeps working for
+# Servabo was renamed Servabo (2026-10-16): a host configured before the rename keeps working for
 # one release, and the script says what to rename. The new name wins when both are set.
 from app.core.legacy_names import LEGACY_PREFIX  # noqa: E402
 

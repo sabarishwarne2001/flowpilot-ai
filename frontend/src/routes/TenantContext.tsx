@@ -1,5 +1,5 @@
 /**
- * Resolved tenant context for FlowPilot AI.
+ * Resolved tenant context for Servabo.
  *
  * TenantGuard publishes the tenant it resolved; every descendant reads it from
  * here. Two properties matter:

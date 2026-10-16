@@ -220,7 +220,7 @@ class DatabricksConnector(WarehouseConnector):
         run_segment = _safe_segment(run_id, field="run id")
         name_segment = _safe_segment(filename, field="filename")
         return (
-            f"/Volumes/{catalog}/{schema}/{volume}/flowpilot/"
+            f"/Volumes/{catalog}/{schema}/{volume}/servabo/"
             f"{run_segment}/{name_segment}"
         )
 
@@ -240,7 +240,7 @@ class DatabricksConnector(WarehouseConnector):
             self._statement(
                 config=config,
                 credential=credential,
-                statement="SELECT 1 AS flowpilot_probe",
+                statement="SELECT 1 AS servabo_probe",
             )
         except ConnectorError as exc:
             return ConnectionTestOutcome(
@@ -260,7 +260,7 @@ class DatabricksConnector(WarehouseConnector):
         parts: Sequence[BundlePart],
         run_id: str,
     ) -> PushOutcome:
-        table_prefix = str(config.get("table_prefix") or "flowpilot_")
+        table_prefix = str(config.get("table_prefix") or "servabo_")
 
         delivered: list[str] = []
         failed: list[str] = []

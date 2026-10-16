@@ -1,5 +1,5 @@
 """
-Email change for FlowPilot AI (ARCH-06 Step 6 / ARCH-07 §B.6 Option B).
+Email change for Servabo (ARCH-06 Step 6 / ARCH-07 §B.6 Option B).
 
 NOT converted to audit_logs table (site #29-31) — users.email is platform-scoped,
 not tenant-scoped. Retained as structured logs with extra audit metadata.

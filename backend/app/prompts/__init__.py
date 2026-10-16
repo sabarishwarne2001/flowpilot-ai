@@ -1,5 +1,5 @@
 """
-FlowPilot AI Prompt Package
+Servabo Prompt Package
 """
 
 PROMPT_PACKAGE_VERSION = "1.0.0"

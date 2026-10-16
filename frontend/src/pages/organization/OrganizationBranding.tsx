@@ -686,7 +686,7 @@ const OrganizationBranding: React.FC = () => {
         icon={Palette}
         eyebrow={organization.organization_name}
         title="Branding & custom domains"
-        description="Reach FlowPilot at your own hostname, show your own brand, and send notifications from your own domain."
+        description="Reach Servabo at your own hostname, show your own brand, and send notifications from your own domain."
       />
 
       {notice ? (
@@ -729,7 +729,7 @@ const OrganizationBranding: React.FC = () => {
             (older server) behaves as before. */}
         {branding?.custom_domains_enabled === false ? (
           <p className="mt-4 rounded-lg border border-border bg-muted/40 p-3 text-sm text-muted-foreground" role="status">
-            Custom domains are not switched on for this FlowPilot deployment, so a hostname
+            Custom domains are not switched on for this Servabo deployment, so a hostname
             cannot be claimed here yet. Ask your platform administrator to enable custom
             domains.
           </p>
@@ -1017,7 +1017,7 @@ const OrganizationBranding: React.FC = () => {
         <h2 className="text-base font-semibold">Notification sender domain</h2>
         <p className={`${HINT} mt-1`}>
           Send notifications from your own domain. Until SPF and DKIM verify,
-          mail goes out from the FlowPilot platform address.
+          mail goes out from the Servabo platform address.
         </p>
 
         {branding?.sender.degradation_reason ? (

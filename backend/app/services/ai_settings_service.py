@@ -1,5 +1,5 @@
 """
-AI Settings business orchestration service for FlowPilot AI.
+AI Settings business orchestration service for Servabo.
 ARCH-14 Step 8 CONTRACT: Removed temporary display price decorator.
 """
 
@@ -55,7 +55,7 @@ class AISettingsService:
 
         HARDENING-T1:D1/D2. The call goes through `llm_service.resolve_routing`
         and `ProviderClientFactory`, so a tenant with an organization routing
-        rule or a BYOK credential tests THAT route and key, not FlowPilot's
+        rule or a BYOK credential tests THAT route and key, not Servabo's
         platform key. Failover is disabled and the deadline is short: a test
         that fell over to another provider would report the wrong success.
 
@@ -121,7 +121,7 @@ class AISettingsService:
                 credential_source=source,
                 resolution_origin=origin,
                 message=(
-                    f"FlowPilot has no platform key for {provider}. Connect your "
+                    f"Servabo has no platform key for {provider}. Connect your "
                     "organization's own key under Organization settings -> BYOK, "
                     "or choose a provider the platform serves."
                 ),
@@ -189,7 +189,7 @@ class AISettingsService:
             resolution_origin=origin,
             message=(
                 f"Connected to {provider} ({model}) in {latency_ms:.0f} ms "
-                f"using {'your organization' if source == 'TENANT' else 'the FlowPilot platform'} key."
+                f"using {'your organization' if source == 'TENANT' else 'the Servabo platform'} key."
             ),
         )
 

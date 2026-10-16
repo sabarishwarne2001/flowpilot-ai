@@ -17,7 +17,7 @@ interface UsePublicBrandingManifestOptions {
  * ARCH-30 Tranche 1 (T4-F5) — the host-resolved theme, for pre-auth surfaces.
  *
  * Returns null while loading, on error, and when disabled. Every consumer
- * treats null as "render FlowPilot defaults", so a failed request degrades to
+ * treats null as "render Servabo defaults", so a failed request degrades to
  * the platform look rather than to an empty header. That is the right
  * direction: on the platform origin the manifest IS the default, and on a
  * tenant host a missing logo is cosmetic, whereas a login page that blocks on

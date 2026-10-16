@@ -150,7 +150,7 @@ export const downloadComplianceExportArchive = async (
   try {
     const link = document.createElement("a");
     link.href = url;
-    link.download = `flowpilot-export-${exportId}.zip`;
+    link.download = `servabo-export-${exportId}.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();

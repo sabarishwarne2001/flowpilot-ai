@@ -1,4 +1,4 @@
-# FlowPilot AI — browser tests (Playwright)
+# Servabo — browser tests (Playwright)
 
 These tests drive the real web app in a headless Chromium browser against the
 real API, worker, Postgres and Redis. They sign in as seeded users, click
@@ -34,7 +34,7 @@ PLATFORM_SMTP_ENCRYPTION=NONE
 ```bash
 # 1. Database and Redis (Docker on your PC; the cloud sandbox uses start-db.sh)
 cd backend && docker compose up -d db redis && cd ..
-# 2. API + worker + mail catcher (migrates first; logs in /tmp/flowpilot-e2e-logs)
+# 2. API + worker + mail catcher (migrates first; logs in /tmp/servabo-e2e-logs)
 frontend/e2e/scripts/start-stack.sh
 # 3. The tests (builds the production bundle, seeds, uploads sample documents)
 cd frontend && npx playwright test -c e2e

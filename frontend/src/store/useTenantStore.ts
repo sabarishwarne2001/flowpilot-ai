@@ -1,5 +1,5 @@
 /**
- * Tenant selection store for FlowPilot AI.
+ * Tenant selection store for Servabo.
  *
  * Persists WHICH tenant the actor is operating in — never the tenant data
  * itself. Organization and workspace records come from /me/context on every

@@ -1,5 +1,5 @@
 /**
- * Global route constants for FlowPilot AI.
+ * Global route constants for Servabo.
  */
 
 export const ROUTES = {

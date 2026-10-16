@@ -38,9 +38,9 @@ _KEYLESS_ENVIRONMENTS: frozenset[str] = frozenset({"test", "development"})
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "FlowPilot AI"
+    PROJECT_NAME: str = "Servabo"
     APP_VERSION: str = APP_VERSION
-    API_TITLE: str = "FlowPilot AI Core API"
+    API_TITLE: str = "Servabo Core API"
     ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     
@@ -52,7 +52,7 @@ class Settings(BaseSettings):
 
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "flowpilot"
+    POSTGRES_DB: str = "servabo"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
@@ -196,8 +196,8 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_USERNAME: str = ""
     PLATFORM_SMTP_PASSWORD: SecretStr | None = None
     PLATFORM_SMTP_ENCRYPTION: str = "TLS"
-    PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
-    PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
+    PLATFORM_SMTP_FROM_EMAIL: str = "noreply@servabo.app"
+    PLATFORM_SMTP_FROM_NAME: str = "Servabo"
 
     # ---- Campaign session 4 (§C.4): alerts for whoever runs the deployment ----
     #: Who is emailed (through the platform relay) about dead background jobs, gateway events
@@ -372,7 +372,7 @@ class Settings(BaseSettings):
     # falling back to S3_BUCKET: a silent fallback would place EU-resident
     # personal data in the default bucket and make the policy decorative.
     #
-    #   S3_REGIONAL_BUCKETS='{"EU":"flowpilot-eu","US":"flowpilot-us"}'
+    #   S3_REGIONAL_BUCKETS='{"EU":"servabo-eu","US":"servabo-us"}'
     S3_REGIONAL_BUCKETS: dict[str, str] = {}
 
     # ======================================================================
@@ -502,7 +502,7 @@ class Settings(BaseSettings):
     # stops a tenant claiming the platform's own origin and having every
     # session cookie in the estate delivered to a page they control.
     #
-    #   PLATFORM_RESERVED_HOSTS='["flowpilot.ai","app.flowpilot.ai"]'
+    #   PLATFORM_RESERVED_HOSTS='["servabo.app","app.servabo.app"]'
     #
     # Empty is a DEPLOYMENT ERROR, not a permissive default: domain_service
     # refuses every claim while this is empty rather than allowing all of
@@ -590,7 +590,7 @@ class Settings(BaseSettings):
     # field, so no tenant can widen egress or point the local model elsewhere.
     #
     #   SERVABO_EDITION      saas (the hosted service) | sovereign (on-premise /
-    #                          air-gapped; needs a licence signed by FlowPilot's
+    #                          air-gapped; needs a licence signed by Servabo's
     #                          Ed25519 key, verified offline)
     #   EGRESS_MODE            open | deny. deny: nothing leaves except the
     #                          destinations the operator declared -- the ones its
@@ -633,7 +633,7 @@ class Settings(BaseSettings):
     AI_CONNECTION_TEST_DEADLINE_SECONDS: float = 20.0
     # HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private,
     # loopback, link-local, CGNAT or metadata addresses. An enterprise that
-    # self-hosts FlowPilot next to an internal relay lists that relay here
+    # self-hosts Servabo next to an internal relay lists that relay here
     # (hostnames or CIDRs). Tenants cannot set this; only the operator can.
     SMTP_PRIVATE_HOST_ALLOWLIST: list[str] = []
     # Development only: local catchers (Mailpit, MailHog) run on localhost.
@@ -1010,7 +1010,7 @@ class Settings(BaseSettings):
         cleaned = v.strip().rstrip("/")
         if not cleaned.startswith(("http://", "https://")):
             raise ValueError(
-                "FRONTEND_URL must include a scheme, e.g. https://app.flowpilot.ai"
+                "FRONTEND_URL must include a scheme, e.g. https://app.servabo.app"
             )
         return cleaned
 
@@ -1199,7 +1199,7 @@ class Settings(BaseSettings):
     _DEV_S3_ACCESS_KEY_ID = "minioadmin"
     _DEV_S3_SECRET_ACCESS_KEY = "minioadmin"
     _DEV_S3_ENDPOINT_URL = "http://localhost:9000"
-    _DEV_S3_BUCKET = "flowpilot-dev"
+    _DEV_S3_BUCKET = "servabo-dev"
 
     @model_validator(mode="after")
     def _resolve_storage_credentials(self) -> "Settings":

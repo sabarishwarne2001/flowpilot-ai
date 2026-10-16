@@ -690,7 +690,7 @@ class TestProviderClientFactory:
         assert use.source == SOURCE_PLATFORM
         assert use.fell_back is True
         assert use.is_zero_cogs is False, (
-            "a fallback is billed to FlowPilot's supplier account; stamping it "
+            "a fallback is billed to Servabo's supplier account; stamping it "
             "ZERO_BYOK would report real COGS as free"
         )
 
@@ -766,7 +766,7 @@ class TestZeroCogsAttribution:
 
         Without this branch a tenant reserved on Groq whose request failed
         over to the platform's Gemini account would record
-        cost_basis_micros=0 / ZERO_BYOK on tokens FlowPilot actually paid a
+        cost_basis_micros=0 / ZERO_BYOK on tokens Servabo actually paid a
         supplier for — a 100% gross margin on real spend, passing every CHECK
         constraint because the pair is internally consistent.
         """

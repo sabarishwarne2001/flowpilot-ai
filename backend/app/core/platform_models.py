@@ -1,4 +1,4 @@
-"""The models FlowPilot serves on its OWN provider keys (N-054), by provider (lower case).
+"""The models Servabo serves on its OWN provider keys (N-054), by provider (lower case).
 
 Kept apart from app/core/ai_models.py, which re-exports it, because it must import nothing:
 app/core/config.py checks GROQ_MODEL_NAME against it while the settings are being built, and

@@ -1,5 +1,7 @@
 # Phase 2 — Security and deployment hardening
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 Branch `hardening/security-deploy`, written 2026-09-30. Read `STATE.md` first if you are
 picking the campaign up; this file is the report on what Phase 2 did, what it proved, and what is
 still not safe. Every finding has its full evidence in `FINDINGS.md`; every decision that is yours

@@ -281,7 +281,7 @@ test.describe("Branding and custom domains", () => {
     // offered "Claim domain" and the click answered 501.
     await page.goto(org("C", "branding"));
     await settle(page);
-    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this FlowPilot deployment/);
+    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this Servabo deployment/);
     await expect(page.getByRole("button", { name: "Claim domain" })).toHaveCount(0);
     await expect(page.locator("#hostname")).toHaveCount(0);
   });
@@ -295,7 +295,7 @@ test.describe("Analytics and BI egress", () => {
     await page.getByRole("textbox", { name: "Label" }).fill(`E2E S3 ${runId()}`);
     await page.getByRole("textbox", { name: "Bucket" }).fill("caretakers-e2e-bucket");
     await page.getByRole("textbox", { name: "Region" }).fill("eu-west-2");
-    await page.getByRole("textbox", { name: "Key prefix" }).fill("flowpilot/");
+    await page.getByRole("textbox", { name: "Key prefix" }).fill("servabo/");
     await page.getByRole("textbox", { name: "Access key ID" }).fill("AKIAE2ETESTONLY0000");
     await page.getByRole("textbox", { name: "Secret access key" }).fill("e2e-secret-not-real");
     await page.getByRole("button", { name: "Add destination" }).last().click();
@@ -336,7 +336,7 @@ test.describe("Egress lockdown", () => {
     await page.getByRole("textbox", { name: "Port" }).fill("443");
     await page.getByRole("button", { name: "Add rule" }).click();
     await expect(page.locator("main")).toContainText(host, { timeout: 10_000 });
-    await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.caretakers.example.com/flowpilot");
+    await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.caretakers.example.com/servabo");
     await page.getByRole("button", { name: "Test" }).click();
     await expect(page.locator("main")).toContainText(/allowed|refused|blocked|permitted/i, { timeout: 10_000 });
     await page.getByRole("button", { name: "Switch lockdown on" }).click();
@@ -472,7 +472,7 @@ test.describe("Webhooks", () => {
     problems.allowHttp(/\/webhooks\//, [400, 422, 502], "the receiver is unreachable from the sandbox");
     await page.goto(org("C", "webhooks"));
     await page.getByRole("button", { name: "New endpoint" }).click();
-    await page.getByRole("textbox", { name: "Endpoint URL" }).fill("https://hooks.caretakers.example.com/flowpilot");
+    await page.getByRole("textbox", { name: "Endpoint URL" }).fill("https://hooks.caretakers.example.com/servabo");
     await page.getByRole("textbox", { name: "Description (optional)" }).fill("E2E endpoint");
     await page.getByRole("checkbox", { name: "work_item.created" }).check();
     await page.getByRole("button", { name: /create|save|add endpoint/i }).last().click();

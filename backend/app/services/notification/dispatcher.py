@@ -1,5 +1,5 @@
 """
-Centralized notification dispatcher for FlowPilot AI.
+Centralized notification dispatcher for Servabo.
 
 Routes notification requests to registered providers (Email, Slack, Teams,
 Webhooks, SMS, etc.) through a provider-agnostic registry.

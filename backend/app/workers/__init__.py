@@ -1,1 +1,1 @@
-"""Workers package for FlowPilot AI async infrastructure."""
+"""Workers package for Servabo async infrastructure."""

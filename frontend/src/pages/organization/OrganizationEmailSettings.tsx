@@ -209,7 +209,7 @@ export const OrganizationEmailSettings: React.FC = () => {
               <span className="mt-0.5 block text-xs text-muted-foreground">
                 {isEnabled
                   ? "Mail for this organization goes through the server below."
-                  : "Mail goes through FlowPilot's default sender."}
+                  : "Mail goes through Servabo's default sender."}
               </span>
             </span>
           </label>

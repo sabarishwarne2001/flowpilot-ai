@@ -69,7 +69,7 @@ def _enable_custom_domains(monkeypatch):
     monkeypatch.setattr(
         settings,
         "PLATFORM_RESERVED_HOSTS",
-        ["flowpilot.ai", "app.flowpilot.ai"],
+        ["servabo.app", "app.servabo.app"],
         raising=False,
     )
     monkeypatch.setattr(
@@ -135,7 +135,7 @@ def test_malformed_hostnames_are_422_not_500(client, tenant, hostname):
 def test_a_platform_hostname_cannot_be_claimed(client, tenant):
     response = client.post(
         f"{API}/organizations/{tenant.organization.id}/custom-domains",
-        json={"hostname": "login.flowpilot.ai"},
+        json={"hostname": "login.servabo.app"},
         headers=tenant.owner.headers,
     )
     assert response.status_code == 422, response.text

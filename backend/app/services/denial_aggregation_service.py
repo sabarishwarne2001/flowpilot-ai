@@ -1,4 +1,4 @@
-"""Threshold denial aggregation service for FlowPilot AI (ARCH-08 §B.8, §7.3).
+"""Threshold denial aggregation service for Servabo (ARCH-08 §B.8, §7.3).
 
 Aggregates high-volume authorization denials into single exponential audit rows
 to keep audit logs human-scale during automated attacks or scanning.

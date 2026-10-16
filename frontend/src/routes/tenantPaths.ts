@@ -1,5 +1,5 @@
 /**
- * Tenant URL grammar for FlowPilot AI.
+ * Tenant URL grammar for Servabo.
  */
 
 export const ROUTE_PARAMS = {

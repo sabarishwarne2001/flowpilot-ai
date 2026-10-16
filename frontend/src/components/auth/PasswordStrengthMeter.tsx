@@ -27,7 +27,7 @@ function loadEstimator(): Promise<Estimator> {
       dictionary: { ...common.dictionary, ...en.dictionary },
     });
     return (password: string, userInputs: string[]) => {
-      const result = factory.check(password, ["flowpilot", ...userInputs]);
+      const result = factory.check(password, ["servabo", ...userInputs]);
       return { score: result.score, warning: result.feedback.warning ?? "" };
     };
   });

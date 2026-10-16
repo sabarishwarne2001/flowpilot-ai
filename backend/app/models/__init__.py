@@ -1,4 +1,4 @@
-"""Database models centralized import and registry gateway for FlowPilot AI."""
+"""Database models centralized import and registry gateway for Servabo."""
 
 from app.db.base import Base
 from app.models.user import User

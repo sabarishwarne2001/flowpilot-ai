@@ -69,7 +69,7 @@ test.describe("Batch operations — Enterprise owner", () => {
     await page.getByRole("button", { name: "Verify a package" }).click();
     await page.getByLabel("Package file").setInputFiles(file);
     await expect(page.getByTestId("verify-result")).toHaveAttribute("data-verdict", "VERIFIED", { timeout: 30_000 });
-    await expect(page.getByTestId("verify-result")).toContainText("the manifest is the one FlowPilot issued");
+    await expect(page.getByTestId("verify-result")).toContainText("the manifest is the one Servabo issued");
 
     const notAPackage = testInfo.outputPath("notes.zip");
     fs.writeFileSync(notAPackage, "this is not a zip archive");

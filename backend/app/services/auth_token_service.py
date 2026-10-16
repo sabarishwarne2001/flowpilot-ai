@@ -1,5 +1,5 @@
 """
-Single-use identity tokens for FlowPilot AI.
+Single-use identity tokens for Servabo.
 
 Email verification and password reset. Both are the same lifecycle — issue a
 high-entropy secret, store only its hash, consume exactly once, expire whether

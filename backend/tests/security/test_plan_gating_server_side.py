@@ -127,7 +127,7 @@ BODY_OVERRIDES: dict[str, dict[str, Any]] = {
     f"PATCH {ORG}/analytics/destinations/{{destination_id}}": {"label": "renamed"},
     f"POST {ORG}/custom-domains": {"hostname": "ai.sweep-example.com"},
     f"POST {ORG}/webhooks/endpoints": {
-        "url": "https://hooks.sweep-example.com/flowpilot",
+        "url": "https://hooks.sweep-example.com/servabo",
         "event_types": ["document.completed"],
     },
     f"PATCH {WS}/corroboration/runs/{{run_id}}/discrepancies/{{discrepancy_id}}": {"status": "CONFIRMED"},

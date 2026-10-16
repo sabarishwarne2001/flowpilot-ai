@@ -3,10 +3,10 @@
 ARCH50-S1:dr
 
 The recovery itself (pg_basebackup, WAL archiving, restore to a timestamp) is operator tooling --
-`scripts/dr_pitr.py`, run by `deploy/bin/flowpilot-sweep` -- because it drives PostgreSQL's own binaries, not the
+`scripts/dr_pitr.py`, run by `deploy/bin/servabo-sweep` -- because it drives PostgreSQL's own binaries, not the
 application. What lives here is what the application can prove about it:
 
-  heartbeats   `beat()` writes one row a minute on the primary (cron: `flowpilot-sweep dr-heartbeat`). After a
+  heartbeats   `beat()` writes one row a minute on the primary (cron: `servabo-sweep dr-heartbeat`). After a
                restore to "latest", the newest heartbeat the restored cluster holds, compared with the newest the
                primary wrote, IS the data lost: the measured RPO of a real incident, not a promise.
   drills       every drill (PITR, logical RESTORE, CHAOS) records what it restored, to when, how much was lost

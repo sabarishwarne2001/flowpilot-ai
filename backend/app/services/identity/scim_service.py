@@ -64,7 +64,7 @@ def _pepper() -> bytes:
     if pepper is None:
         raise RuntimeError("API_KEY_PEPPER is not configured; SCIM tokens cannot be hashed.")
     return hmac.new(
-        pepper.get_secret_value().encode("utf-8"), b"flowpilot.scim-token.v1", hashlib.sha256
+        pepper.get_secret_value().encode("utf-8"), b"servabo.scim-token.v1", hashlib.sha256
     ).digest()
 
 
@@ -267,7 +267,7 @@ def service_provider_config() -> dict:
         "authenticationSchemes": [{
             "type": "oauthbearertoken",
             "name": "OAuth Bearer Token",
-            "description": "An organization-owned SCIM token issued in FlowPilot.",
+            "description": "An organization-owned SCIM token issued in Servabo.",
             "primary": True,
         }],
     }
@@ -332,7 +332,7 @@ def _no_seat() -> ScimError:
     """Campaign session 1. The organization's seats are full: a SCIM error, not a crash."""
     return ScimError(
         403,
-        "The organization has no seat available for this user. Add seats in FlowPilot "
+        "The organization has no seat available for this user. Add seats in Servabo "
         "(Billing -> Seats) or upgrade the plan, then retry.",
     )
 

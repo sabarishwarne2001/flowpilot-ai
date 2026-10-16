@@ -1,5 +1,5 @@
 """
-Email verification for FlowPilot AI.
+Email verification for Servabo.
 
 Registration creates an account; verification proves the address on it belongs
 to the person using it. Between those two facts sits every workspace-scoped

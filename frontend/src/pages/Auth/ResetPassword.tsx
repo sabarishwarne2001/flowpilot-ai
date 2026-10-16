@@ -1,5 +1,5 @@
 /**
- * Password reset completion page for FlowPilot AI.
+ * Password reset completion page for Servabo.
  *
  * The token arrives in the URL FRAGMENT (ARCH-03 §B.9) and is cleared from the
  * address bar as soon as it is read. A reset link is a password-equivalent

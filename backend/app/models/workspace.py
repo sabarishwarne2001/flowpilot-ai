@@ -1,6 +1,6 @@
 """
 Database representation of the Workspace collaboration boundary for
-FlowPilot AI.
+Servabo.
 """
 
 from __future__ import annotations

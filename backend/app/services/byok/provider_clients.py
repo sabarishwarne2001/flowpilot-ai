@@ -135,7 +135,7 @@ class FallbackImpossibleError(FallbackForbiddenError):
     """ARCH-23 B3. The tenant permitted fallback and there is nothing to fall
     back to.
 
-    FlowPilot holds no OpenAI, Anthropic, Azure or Mistral key of its own, so
+    Servabo holds no OpenAI, Anthropic, Azure or Mistral key of its own, so
     for those four providers `allow_platform_fallback` is inert no matter what
     the tenant sets. Distinguished from `FallbackForbiddenError` because the
     remedies are opposite: one is fixed by the tenant changing a setting, the
@@ -702,7 +702,7 @@ class ProviderClientFactory:
                 },
             )
             raise FallbackImpossibleError(
-                f"The {spec.label} call failed ({cause}) and FlowPilot holds "
+                f"The {spec.label} call failed ({cause}) and Servabo holds "
                 f"no {spec.label} key of its own, so there is nothing to fall "
                 "back to. This is not a policy setting you can change — fix "
                 "the credential, or route this task to a provider where "
@@ -726,7 +726,7 @@ class ProviderClientFactory:
             raise FallbackForbiddenError(
                 f"The {spec.label} call failed ({cause}) and this "
                 "organization has not enabled platform fallback. Routing to "
-                "FlowPilot's own provider account without that consent is not "
+                "Servabo's own provider account without that consent is not "
                 "permitted. Enable fallback in the BYOK console, or fix the "
                 "credential."
             )

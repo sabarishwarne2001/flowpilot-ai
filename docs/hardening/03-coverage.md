@@ -1,5 +1,7 @@
 # Phase 3 — Browser tests and full-product coverage
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Branch `hardening/e2e`. Written 2026-10-05 at the Phase 3 checkpoint._
 
 ## 1. In plain language

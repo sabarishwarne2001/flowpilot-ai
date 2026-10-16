@@ -134,7 +134,7 @@ PROMPT_ECHO_PATTERNS: tuple[Pattern[str], ...] = (
         re.I,
     ),
     re.compile(
-        r"\bYou are FlowPilot AI, an enterprise document intelligence assistant\b",
+        r"\bYou are Servabo, an enterprise document intelligence assistant\b",
         re.I,
     ),
 )

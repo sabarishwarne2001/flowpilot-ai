@@ -1,1 +1,1 @@
-"""Rate limiting package for FlowPilot AI (ARCH-08 §B.5)."""
+"""Rate limiting package for Servabo (ARCH-08 §B.5)."""

@@ -1,4 +1,4 @@
-"""Database representation of API Keys for FlowPilot AI (ARCH-08, ARCH-21)."""
+"""Database representation of API Keys for Servabo (ARCH-08, ARCH-21)."""
 
 from __future__ import annotations
 

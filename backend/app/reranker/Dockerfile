@@ -1,5 +1,5 @@
 # =============================================================================
-# FlowPilot AI — Reranker Microservice Image (ARCH-11 Step 7)
+# Servabo — Reranker Microservice Image (ARCH-11 Step 7)
 # =============================================================================
 
 FROM python:3.12-slim AS base

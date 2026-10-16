@@ -1,5 +1,5 @@
 /**
- * Tenant unavailability tombstone for FlowPilot AI.
+ * Tenant unavailability tombstone for Servabo.
  *
  * Shown when a tenant exists and the actor belongs to it, but it cannot
  * currently serve requests — a suspended organization, an archived workspace.

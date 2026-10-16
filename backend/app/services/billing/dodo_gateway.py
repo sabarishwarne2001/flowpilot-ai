@@ -10,7 +10,7 @@ Not because Stripe India is closed — it is not. Stripe's own RBI compliance
 documentation describes an onboarding path for sole proprietorships that are not
 registered, and the original premise that it is invite-only was inaccurate.
 
-The reason is tax. Under Stripe, FlowPilot is the seller of record and the
+The reason is tax. Under Stripe, Servabo is the seller of record and the
 operator personally owes GST registration in India, VAT registration across the
 EU past threshold, and US state sales-tax nexus analysis — a recurring
 compliance job for a solo founder. Under a Merchant of Record, Dodo is the legal
@@ -71,7 +71,7 @@ because Stripe's subscription-item proration is not a universal concept and I
 have not verified Dodo's equivalent semantics. A stub that guessed would
 type-check clean and mis-bill.
 
-`supports_usage_billing` is likewise False PENDING VERIFICATION. FlowPilot
+`supports_usage_billing` is likewise False PENDING VERIFICATION. Servabo
 prices seats plus metered consumption; if Dodo's usage API cannot accept
 `usage_rollups` as reported quantities at the granularity the overage model
 needs, the metered half of the pricing model does not survive this migration.

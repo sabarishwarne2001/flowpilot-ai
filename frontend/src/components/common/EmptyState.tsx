@@ -25,7 +25,7 @@ interface EmptyStateProps {
 }
 
 /**
- * Universal, stateless Empty State Presenter Card for FlowPilot AI.
+ * Universal, stateless Empty State Presenter Card for Servabo.
  *
  * Provides consistent typography, clean vector alignment grids, and
  * supports optional interactive CTA actions natively.

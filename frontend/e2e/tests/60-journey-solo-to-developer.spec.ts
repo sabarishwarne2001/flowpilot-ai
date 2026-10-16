@@ -3,13 +3,13 @@
  *
  * Signs up and verifies through the real forms and email, creates an organization (the one-week
  * trial starts), uploads a document, hits a Free limit and follows the upgrade path to the plans,
- * upgrades to Developer, creates an API key, uploads through the API with it, and FlowPilot sends
+ * upgrades to Developer, creates an API key, uploads through the API with it, and Servabo sends
  * the webhook for that document.
  *
- * Stood in: Stripe's hosted checkout page (the request FlowPilot makes is checked, the payment is
- * then confirmed by `backend/scripts/e2e_stand_in.py` through FlowPilot's own reconcile code), and
+ * Stood in: Stripe's hosted checkout page (the request Servabo makes is checked, the payment is
+ * then confirmed by `backend/scripts/e2e_stand_in.py` through Servabo's own reconcile code), and
  * the customer's webhook receiver: the sandbox cannot host a public HTTPS endpoint, so the journey
- * proves FlowPilot sent the signed delivery for the uploaded document (the receiving end, with its
+ * proves Servabo sent the signed delivery for the uploaded document (the receiving end, with its
  * signature check and retries, is proven live in `backend/tests/engines/test_webhooks_live.py`).
  */
 import fs from "node:fs";
@@ -73,7 +73,7 @@ test.describe("Journey: a solo user upgrades to Developer and uses the API", () 
     await limit.getByTestId("view-plans").click();
     await expect(page).toHaveURL(new RegExp(`${customer.org("billing")}$`));
 
-    // Upgrade to Developer: FlowPilot opens the gateway's checkout for one seat of Developer.
+    // Upgrade to Developer: Servabo opens the gateway's checkout for one seat of Developer.
     let checkout: Record<string, unknown> | null = null;
     await page.route(/\/billing\/plans/, async (route) => {
       const response = await route.fetch();
@@ -95,7 +95,7 @@ test.describe("Journey: a solo user upgrades to Developer and uses the API", () 
     // A webhook endpoint for finished documents, and an API key, both in the browser.
     await page.goto(customer.org("webhooks"));
     await page.getByRole("button", { name: "New endpoint" }).click();
-    await page.locator("#hook-url").fill("https://hooks.example.com/flowpilot");
+    await page.locator("#hook-url").fill("https://hooks.example.com/servabo");
     await page.getByRole("checkbox", { name: "document.completed" }).check();
     await page.getByRole("button", { name: "Create endpoint" }).click();
     await expect(page.getByRole("region", { name: "Webhook signing secret" })).toBeVisible();

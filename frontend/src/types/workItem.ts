@@ -1,5 +1,5 @@
 /**
- * Work Item Data Transfer Objects (DTOs) for FlowPilot AI.
+ * Work Item Data Transfer Objects (DTOs) for Servabo.
  *
  * ARCH-0V Tranche 4 — `UploadDocumentResponse` no longer lies.
  *

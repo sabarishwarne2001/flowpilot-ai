@@ -22,7 +22,7 @@ _LINES = [
 
 
 def sample_invoice_pdf(today: date | None = None) -> bytes:
-    """A one-page invoice with the fields FlowPilot reads: vendor, number, dates, lines, totals."""
+    """A one-page invoice with the fields Servabo reads: vendor, number, dates, lines, totals."""
     from reportlab.lib.pagesizes import A4
     from reportlab.pdfgen import canvas
 
@@ -39,7 +39,7 @@ def sample_invoice_pdf(today: date | None = None) -> bytes:
         page.drawString(x, y, text)
         y -= gap
 
-    line("SAMPLE DOCUMENT - for trying FlowPilot, not a real bill", 8, 24)
+    line("SAMPLE DOCUMENT - for trying Servabo, not a real bill", 8, 24)
     line("TAX INVOICE", 18, 28)
     line("Vendor: Northwind Office Supplies Ltd")
     line("Vendor Address: 4 Market Street, Manchester M1 1AA, United Kingdom")

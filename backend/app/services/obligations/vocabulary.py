@@ -76,7 +76,7 @@ ROLL_PRECEDING: Final = "PRECEDING"
 ROLL_MODIFIED_FOLLOWING: Final = "MODIFIED_FOLLOWING"
 ROLLS: Final = (ROLL_NONE, ROLL_FOLLOWING, ROLL_PRECEDING, ROLL_MODIFIED_FOLLOWING)
 
-#: RFC 5545 frequencies FlowPilot accepts: a due date is a DATE, so nothing below a day.
+#: RFC 5545 frequencies Servabo accepts: a due date is a DATE, so nothing below a day.
 RRULE_FREQUENCIES: Final = ("DAILY", "WEEKLY", "MONTHLY", "YEARLY")
 MAX_RRULE_LENGTH: Final = 300
 #: A series is expanded at most this far ahead (calendar view, feeds).
@@ -124,7 +124,7 @@ FEED_SCOPES: Final = (FEED_SCOPE_ALL, FEED_SCOPE_MINE)
 FEED_TOKEN_VERSION: Final = "v1"
 #: Domain separation for the feed signature key (HKDF info). Changing it
 #: invalidates every issued feed, which is a decision, not a tweak.
-FEED_HKDF_INFO: Final = b"flowpilot/arch46/calendar-feed/v1"
+FEED_HKDF_INFO: Final = b"servabo/arch46/calendar-feed/v1"
 FEED_MAC_CHARS: Final = 22              # 16 bytes of HMAC-SHA256, base64url
 MAX_FEEDS_PER_MEMBER: Final = 10
 #: How far back closed obligations stay in a feed (as completed / cancelled events).

@@ -275,7 +275,7 @@ def test_fence_nonce_echo_is_stripped():
 
 def test_system_prompt_echo_is_stripped():
     text = (
-        "You are FlowPilot AI, an enterprise document intelligence assistant. "
+        "You are Servabo, an enterprise document intelligence assistant. "
         "The answer is 42." + " " * 120
     )
     assert "enterprise document intelligence assistant" not in output_filter.redact_text(

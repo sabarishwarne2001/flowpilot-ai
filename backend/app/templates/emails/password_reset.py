@@ -31,7 +31,7 @@ def render_password_reset(
     Args:
         recipient_email: The account address the reset was requested for.
         reset_link: Fully-qualified frontend URL with the token in the
-            fragment, e.g. https://app.flowpilot.ai/reset-password#token=...
+            fragment, e.g. https://app.servabo.app/reset-password#token=...
         expiry_str: Human-readable expiry, already formatted by the caller.
         brand_name: Platform name for the header and footer.
 

@@ -3,7 +3,7 @@
     pytest tests/security/test_superadmin_only.py -q
 
 The Platform section of the console (Unit economics, Sovereign edition, Revenue
-operations) and the partner-programme back office are for FlowPilot staff. They
+operations) and the partner-programme back office are for Servabo staff. They
 read and change data across every tenant: supplier costs, price books,
 contracts, invoices, payouts. A tenant who could reach them could read another
 tenant's margins or void an invoice.
@@ -75,7 +75,7 @@ def sweep() -> Sweep:
 
 @pytest.fixture()
 def superadmin(db_session: Session) -> Persona:
-    persona = _make_user(db_session, "platform-staff@flowpilot.test")
+    persona = _make_user(db_session, "platform-staff@servabo.test")
     persona.user.is_superuser = True
     db_session.commit()
     return persona

@@ -1,5 +1,5 @@
 """
-Abstract notification provider interface for FlowPilot AI.
+Abstract notification provider interface for Servabo.
 
 Defines the provider-agnostic contract implemented by all notification
 channels (SMTP, Slack, Teams, Discord, SMS, Webhooks, etc.).

@@ -465,12 +465,12 @@ def clear_asset(
 
 def sender_records_for(sender_domain: str) -> list[SenderDnsRecord]:
     """The records a tenant must publish, rendered for the console."""
-    selector = "flowpilot"
+    selector = "servabo"
     return [
         SenderDnsRecord(
             purpose="SPF",
             record_name=sender_domain,
-            record_value="v=spf1 include:mail.flowpilot.ai ~all",
+            record_value="v=spf1 include:mail.servabo.app ~all",
         ),
         SenderDnsRecord(
             purpose="DKIM",
@@ -480,7 +480,7 @@ def sender_records_for(sender_domain: str) -> list[SenderDnsRecord]:
         SenderDnsRecord(
             purpose="DMARC",
             record_name=f"_dmarc.{sender_domain}",
-            record_value="v=DMARC1; p=none; rua=mailto:dmarc@flowpilot.ai",
+            record_value="v=DMARC1; p=none; rua=mailto:dmarc@servabo.app",
         ),
     ]
 
@@ -571,7 +571,7 @@ def verify_sender_domain(
     now = utcnow()
     spf = dns_service.lookup_txt(branding.sender_domain)
     dkim = dns_service.lookup_txt(
-        f"flowpilot._domainkey.{branding.sender_domain}"
+        f"servabo._domainkey.{branding.sender_domain}"
     )
 
     if (spf.error and not spf.resolved) and (dkim.error and not dkim.resolved):

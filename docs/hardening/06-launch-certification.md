@@ -1,5 +1,7 @@
 # Launch certification — campaign session 4 (2026-10-14)
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 **Verdict: GO for a first paying customer, once the owner has done the launch checklist**
 (HANDOFF.md, "Owner launch checklist"). Nothing in the engineering list below blocks a launch; the
 items carried into `NEXT-SESSION-PROMPT.md` are improvements and edge cases that were found,

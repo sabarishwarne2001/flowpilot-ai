@@ -1,5 +1,5 @@
 """
-HttpOnly refresh cookie helpers for FlowPilot AI (ARCH-03 §B.3).
+HttpOnly refresh cookie helpers for Servabo (ARCH-03 §B.3).
 """
 
 from __future__ import annotations

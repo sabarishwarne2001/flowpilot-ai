@@ -82,7 +82,7 @@ API_STATUS: str = "STABLE"
 DEPRECATION_AT: Optional[datetime] = None
 SUNSET_AT: Optional[datetime] = None
 SUCCESSOR_URL: Optional[str] = None
-DOCUMENTATION_URL: str = "https://docs.flowpilot.ai/public-api"
+DOCUMENTATION_URL: str = "https://docs.servabo.app/public-api"
 
 HEADER_API_VERSION = "X-Servabo-API-Version"
 

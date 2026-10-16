@@ -239,7 +239,7 @@ const OrganizationEgress: React.FC = () => {
               {TENANT_CHANNELS.map((c) => <option key={c} value={c}>{CHANNEL_LABELS[c]}</option>)}
             </select></label>
           <label className="space-y-1"><span className={FIELD_LABEL}>URL or host</span>
-            <input className={INPUT} value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="https://hooks.acme.com/flowpilot" /></label>
+            <input className={INPUT} value={destination} onChange={(e) => setDestination(e.target.value)} placeholder="https://hooks.acme.com/servabo" /></label>
           <button type="submit" className={BUTTON_SECONDARY} disabled={test.isPending || destination.trim() === ""}>Test</button>
         </form>
         {decision ? (

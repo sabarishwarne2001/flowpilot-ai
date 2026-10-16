@@ -1,5 +1,5 @@
 """
-Account-level user profile service for FlowPilot AI (ARCH-05 Step 5).
+Account-level user profile service for Servabo (ARCH-05 Step 5).
 
 Distinct from every other service in this codebase in one respect worth
 naming: nothing here is tenant-scoped, and nothing here takes an

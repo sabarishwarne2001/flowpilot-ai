@@ -24,7 +24,7 @@ const JSON_HEADERS = { Accept: "application/json" } as const;
  * ARCH-25 built this endpoint, mounted it, registered it as public and gave it
  * `Vary: Host`. `BRANDING_ENDPOINTS.manifest` and `brandingKeys.manifest` were
  * declared for it. Nothing called either, so the login page on a tenant's own
- * domain rendered FlowPilot's name — data with no reader, invisible to the
+ * domain rendered Servabo's name — data with no reader, invisible to the
  * compiler because an unused export is legal.
  *
  * It takes no organization id and must never take one. The tenant is the

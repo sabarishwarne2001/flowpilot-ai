@@ -128,7 +128,7 @@ export const runBrandColourSelfCheck = (): string[] => {
     foreground_color: null, color_scheme: "SYSTEM", logo_url: null, favicon_url: null,
     support_email: null, has_custom_branding: true, ...fields,
   });
-  expect("FlowPilot's own blue", hexToHslTriplet("#2463eb"), "221 83.3% 53.1%");
+  expect("Servabo's own blue", hexToHslTriplet("#2463eb"), "221 83.3% 53.1%");
   expect("a grey has no hue", hexToHslTriplet("#808080"), "0 0% 50.2%");
   expect("a hue past 300 degrees", hexToHslTriplet("#ff00aa"), "320 100% 50%");
   expect("white text on a dark primary", readableTextOn("#0f766e"), WHITE);

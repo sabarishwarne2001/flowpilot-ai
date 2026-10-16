@@ -50,7 +50,7 @@ def digital_pdf(tmp_path_factory) -> pathlib.Path:
         surface.setFont("Helvetica", 12)
         for index, line in enumerate(
             [
-                "FLOWPILOT SERVICES INVOICE",
+                "SERVABO SERVICES INVOICE",
                 "Invoice number: FP-2026-00417",
                 "Vendor: Northwind Analytics Ltd",
                 "Total amount due: EUR 4,200.00",
@@ -69,7 +69,7 @@ def digital_pdf(tmp_path_factory) -> pathlib.Path:
 def _minimal_pdf() -> bytes:
     """A hand-rolled single-page PDF with a real text layer."""
     content = (
-        b"BT /F1 12 Tf 72 760 Td (FLOWPILOT SERVICES INVOICE) Tj "
+        b"BT /F1 12 Tf 72 760 Td (SERVABO SERVICES INVOICE) Tj "
         b"0 -24 Td (Invoice number: FP-2026-00417) Tj "
         b"0 -24 Td (Total amount due: EUR 4,200.00) Tj ET"
     )
@@ -113,7 +113,7 @@ def test_digital_page_yields_boxed_blocks(digital_pdf):
     assert page is not None, "a text-layer PDF must not fall through to OCR"
     assert page.blocks, "F7: digital pages used to arrive with blocks=[]"
     assert page.boxed_block_count == len(page.blocks)
-    assert "FLOWPILOT" in page.text
+    assert "SERVABO" in page.text
 
 
 def test_page_text_is_the_join_of_block_texts(digital_pdf):
@@ -226,7 +226,7 @@ def test_extract_page_returns_none_for_a_scanned_page(tmp_path):
     blank = tmp_path / "blank.pdf"
     raw = (
         _minimal_pdf()
-        .replace(b"FLOWPILOT SERVICES INVOICE", b" ")
+        .replace(b"SERVABO SERVICES INVOICE", b" ")
         .replace(b"Invoice number: FP-2026-00417", b" ")
         .replace(b"Total amount due: EUR 4,200.00", b" ")
     )

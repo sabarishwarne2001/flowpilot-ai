@@ -16,7 +16,7 @@ catalog). Nothing here is fetched at run time.
 | `common/XAdES01903v132-201601.xsd`, `common/XAdES01903v141-201601.xsd` | ETSI XAdES schemas, from `phax/ph-xsds` (`ph-xsds-xades132`, `ph-xsds-xades141`) | ETSI; redistributed by ph-xsds under Apache-2.0 headers |
 
 The signature and XAdES modules are only compiled because UBL's extension
-content imports them; FlowPilot never writes a UBL extension or signature.
+content imports them; Servabo never writes a UBL extension or signature.
 
 ## `ooxml/` — ECMA-376 Office Open XML (SpreadsheetML and OPC)
 
@@ -30,19 +30,19 @@ Used by `verify_arch47` to validate every XLSX golden file part by part.
 
 * **ASC X12 (810, 850, 856, 997).** The X12 standards are licensed by ASC X12;
   no schema is freely published. `formats/x12.py` encodes the 004010 segments
-  FlowPilot writes (element ids, minimum and maximum lengths, data types,
+  Servabo writes (element ids, minimum and maximum lengths, data types,
   mandatory elements, code values and segment order) from public
   implementation guides, and its validator re-parses every file with an
   independent reader (envelope arithmetic: ISA width 106, GS/GE and ST/SE
   counts and control numbers).
 * **Tally Prime XML.** Tally publishes a documented XML import format but no
-  schema. `tally/tally-voucher-import.xsd` is FlowPilot's own XSD of that
+  schema. `tally/tally-voucher-import.xsd` is Servabo's own XSD of that
   documented structure (written for this milestone, not Tally's), and the
   validator adds Tally's accounting rules (entry amounts sum to zero;
   ISDEEMEDPOSITIVE agrees with the sign).
 * **REST / OData presets.** QuickBooks Online, Zoho Books, Business Central,
   S/4HANA and NetSuite publish API references, not machine schemas that can be
   vendored here; `formats/jsonapi.py` carries JSON Schemas transcribed from
-  those references for the request bodies FlowPilot sends. Verified against the
+  those references for the request bodies Servabo sends. Verified against the
   transcriptions and mock servers, never against a live ERP (that needs each
   customer's sandbox).

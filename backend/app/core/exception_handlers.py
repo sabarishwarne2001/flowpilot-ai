@@ -1,5 +1,5 @@
 """
-Global domain exception translation for FlowPilot AI.
+Global domain exception translation for Servabo.
 """
 
 from __future__ import annotations

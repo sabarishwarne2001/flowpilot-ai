@@ -2,7 +2,7 @@ import React, { useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
 /**
- * HM-S1:confirm-dialog — FlowPilot's modal confirmation.
+ * HM-S1:confirm-dialog — Servabo's modal confirmation.
  *
  * Every existing caller keeps working (the props are a superset). What changed
  * is behaviour a dialog owes its reader: it is announced as an alert dialog,

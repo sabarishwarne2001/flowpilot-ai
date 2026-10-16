@@ -29,7 +29,7 @@ from app.models.webhook_delivery import WebhookDelivery
 from app.services import webhook_dispatch
 from tests.engines.conftest import Engines
 
-URL = "https://hooks.acme.example.com/flowpilot"
+URL = "https://hooks.acme.example.com/servabo"
 
 
 @dataclass

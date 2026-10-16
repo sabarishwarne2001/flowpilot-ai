@@ -146,7 +146,7 @@ class StripeInvoiceSnapshot:
 
 @dataclass(frozen=True)
 class StripeInvoiceItemDraft:
-    """One line FlowPilot adds to a customer's Stripe invoice (campaign session 4, F-339)."""
+    """One line Servabo adds to a customer's Stripe invoice (campaign session 4, F-339)."""
 
     key: str
     amount_cents: int
@@ -989,7 +989,7 @@ class StripeGateway:
             params["return_url"] = return_url
         if subscription_update is not None:
             # Campaign session 4 (F-344). The portal opens on the confirmation of the plan and seats
-            # the customer picked in FlowPilot, prorated, instead of on its home page where the pick
+            # the customer picked in Servabo, prorated, instead of on its home page where the pick
             # was lost. Stripe changes one item of the subscription: its licensed (seat) item.
             item_id = self._primary_item_id(subscription_update.subscription_id)
             if item_id is None:

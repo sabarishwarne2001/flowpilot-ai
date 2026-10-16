@@ -1,5 +1,5 @@
 /**
- * Organization invitation API service for FlowPilot AI.
+ * Organization invitation API service for Servabo.
  */
 
 import apiClient from "@/services/api/client";

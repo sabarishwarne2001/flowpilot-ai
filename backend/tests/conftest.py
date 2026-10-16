@@ -1,6 +1,6 @@
 """
-Test fixtures for the FlowPilot AI tenant isolation suite.
-Fully isolated in a dedicated test database (flowpilot_test).
+Test fixtures for the Servabo tenant isolation suite.
+Fully isolated in a dedicated test database (servabo_test).
 Never connects to or truncates the development database.
 """
 
@@ -26,7 +26,7 @@ from app.core.config import settings
 
 # Construct dedicated test database URL
 BASE_URL = str(settings.SQLALCHEMY_DATABASE_URI if hasattr(settings, "SQLALCHEMY_DATABASE_URI") else settings.sqlalchemy_database_uri)
-TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "flowpilot_test")
+TEST_DB_NAME = os.environ.get("TEST_DB_NAME", "servabo_test")
 TEST_DB_URL = BASE_URL.rsplit("/", 1)[0] + f"/{TEST_DB_NAME}"
 
 test_engine = create_engine(TEST_DB_URL, poolclass=NullPool)

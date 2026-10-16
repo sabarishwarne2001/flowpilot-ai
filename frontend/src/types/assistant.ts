@@ -1,6 +1,6 @@
 /**
  * AI Assistant and Conversational Memory Data Transfer Objects (DTOs)
- * for FlowPilot AI.
+ * for Servabo.
  *
  * Defines immutable TypeScript contracts shared between the frontend
  * and backend while preparing the application for streaming responses,

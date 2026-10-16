@@ -1,5 +1,5 @@
 /**
- * Global formatting utilities for FlowPilot AI.
+ * Global formatting utilities for Servabo.
  *
  * Contains pure, reusable helper functions for presenting
  * data consistently across the application.

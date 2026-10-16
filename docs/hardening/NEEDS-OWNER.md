@@ -1,5 +1,7 @@
 # Decisions only the owner can make
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 Each item says what the choice is, why it matters, and what the campaign does
 until you decide. Nothing here blocks work: the campaign continues with other
 items.

@@ -1,7 +1,7 @@
 """The sign-in policy offers only controls that do something (campaign session 3).
 
 `idp_session_sync` was stored, returned and editable, and read by nothing: signed single logout
-from the identity provider always ends that person's FlowPilot sessions (F-205), whatever the
+from the identity provider always ends that person's Servabo sessions (F-205), whatever the
 flag said, and the identity console carried a comment admitting it. A switch that changes nothing
 is removed (decided in NEEDS-OWNER.md: honouring the provider's logout is not optional). Unknown
 fields are refused (422) rather than silently ignored, so a client still sending it learns.

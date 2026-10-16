@@ -1,5 +1,5 @@
 """
-Redis client connection factory for FlowPilot AI (ARCH-08 §B.5).
+Redis client connection factory for Servabo (ARCH-08 §B.5).
 """
 
 from __future__ import annotations

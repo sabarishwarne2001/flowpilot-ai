@@ -12,9 +12,9 @@ import { AUTH_MUTED_LINK } from "./authStyles";
  * Chrome for every page before sign-in: the form on an elevated card on the
  * left, the product on the right (desktop only).
  *
- * On a verified tenant custom domain with branding enabled, the FlowPilot
+ * On a verified tenant custom domain with branding enabled, the Servabo
  * marketing pane is replaced with the tenant's name and, when set, their
- * support address. A white-labelled login that still advertises FlowPilot
+ * support address. A white-labelled login that still advertises Servabo
  * beside the tenant's logo tells the tenant's employees which vendor they are
  * typing their password into — which is the thing white-label is sold to hide.
  *
@@ -29,7 +29,7 @@ import { AUTH_MUTED_LINK } from "./authStyles";
 export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ children }) => {
   const manifest = usePublicBrandingManifest({ enabled: true });
   const custom = manifest?.has_custom_branding ? manifest : null;
-  const brandLabel = custom?.brand_name ?? "FlowPilot AI";
+  const brandLabel = custom?.brand_name ?? "Servabo";
   const year = new Date().getFullYear();
   const scheme = custom?.color_scheme ?? "SYSTEM";
 
@@ -84,7 +84,7 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
 
         <footer className="relative z-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
           {/* Campaign session 4: pricing, terms and privacy, on the platform's own address only.
-              On a white-labelled domain FlowPilot's pages would name the vendor the tenant hides. */}
+              On a white-labelled domain Servabo's pages would name the vendor the tenant hides. */}
           {custom ? null : (
             <nav aria-label="Pricing and legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
               {PUBLIC_PAGE_LINKS.map((link) => (

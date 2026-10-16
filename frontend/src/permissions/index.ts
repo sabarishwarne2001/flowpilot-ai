@@ -1,5 +1,5 @@
 /**
- * Permission surface for the FlowPilot AI frontend.
+ * Permission surface for the Servabo frontend.
  *
  * Namespaced rather than flattened, deliberately. Several names exist at both
  * tiers with genuinely different meanings — `precedence` is an administrative

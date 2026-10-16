@@ -104,7 +104,7 @@ def _assert_model_available(db: Session, *, organization_id, settings_in: AISett
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail=(
-                f"{settings_in.model} is not a model FlowPilot offers on "
+                f"{settings_in.model} is not a model Servabo offers on "
                 f"{_PROVIDER_LABELS.get(provider, provider)}. Choose one of: {', '.join(listed)}."
             ),
         )
@@ -115,7 +115,7 @@ def _assert_model_available(db: Session, *, organization_id, settings_in: AISett
         raise OwnKeyRequiredError(
             f"{settings_in.model} runs on your organization's own {label} key, which has not been added. "
             f"An organization admin can add one under Organization settings, AI provider keys; until then "
-            f"choose GPT-OSS 20B or GPT-OSS 120B, which FlowPilot runs within your plan.",
+            f"choose GPT-OSS 20B or GPT-OSS 120B, which Servabo runs within your plan.",
             details={"provider": provider, "model": settings_in.model, "remedy": "ADD_PROVIDER_KEY"},
         )
 

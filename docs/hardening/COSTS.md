@@ -1,4 +1,4 @@
-# What FlowPilot costs to run (campaign session 4, §C.9)
+# What Servabo costs to run (campaign session 4, §C.9)
 
 Plain numbers for the first customers. Prices of other companies change: the ones marked
 *approximate* were not checked live from this sandbox, so look them up before you buy. Everything
@@ -7,7 +7,7 @@ in campaign session 4.
 
 ## 1. The smallest server
 
-FlowPilot runs as one Docker Compose stack on one server (RUNBOOK §9): the web API, seven worker
+Servabo runs as one Docker Compose stack on one server (RUNBOOK §9): the web API, seven worker
 processes, PostgreSQL with pgvector, Redis, the reranker and Caddy. OCR (PaddleOCR) and the
 embedding model (SentenceTransformers) run **on the server**, so no per-page OCR bill arrives from
 anyone; they cost CPU time and memory instead.
@@ -28,7 +28,7 @@ grow while documents are processed; the reranker loads its model once (cap 2 GB)
 is tight: a batch of scanned uploads would push the OCR worker and the database into swap.
 Approximate prices for that size: Hetzner Cloud about €25–35 a month, DigitalOcean or Linode about
 $80–100 a month. Add the provider's snapshot or backup option (about 20% of the server price) as a
-second copy next to FlowPilot's own encrypted backups (RUNBOOK §9.4).
+second copy next to Servabo's own encrypted backups (RUNBOOK §9.4).
 
 **When to grow:** when uploads queue for more than a few minutes in Platform admin → Background
 jobs, give the OCR worker more CPU first (OCR is the slowest step: about 1–3 seconds a page on one
@@ -38,7 +38,7 @@ vCPU), then move PostgreSQL to a managed database.
 
 | Item | What for | Approximate cost |
 |---|---|---|
-| Domain name | `flowpilot.ai` (N-028) | $15–80 a year, depending on the extension |
+| Domain name | `servabo.app` (N-028) | $15–80 a year, depending on the extension |
 | Postmark | verification, invitation, trial, billing and alert emails (N-027) | free test tier; about $15 a month for 10,000 emails |
 | Object storage (Cloudflare R2, Backblaze B2 or S3) | uploaded documents, and an off-server copy of backups | R2: about $0.015 per GB-month, the first 10 GB free; a few dollars a month at first |
 | Healthchecks.io | heartbeats and the alert email when a job or the site stops (RUNBOOK §9.6) | free for up to 20 checks |
@@ -49,7 +49,7 @@ vCPU), then move PostgreSQL to a managed database.
 
 ## 3. What one document costs
 
-The plans include the two models FlowPilot serves on its own Groq key (N-054). The price book
+The plans include the two models Servabo serves on its own Groq key (N-054). The price book
 (`backend/scripts/seed_price_book.py`) holds the supplier's list prices (checked 2026-10-11):
 
 | Model (Groq) | Input, per million tokens | Output, per million tokens |
@@ -70,7 +70,7 @@ OCR pages, embeddings and storage cost the server's CPU and disk, not a per-unit
 book still charges them on paid plans' overage at several times that cost.
 
 Customers on Gemini or Qwen models use **their own provider key** (BYOK): they pay the provider, and
-FlowPilot pays nothing for those tokens (N-048, N-054).
+Servabo pays nothing for those tokens (N-048, N-054).
 
 ## 4. The worst case for one Free user
 
@@ -79,7 +79,7 @@ allowances, which are **shared by every Free organization the same person owns**
 (`quota_service.usage_pool`), so making more organizations does not multiply them. After the week,
 the organization is read-only: nothing more is processed until it subscribes.
 
-| Free allowance (per month, refused at the limit) | Worst-case cost to FlowPilot |
+| Free allowance (per month, refused at the limit) | Worst-case cost to Servabo |
 |---|---|
 | 300,000 input tokens on GPT-OSS 120B | $0.045 |
 | 60,000 output tokens on GPT-OSS 120B | $0.036 |

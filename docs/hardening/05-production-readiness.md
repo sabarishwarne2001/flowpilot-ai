@@ -1,5 +1,7 @@
 # Phase 5 — Production readiness: every open finding worked
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Branch `claude/blissful-goldberg-hsqxy1` (the branch this cloud session may push to; N-001 default:
 the PR title names the intended `hardening/phase-5-production-readiness`). Written 2026-10-06._
 

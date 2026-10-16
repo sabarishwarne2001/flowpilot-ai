@@ -1,4 +1,4 @@
-"""Principal attribution abstraction for FlowPilot AI (ARCH-08 §B.1, extended by ARCH-09 §B.10).
+"""Principal attribution abstraction for Servabo (ARCH-08 §B.1, extended by ARCH-09 §B.10).
 
 Represents the authenticated identity behind a unit of work (Human User, API Key, or System Background Worker).
 """
@@ -168,7 +168,7 @@ class Principal:
 
 
 _principal_var: ContextVar[Optional[Principal]] = ContextVar(
-    "flowpilot_principal", default=None
+    "servabo_principal", default=None
 )
 
 

@@ -65,7 +65,7 @@ class IdpConfigCreate(BaseModel):
         if v == "OWNER":
             raise ValueError(
                 "An identity provider cannot grant OWNER. Ownership transfer is "
-                "an explicit, audited action in FlowPilot."
+                "an explicit, audited action in Servabo."
             )
         return v
 

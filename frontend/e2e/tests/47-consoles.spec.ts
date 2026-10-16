@@ -176,7 +176,7 @@ test.describe("Sovereign console (F-317)", () => {
 test.describe("Partner portal (session 3)", () => {
   test.use({ user: "A.owner" });
 
-  // The portal and its nav item had no browser test, and a partner FlowPilot suspended saw every
+  // The portal and its nav item had no browser test, and a partner Servabo suspended saw every
   // control as usual and learned it was read-only only from refusals.
   test("a partner owner reaches the portal from the sidebar; suspended, it reads but changes nothing", async ({ page, session }) => {
     const operator = await loginAs("P.superadmin");

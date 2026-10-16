@@ -94,7 +94,7 @@ def process_revision_directives(context_, revision, directives) -> None:
 
 def _get_target_url() -> str:
     ini_url = config.get_main_option("sqlalchemy.url")
-    # If ini_url is set by test suite (postgresql://...flowpilot_test), use it
+    # If ini_url is set by test suite (postgresql://...servabo_test), use it
     if ini_url and not ini_url.startswith("driver://") and ini_url.strip() != "":
         return ini_url
     return str(settings.SQLALCHEMY_DATABASE_URI if hasattr(settings, "SQLALCHEMY_DATABASE_URI") else settings.sqlalchemy_database_uri)

@@ -1,5 +1,5 @@
 """
-SMTP Connection Configuration Utilities for FlowPilot AI.
+SMTP Connection Configuration Utilities for Servabo.
 
 ARCH40-S1:smtp-delegates. `resolve_smtp_config` is now a thin read-through onto
 `app.services.email_resolution.resolve_email_identity`, which is the single

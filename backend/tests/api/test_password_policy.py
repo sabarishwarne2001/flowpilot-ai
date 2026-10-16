@@ -18,7 +18,7 @@ from app.services import auth_token_service
 from app.models.auth_token import AuthTokenPurpose
 
 STRONG = "maple-orbit-quietly-lantern"
-WEAK = ("Password123!", "qwertyuiop12", "flowpilot2026", "iloveyou12345")
+WEAK = ("Password123!", "qwertyuiop12", "servabo2026", "iloveyou12345")
 
 
 @pytest.fixture(autouse=True)

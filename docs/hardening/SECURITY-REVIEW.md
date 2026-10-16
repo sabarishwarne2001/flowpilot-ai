@@ -1,4 +1,4 @@
-# FlowPilot AI — security review (pre-launch campaign, session 3)
+# Servabo — security review (pre-launch campaign, session 3)
 
 _Date: 2026-10-12. Scope: the whole product as it stands on branch `claude/determined-planck-e5ftrx`
 (pull request #22). Standard: OWASP ASVS 4.0 Level 2, plus the multi-tenant checks a B2B SaaS
@@ -6,7 +6,7 @@ buyer's security questionnaire asks for._
 
 ## In plain words
 
-FlowPilot was attacked the way a customer's security team, a curious member or a hostile tenant
+Servabo was attacked the way a customer's security team, a curious member or a hostile tenant
 would: reading another organization's data by swapping IDs, climbing from a low role to a high one,
 using API keys and directory tokens where they should not work, pointing integrations at the
 platform's own network, uploading files that carry script, injecting markup into emails, forging

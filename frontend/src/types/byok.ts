@@ -192,11 +192,11 @@ export const TASK_ORDER: readonly BYOKTaskType[] = [
 
 export const DOWNGRADE_EXPLANATIONS: Record<string, string> = {
   no_tenant_credential_configured:
-    "No key is stored for this provider, so this task runs on the FlowPilot account.",
+    "No key is stored for this provider, so this task runs on the Servabo account.",
   tenant_credential_last_validation_failed:
-    "The stored key failed its last test, so this task runs on the FlowPilot account until it is fixed.",
+    "The stored key failed its last test, so this task runs on the Servabo account until it is fixed.",
   route_rule_requests_platform_key:
-    "This rule is set to use the FlowPilot account by design.",
+    "This rule is set to use the Servabo account by design.",
   route_rule_disabled: "This rule is switched off.",
   no_route_rule_configured: "No rule is set; the workspace default applies.",
 };
@@ -210,7 +210,7 @@ export const explainDowngrade = (reason: string | null): string | null => {
     return known;
   }
   if (reason.startsWith("provider_unroutable")) {
-    return "This provider cannot run on a tenant key in this release, so the task runs on the FlowPilot account.";
+    return "This provider cannot run on a tenant key in this release, so the task runs on the Servabo account.";
   }
   return reason;
 };

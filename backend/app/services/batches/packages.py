@@ -12,9 +12,9 @@ LAYOUT (every path under one folder named after the package)
 
 WHY THREE LAYERS OF CHECKSUM
 
-`SHA256SUMS` lets anyone check the files with standard tools and no FlowPilot account. It is not
+`SHA256SUMS` lets anyone check the files with standard tools and no Servabo account. It is not
 enough on its own: someone who edits a file can regenerate it. So the manifest's own SHA-256 is
-recorded in FlowPilot when the package is built (and printed in README.txt): verification in the
+recorded in Servabo when the package is built (and printed in README.txt): verification in the
 app compares the package's manifest with that record, which an editor of the zip cannot change.
 And each original file is checked against the SHA-256 recorded when it was uploaded, so the
 package proves the file is the one that was received, not just the one that was exported.
@@ -224,7 +224,7 @@ def _csv_bytes(records: list[dict[str, Any]]) -> bytes:
 
 def _readme(package: ExportPackage, manifest_sha256: str, documents: int, files: int, workspace: str) -> bytes:
     lines = [
-        "FLOWPILOT AI EXPORT PACKAGE",
+        "SERVABO AI EXPORT PACKAGE",
         "===========================",
         "",
         f"Package:        {package.name}",
@@ -238,7 +238,7 @@ def _readme(package: ExportPackage, manifest_sha256: str, documents: int, files:
         "---------",
         f"manifest.json SHA-256: {manifest_sha256}",
         "",
-        "FlowPilot recorded this manifest SHA-256 when it built the package. If the package is",
+        "Servabo recorded this manifest SHA-256 when it built the package. If the package is",
         "changed and SHA256SUMS regenerated to match, the manifest no longer has this digest.",
         "",
         "To check every file with standard tools, from inside this folder:",
@@ -246,10 +246,10 @@ def _readme(package: ExportPackage, manifest_sha256: str, documents: int, files:
         "  macOS:    shasum -a 256 -c SHA256SUMS",
         "  Windows:  Get-FileHash -Algorithm SHA256 <file>   (compare with SHA256SUMS)",
         "",
-        "To check it against FlowPilot's record: Batch operations -> Verify a package, and upload",
+        "To check it against Servabo's record: Batch operations -> Verify a package, and upload",
         "this zip unchanged.",
         "",
-        "Each original file under files/ is also checked against the SHA-256 FlowPilot recorded when",
+        "Each original file under files/ is also checked against the SHA-256 Servabo recorded when",
         "it was uploaded (manifest.json, documents[].source_sha256 and source_verified).",
         "",
     ]
@@ -482,7 +482,7 @@ _UNREADABLE_ENTRY: tuple[type[BaseException], ...] = (
 
 
 def _manifest_shape_ok(manifest: Any) -> bool:
-    """The fields verify reads have the types FlowPilot writes (F-407): valid JSON of another
+    """The fields verify reads have the types Servabo writes (F-407): valid JSON of another
     shape is not a package, not a server error."""
     if not isinstance(manifest, dict):
         return False
@@ -502,7 +502,7 @@ def _manifest_shape_ok(manifest: Any) -> bool:
     )
 
 def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[str, Any]:
-    """Check an uploaded package against its own checksums and against FlowPilot's record of it."""
+    """Check an uploaded package against its own checksums and against Servabo's record of it."""
     handle.seek(0)
     archive_digest = hashlib.sha256()
     for chunk in iter(lambda: handle.read(_CHUNK), b""):
@@ -525,13 +525,13 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
         names = {i.filename for i in infos}
         manifest_names = sorted(n for n in names if n == "manifest.json" or n.endswith("/manifest.json"))
         if not manifest_names:
-            return {**invalid, "message": "This is not a FlowPilot export package: it has no manifest.json."}
+            return {**invalid, "message": "This is not a Servabo export package: it has no manifest.json."}
         manifest_name = min(manifest_names, key=len)
         root = manifest_name[: -len("manifest.json")]
         sums_name = f"{root}SHA256SUMS"
         if sums_name not in names:
-            return {**invalid, "message": "This is not a FlowPilot export package: it has no SHA256SUMS."}
-        too_large = {**invalid, "message": "The package's manifest or SHA256SUMS is too large to be a FlowPilot package."}
+            return {**invalid, "message": "This is not a Servabo export package: it has no SHA256SUMS."}
+        too_large = {**invalid, "message": "The package's manifest or SHA256SUMS is too large to be a Servabo package."}
         if max(archive.getinfo(manifest_name).file_size, archive.getinfo(sums_name).file_size) > v.VERIFY_MAX_MANIFEST_BYTES:
             return too_large
 
@@ -552,9 +552,9 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
         except _UNREADABLE_ENTRY + (ValueError, UnicodeDecodeError, KeyError):
             return {**invalid, "message": "The package's manifest or SHA256SUMS cannot be read."}
         if not _manifest_shape_ok(manifest):
-            return {**invalid, "message": "This is not a FlowPilot export package (its manifest is malformed)."}
+            return {**invalid, "message": "This is not a Servabo export package (its manifest is malformed)."}
         if manifest.get("format") != v.PACKAGE_FORMAT:
-            return {**invalid, "message": "This is not a FlowPilot export package (unknown format)."}
+            return {**invalid, "message": "This is not a Servabo export package (unknown format)."}
 
         checks: list[FileCheck] = []
         relative = {n[len(root):]: n for n in names if n.startswith(root) and n != sums_name}
@@ -601,14 +601,14 @@ def verify(db: Session, *, workspace_id: uuid.UUID, handle: BinaryIO) -> dict[st
     else:
         verdict = "VERIFIED"
     messages = {
-        "VERIFIED": "Every file matches, and the manifest is the one FlowPilot issued.",
-        "TAMPERED": "This package was changed after FlowPilot issued it.",
+        "VERIFIED": "Every file matches, and the manifest is the one Servabo issued.",
+        "TAMPERED": "This package was changed after Servabo issued it.",
         "UNRECOGNISED": "The files match their checksums, but this workspace never issued this package.",
     }
     return {
         "verdict": verdict,
         "message": messages[verdict] if not (verdict == "TAMPERED" and not problems) else
-        "The files match a regenerated SHA256SUMS, but the manifest is not the one FlowPilot issued.",
+        "The files match a regenerated SHA256SUMS, but the manifest is not the one Servabo issued.",
         "package_id": str(package_id) if package_id else None,
         "package_name": manifest.get("name"),
         "issued_at": manifest.get("created_at"),

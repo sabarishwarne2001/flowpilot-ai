@@ -138,7 +138,7 @@ export const LegalHoldsPanel: React.FC<LegalHoldsPanelProps> = ({ workspaceId, c
               value={reason}
               onChange={(event) => setReason(event.target.value)}
               maxLength={255}
-              placeholder="e.g. Litigation hold — Acme v. FlowPilot"
+              placeholder="e.g. Litigation hold — Acme v. Servabo"
               className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-1.5 text-sm focus:border-primary focus:outline-none"
             />
           </div>

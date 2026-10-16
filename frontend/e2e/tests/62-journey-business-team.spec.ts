@@ -7,8 +7,8 @@
  * removed and loses access at once.
  *
  * Stood in: the payment gateway's side of the seat change (`backend/scripts/e2e_stand_in.py` sets
- * the quantity as Stripe would and FlowPilot records it through its reconcile code); the page then
- * shows FlowPilot's own answer.
+ * the quantity as Stripe would and Servabo records it through its reconcile code); the page then
+ * shows Servabo's own answer.
  */
 import fs from "node:fs";
 import path from "node:path";

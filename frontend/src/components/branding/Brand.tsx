@@ -81,7 +81,7 @@ function BrandSkeleton({ variant }: { variant: BrandVariant }) {
  *    verified tenant custom domain. The host-resolved public manifest supplies
  *    the brand name and an UNAUTHENTICATED logo URL. This is what makes
  *    `ai.acme.com/login` say Acme before anyone has signed in.
- * 3. Neither: FlowPilot defaults.
+ * 3. Neither: Servabo defaults.
  *
  * ARCH-29 finding Issue 5 established why (2) could not be done in this
  * component alone: pre-auth there is no tenant to read and no session to fetch
@@ -108,10 +108,10 @@ export const Brand: React.FC<BrandProps> = ({
     tenant === null && manifest?.has_custom_branding ? manifest : null;
 
   const workspaceName =
-    tenant?.workspace.workspace_name ?? publicBrand?.brand_name ?? "FlowPilot AI";
+    tenant?.workspace.workspace_name ?? publicBrand?.brand_name ?? "Servabo";
   const companyName =
     tenant?.organization.organization_name ??
-    (publicBrand ? "Secure sign-in" : "AI Document Intelligence");
+    (publicBrand ? "Secure sign-in" : "The AI back office");
 
   const logoPath = tenant?.workspace.company_logo_url ?? null;
   const authenticatedLogo = useAuthenticatedImage(logoPath);

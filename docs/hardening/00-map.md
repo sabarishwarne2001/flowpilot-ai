@@ -1,5 +1,7 @@
 # 00 — System map, risk ranking and repo hygiene (Phase 0)
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 Everything here comes from **reading the code** on commit `1a959a1`. Nothing
 was run, so nothing here counts as verified. The ledger
 (`COVERAGE.csv`, 1,306 rows) starts with every row `untested`.

@@ -1,5 +1,5 @@
 """
-Email Notification Provider for FlowPilot AI.
+Email Notification Provider for Servabo.
 
 Acts as a lightweight adapter between the notification framework and
 EmailService. All SMTP communication is delegated to EmailService.

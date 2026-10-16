@@ -1,5 +1,5 @@
 """
-Tenant isolation gate for FlowPilot AI.
+Tenant isolation gate for Servabo.
 
 Asserts the failure table from ARCH-01 section B.5 across every tenant-scoped
 route. This is a permanent CI gate, not a one-off verification: it must pass

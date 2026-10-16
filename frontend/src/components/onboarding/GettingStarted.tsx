@@ -2,7 +2,7 @@
  * The workspace's first-run checklist (campaign session 4, §A.4).
  *
  * A new customer should reach a useful result within minutes: add a document (or try the built-in
- * sample invoice, an ordinary upload made by the server), see what FlowPilot read from it, ask the
+ * sample invoice, an ordinary upload made by the server), see what Servabo read from it, ask the
  * assistant about it, and bring a colleague in. Each step ticks itself from the workspace's real
  * state, so the card is never out of step with what has been done; it disappears when all are done
  * or when the person hides it (remembered in this browser only).
@@ -72,7 +72,7 @@ export const GettingStarted: React.FC<GettingStartedProps> = ({
   const sample = useMutation({
     mutationFn: () => workItemApi.uploadSampleDocument(workspaceId),
     onSuccess: async () => {
-      toast.success("Sample invoice added. FlowPilot is reading it now; it takes about a minute.");
+      toast.success("Sample invoice added. Servabo is reading it now; it takes about a minute.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: dashboardKeys.all(workspaceId) }),
         queryClient.invalidateQueries({ queryKey: workItemKeys.all(workspaceId) }),
@@ -86,7 +86,7 @@ export const GettingStarted: React.FC<GettingStartedProps> = ({
   const firstProcessed = processed.data?.items[0];
   const steps = [
     { key: "upload", done: totalDocuments > 0, title: "Add your first document" },
-    { key: "read", done: Boolean(firstProcessed), title: "See what FlowPilot read from it" },
+    { key: "read", done: Boolean(firstProcessed), title: "See what Servabo read from it" },
     { key: "ask", done: (conversations.data?.length ?? 0) > 0, title: "Ask the assistant about it" },
     ...(canInvite
       ? [{ key: "invite", done: (members.data?.seats_consumed ?? members.data?.total ?? 0) > 1, title: "Invite a colleague" }]
@@ -157,7 +157,7 @@ export const GettingStarted: React.FC<GettingStartedProps> = ({
         <div>
           <h2 id="getting-started" className="flex items-center gap-2 text-[15px] font-semibold tracking-tight">
             <Sparkles className="h-4 w-4 text-primary" aria-hidden />
-            Get started with FlowPilot
+            Get started with Servabo
           </h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {doneCount} of {steps.length} done. Each step ticks itself when you have done it.

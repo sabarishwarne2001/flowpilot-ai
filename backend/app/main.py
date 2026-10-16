@@ -1,5 +1,5 @@
 """
-Main entrypoint for the FlowPilot AI Backend API.
+Main entrypoint for the Servabo Backend API.
 """
 
 import logging
@@ -121,7 +121,7 @@ def assert_public_route_registry(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting FlowPilot AI Backend Core...")
+    logger.info("Starting Servabo Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
     legacy_names.warn_once(logger)
     logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
@@ -167,7 +167,7 @@ async def lifespan(app: FastAPI):
     except Exception:  # noqa: BLE001
         logger.exception("SLO shutdown flush failed; observations discarded.")
 
-    logger.info("Stopping FlowPilot AI Backend Core...")
+    logger.info("Stopping Servabo Backend Core...")
 
 
 # F-046. Swagger UI, ReDoc and the OpenAPI schema list every route and the exact shape of
@@ -192,7 +192,7 @@ class ServaboAPI(FastAPI):
 app = ServaboAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
-    description="Backend API for FlowPilot AI",
+    description="Backend API for Servabo",
     openapi_url=f"{settings.API_V1_STR}/openapi.json" if _serve_api_docs else None,
     docs_url="/docs" if _serve_api_docs else None,
     redoc_url="/redoc" if _serve_api_docs else None,
@@ -219,7 +219,7 @@ else:
 #
 # That ordering is deliberate in both directions. Host resolution runs
 # INSIDE the rate limiters so that sweeping the vanity namespace to
-# discover which hostnames belong to FlowPilot customers is rate-limited
+# discover which hostnames belong to Servabo customers is rate-limited
 # like any other probe. It runs INSIDE RequestTrace so that every refusal
 # carries a request id and lands in the same log stream as everything
 # else, because an unmatched Host is the first thing anyone will look for

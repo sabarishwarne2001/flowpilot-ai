@@ -37,7 +37,7 @@ from app.templates.emails.organization_invitation import (
     render_organization_invitation,
 )
 
-BRAND = "FlowPilot AI"
+BRAND = "Servabo"
 EXPIRES = datetime.now(timezone.utc) + timedelta(hours=72)
 LINK = "https://app.example.com/invitations/accept#token=abc123"
 MEMBERS = "https://app.example.com/members"

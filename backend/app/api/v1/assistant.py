@@ -1,5 +1,5 @@
 """
-AI Assistant API router for FlowPilot AI.
+AI Assistant API router for Servabo.
 """
 
 from __future__ import annotations

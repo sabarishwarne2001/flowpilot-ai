@@ -20,8 +20,8 @@ def driver(request, tmp_path):
 
     with moto.mock_aws():
         client = boto3.client("s3", region_name="us-east-1")
-        client.create_bucket(Bucket="flowpilot-test")
-        yield S3StorageDriver(bucket="flowpilot-test", prefix="test", client=client)
+        client.create_bucket(Bucket="servabo-test")
+        yield S3StorageDriver(bucket="servabo-test", prefix="test", client=client)
 
 
 class TestKeyGrammar:

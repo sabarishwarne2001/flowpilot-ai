@@ -1,5 +1,5 @@
 /**
- * Email verification landing page for FlowPilot AI.
+ * Email verification landing page for Servabo.
  *
  * The token arrives in the URL FRAGMENT, not the query string (ARCH-03 §B.9).
  * A fragment is never transmitted to any server, so the token cannot leak

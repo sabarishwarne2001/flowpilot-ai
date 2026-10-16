@@ -140,7 +140,7 @@ export default function MarketplaceCatalog() {
         icon={Store}
         eyebrow={state.status === "ready" ? state.organization.organization_name : undefined}
         title="Partner marketplace"
-        description="Signed automation workflows published by FlowPilot partners. Every manifest is cryptographically verified before it can be installed."
+        description="Signed automation workflows published by Servabo partners. Every manifest is cryptographically verified before it can be installed."
       />
       <PlanLockBanner capability={CAPABILITY.automations} feature="Automations" />
 

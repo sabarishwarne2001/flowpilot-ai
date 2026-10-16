@@ -76,7 +76,7 @@ export const PublicPageShell: React.FC<PublicPageShellProps> = ({ title, childre
 
       <footer className="border-t border-border/70">
         <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-6 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between sm:px-6 lg:px-8">
-          <span>© {year} FlowPilot AI</span>
+          <span>© {year} Servabo</span>
           <nav aria-label="Pricing and legal" className="flex flex-wrap items-center gap-x-1 gap-y-1">
             {PUBLIC_PAGE_LINKS.map((link) => (
               <Link key={link.to} to={link.to} className={NAV_LINK}>

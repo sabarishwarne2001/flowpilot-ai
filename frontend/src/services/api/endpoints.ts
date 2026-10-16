@@ -1,5 +1,5 @@
 /**
- * Centralized API path construction for FlowPilot AI.
+ * Centralized API path construction for Servabo.
  */
 
 const seg = (value: string): string => encodeURIComponent(value);

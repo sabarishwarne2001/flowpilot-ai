@@ -160,7 +160,7 @@ class SnowflakeCredential(_CredentialBase):
     )
     stage_bucket: str = Field(min_length=3, max_length=63)
     stage_region: str = Field(min_length=2, max_length=32)
-    stage_prefix: str = Field(default="flowpilot/", max_length=512)
+    stage_prefix: str = Field(default="servabo/", max_length=512)
     stage_endpoint_url: Optional[str] = Field(default=None, max_length=512)
 
     table_prefix: str = Field(
@@ -261,7 +261,7 @@ class BigQueryCredential(_CredentialBase):
     )
 
     table_prefix: str = Field(
-        default="flowpilot_",
+        default="servabo_",
         max_length=64,
         pattern=_IDENT,
         description="Prepended to the lowercased dataset name to form the "
@@ -333,7 +333,7 @@ class DatabricksCredential(_CredentialBase):
         "that is not on a volume it can see.",
     )
     table_prefix: str = Field(
-        default="flowpilot_", max_length=64, pattern=_IDENT
+        default="servabo_", max_length=64, pattern=_IDENT
     )
 
     access_token: str = Field(
@@ -362,7 +362,7 @@ class S3Credential(_CredentialBase):
     bucket: str = Field(min_length=3, max_length=63)
     region: str = Field(min_length=2, max_length=32)
     prefix: str = Field(
-        default="flowpilot/",
+        default="servabo/",
         max_length=512,
         description="Key prefix inside the tenant's bucket.",
     )

@@ -1,7 +1,7 @@
 """ARCH42-S1:sweep — the nightly re-resolution pass.
 
-Run by scripts/sweep_entities.py through deploy/bin/flowpilot-sweep
-(`entities`), scheduled in deploy/cron.d/flowpilot-sweepers. Per entitled
+Run by scripts/sweep_entities.py through deploy/bin/servabo-sweep
+(`entities`), scheduled in deploy/cron.d/servabo-sweepers. Per entitled
 workspace, in this order:
 
   1. RE-KEY identifiers written under an older key generation (decrypt the

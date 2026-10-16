@@ -1,7 +1,7 @@
 """ARCH49-S1:handler — the `process.sweep_workspace` job.
 
 Enqueued by scripts/sweep_process.py (every 15 minutes from
-deploy/cron.d/flowpilot-sweepers, one job per workspace per slot: the
+deploy/cron.d/servabo-sweepers, one job per workspace per slot: the
 idempotency key is the workspace and the slot). One workspace's sweep: the
 event log catches up, the SLA models are refitted (at most hourly) and their
 predictions written, and the exception agent retires, applies and plans

@@ -20,9 +20,9 @@ guard), and the comment written above it in the code.
 
 | Setting | Type | Default | In | Notes |
 |---|---|---|---|---|
-| `PROJECT_NAME` | `str` | `'FlowPilot AI'` | example |  |
+| `PROJECT_NAME` | `str` | `'Servabo'` | example |  |
 | `APP_VERSION` | `str` | `APP_VERSION` | example |  |
-| `API_TITLE` | `str` | `'FlowPilot AI Core API'` | example |  |
+| `API_TITLE` | `str` | `'Servabo Core API'` | example |  |
 | `ENVIRONMENT` | `str` | `'development'` | example, production, guard |  |
 | `API_V1_STR` | `str` | `'/api/v1'` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
@@ -30,7 +30,7 @@ guard), and the comment written above it in the code.
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `POSTGRES_USER` | `str` | `'postgres'` | example, production |  |
 | `POSTGRES_PASSWORD` | `str` | `'postgres'` | example, production, guard |  |
-| `POSTGRES_DB` | `str` | `'flowpilot'` | example, production |  |
+| `POSTGRES_DB` | `str` | `'servabo'` | example, production |  |
 | `POSTGRES_HOST` | `str` | `'localhost'` | example |  |
 | `POSTGRES_PORT` | `int` | `5432` | example |  |
 | `JWT_SECRET_KEY` | `SecretStr` | `required` | example, production, guard |  |
@@ -71,8 +71,8 @@ guard), and the comment written above it in the code.
 | `PLATFORM_SMTP_USERNAME` | `str` | `''` | example, production |  |
 | `PLATFORM_SMTP_PASSWORD` | `SecretStr \| None` | `None` | example, production |  |
 | `PLATFORM_SMTP_ENCRYPTION` | `str` | `'TLS'` | example, production |  |
-| `PLATFORM_SMTP_FROM_EMAIL` | `str` | `'noreply@flowpilot.ai'` | example, production |  |
-| `PLATFORM_SMTP_FROM_NAME` | `str` | `'FlowPilot AI'` | example, production |  |
+| `PLATFORM_SMTP_FROM_EMAIL` | `str` | `'noreply@servabo.app'` | example, production |  |
+| `PLATFORM_SMTP_FROM_NAME` | `str` | `'Servabo'` | example, production |  |
 | `OPERATOR_ALERT_EMAILS` | `str` | `''` | example, production, guard | Who is emailed (through the platform relay) about dead background jobs, gateway events that will never be applied, bursts of server errors and duplicate gateway subscriptions. Comma-separated addresses. Required in prod… |
 | `OPERATOR_ALERT_5XX_THRESHOLD` | `int` | `20` | production | Server errors (5xx answers, all API processes together) in five minutes that count as a burst worth an alert. |
 | `OPERATOR_ALERT_REPEAT_MINUTES` | `int` | `60` | production | The same alert is emailed again at most this often while it keeps happening. |
@@ -218,7 +218,7 @@ guard), and the comment written above it in the code.
 | `LLM_METERING_ENABLED` | `bool` | `True` | example, production, guard |  |
 | `LLM_REQUEST_DEADLINE_SECONDS` | `float` | `25.0` | — |  |
 | `AI_CONNECTION_TEST_DEADLINE_SECONDS` | `float` | `20.0` | — | HARDENING-T1:D1. Short and single-attempt: a connection test that takes the full extraction deadline reads to an admin as a hang. |
-| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts FlowPilot next to an internal relay lists that relay here (hostna… |
+| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts Servabo next to an internal relay lists that relay here (hostna… |
 | `SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT` | `bool` | `True` | — | Development only: local catchers (Mailpit, MailHog) run on localhost. |
 | `PIPELINE_STUCK_AFTER_MINUTES` | `int` | `90` | — | HARDENING-T1:D25. How long a document may sit in a working stage with no live job before the sweep fails it. Longer than the slowest legitimate OCR run plus retry backoff. |
 | `BILLING_PORTAL_ALLOW_LEGACY_GATEWAY` | `bool` | `False` | — | HARDENING-FINAL:billing-B. Off: the customer portal follows BILLING_GATEWAY strictly. On only during a planned gateway migration. |

@@ -1,5 +1,5 @@
 /**
- * Dashboard Data Transfer Objects (DTOs) for FlowPilot AI.
+ * Dashboard Data Transfer Objects (DTOs) for Servabo.
  *
  * These interfaces represent dashboard-specific analytics returned
  * by the backend. They intentionally remain independent from the

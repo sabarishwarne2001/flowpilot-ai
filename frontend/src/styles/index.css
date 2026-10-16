@@ -3,7 +3,7 @@
 @tailwind utilities;
 
 /*
- * FlowPilot design tokens.
+ * Servabo design tokens.
  *
  * Every surface in the app reads these through Tailwind's semantic colours
  * (bg-background, bg-card, border-border, text-muted-foreground, ...), so a

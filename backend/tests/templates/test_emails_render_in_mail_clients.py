@@ -45,22 +45,22 @@ def _grants() -> list:
 
 EMAILS = {
     "verify": lambda: render_verify_email(recipient_email="a@example.com", verify_link=LINK, expiry_str="24 hours",
-                                          brand_name="FlowPilot"),
+                                          brand_name="Servabo"),
     "reset": lambda: render_password_reset(recipient_email="a@example.com", reset_link=LINK, expiry_str="1 hour",
-                                           brand_name="FlowPilot"),
+                                           brand_name="Servabo"),
     "invitation": lambda: render_organization_invitation(
         invited_email="b@example.com", organization_name="Acme", inviter_email="a@example.com",
         organization_role_display="Member", grants=_grants(), accept_link=LINK,
-        expires_at=NOW + timedelta(days=7), brand_name="FlowPilot"),
+        expires_at=NOW + timedelta(days=7), brand_name="Servabo"),
     "notice": lambda: render_account_notice(
         title="Your card was declined", body="Update your card to keep the workspace writable.",
         organization_name="Acme", category_label="Billing", essential=True, action_url=LINK,
-        action_label="Update card", preferences_url="https://app.example.com/prefs", brand_name="FlowPilot"),
+        action_label="Update card", preferences_url="https://app.example.com/prefs", brand_name="Servabo"),
     "trial": lambda: render_trial_notice(kind="ENDING", organization_names=["Acme"], ends_at=NOW + timedelta(days=2),
-                                         plans_link=LINK, brand_name="FlowPilot"),
+                                         plans_link=LINK, brand_name="Servabo"),
     "operator": lambda: render_operator_alert(subject="Dead jobs", body="3 jobs failed for good.", occurrences=3,
                                               first_seen_at=NOW, last_seen_at=NOW, console_url=LINK,
-                                              brand_name="FlowPilot"),
+                                              brand_name="Servabo"),
     # Flagship session: Helm's emails (the Monday briefing, and what its hands send to suppliers and customers).
     "helm-briefing": lambda: render_briefing(
         brand_name="Example Cloud", organization_name="Meridian Wholesale", book_name="Main", week_of="19 Oct 2026",

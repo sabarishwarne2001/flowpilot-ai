@@ -72,7 +72,7 @@ class TestGate165JitSeatCap:
         db.add(config)
         db.flush()
         role = jit_service.resolve_org_role(
-            db, config=config, attributes={"groups": ["flowpilot-owners"]})
+            db, config=config, attributes={"groups": ["servabo-owners"]})
         assert role != "OWNER"
 
 

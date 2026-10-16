@@ -1,5 +1,5 @@
 """
-Database representation of the system User entity for FlowPilot AI.
+Database representation of the system User entity for Servabo.
 
 Defines account credentials, authentication indexes, platform authorization flags,
 and bidirectional relationship mappings targeting work items, rules, notifications,
@@ -28,7 +28,7 @@ if TYPE_CHECKING:
 
 class User(Base, UUIDMixin, TimestampMixin):
     """
-    Persistent representation of a user identity within FlowPilot AI.
+    Persistent representation of a user identity within Servabo.
 
     Inherits UUID primary keys and automated timezone audit tracking timestamps.
     """

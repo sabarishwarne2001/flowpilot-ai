@@ -44,7 +44,7 @@ def test_a_published_record_is_read_from_a_resolver_on_another_port(resolver) ->
     assert result.contains(TOKEN)
 
 
-def test_the_flowpilot_subdomain_and_a_missing_name(resolver) -> None:
+def test_the_servabo_subdomain_and_a_missing_name(resolver) -> None:
     records, _ = resolver
     records["_servabo.acme.example.com"] = [TOKEN]
     assert dns_service.lookup_txt("acme.example.com", subdomain="_servabo").contains(TOKEN)

@@ -1,5 +1,5 @@
 """
-Organization invitation API router for FlowPilot AI.
+Organization invitation API router for Servabo.
 
 Exposes the ARCH-04 invitation lifecycle: issuance, resend, revocation, preview,
 acceptance, and rejection.
