@@ -32,8 +32,9 @@ import { webhookKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { canManageMembers } from "@/permissions/organizationPermissions";
-import { WEBHOOK_EVENT_TYPES } from "@/types/webhook";
+import { HELM_WEBHOOK_EVENT_TYPES, WEBHOOK_EVENT_TYPES } from "@/types/webhook";
 import type { WebhookEndpoint } from "@/types/webhook";
 import { errorMessage } from "@/services/api/errors";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -299,6 +300,9 @@ export const OrganizationWebhooks: React.FC = () => {
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
   const [events, setEvents] = useState<Set<string>>(new Set());
+  // Helm's events are sent on the Enterprise plan only (capability.helm_api); elsewhere a box for
+  // them would subscribe to something that never arrives.
+  const helmApi = useCapabilityAccess(organizationId, CAPABILITY.helmApi);
 
   const [revealed, setRevealed] = useState<
     { secret: string; url: string; validUntil?: string } | null
@@ -595,21 +599,38 @@ export const OrganizationWebhooks: React.FC = () => {
                 published to webhooks.
               </p>
               <div className="grid max-h-64 gap-1.5 overflow-y-auto rounded-md border border-border bg-background p-2 sm:grid-cols-2">
-                {WEBHOOK_EVENT_TYPES.map((eventType) => (
-                  <label
-                    key={eventType}
-                    className="flex items-center gap-2 text-sm text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={events.has(eventType)}
-                      onChange={() => toggleEvent(eventType)}
-                      className="mt-0.5"
-                    />
-                    <span className="font-mono text-xs">{eventType}</span>
-                  </label>
-                ))}
+                {WEBHOOK_EVENT_TYPES.map((eventType) => {
+                  const helm = HELM_WEBHOOK_EVENT_TYPES.has(eventType);
+                  const locked = helm && !helmApi.granted;
+                  return (
+                    <label
+                      key={eventType}
+                      className={`flex items-center gap-2 text-sm text-foreground ${
+                        locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={events.has(eventType)}
+                        onChange={() => toggleEvent(eventType)}
+                        disabled={locked}
+                        className="mt-0.5"
+                      />
+                      <span className="font-mono text-xs">{eventType}</span>
+                      {helm && (
+                        <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">
+                          Enterprise
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {helmApi.granted
+                  ? "Helm's events carry ids, amounts and states, never names or document text. Read the rest from the Helm API."
+                  : "Helm's events are sent on the Enterprise plan."}
+              </p>
             </fieldset>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
