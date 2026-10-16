@@ -306,6 +306,7 @@ statement of account per supplier) and times each step on real Postgres. It runs
 |---|---|---|---|
 | Plan for the open payables over 30 days | ≤ 10 s for 1,000 open payables | 2.9 s (88 open) | **5.8 s (1,080 open)** |
 | 1,000 seeded futures of cash | ≤ 3 s | 0.01 s | 0.01 s |
+| What if… (today's plan and the scenario's; §21, measured 2026-10-16) | ≤ 10 s (a person waits) | 0.3 s | 2.4 s |
 | Ledger update after one document changes | ≤ 1 s | 0.7 s | **2.9 s: over budget** |
 | Snapshot (every input the plan reads) | — | 0.2 s | 1.7 s |
 | Every supplier statement reconciled (40) | — | 0.9 s | 1.3 s |
