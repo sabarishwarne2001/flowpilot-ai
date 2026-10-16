@@ -238,7 +238,7 @@ actions and asserts no action that breaks an active limit passes.
 | `create_task` | a `helm_tasks` row, shown in the review hub (kind `HELM`), assigned |
 | `decide_renewal` | a decision task; renew, cancel or renegotiate is recorded on the obligation (`obligation_events`) |
 | `notify` | `organization_notification_service.emit`, category `helm` |
-| `webhook` (Enterprise) | `helm.plan.ready`, `helm.action.executed`, `helm.mandate.breached` through the outgoing-webhook service |
+| `webhook` (Enterprise) | `helm.plan.ready` (a new plan version), `helm.action.executed` (an action ran, with its execution certificate id and hash) and `helm.mandate.breached` (an instrument newly breached, the same rule as the owners' notice) as PUBLIC outbox rows in the caller's transaction; the platform's relay fans them out to subscribed endpoints, signs, sends through the egress gate and retries (`helm/webhooks.py`). Only on `capability.helm_api`, never for the sample company, only when an endpoint listens. Payloads carry ids, kinds, states, counts, dates and money as integer micros with its currency; never document text, a name, an action's title or explanation, a mandate's sentence or a masked fact |
 
 Approvals: in Propose mode actions wait; an approver approves one, approves the whole plan, or
 rejects one with a reason. Approval is a conditional update (`PROPOSED → APPROVED`) and execution a
@@ -278,12 +278,35 @@ All six are in `TENANT_ACTIVITY_JOB_TYPES` and `BILLING_GATED_JOB_TYPES`, gated 
 `capability.helm` (preview backtests and the sample book excepted), idempotent, and visible on the
 platform jobs page with the dead-letter queue.
 
+Every Helm job is gated twice: by the platform's tenant gate (an inactive or unpaid organization) and by
+`gate.book_closed` (the book archived, the sample company deleted, or a workspace the work is about
+archived or suspended). A gated job ends successfully with the reason in words and is not retried; a
+queued backtest whose book closed or whose plan lost Helm ends FAILED with the reason. Every Helm write
+locks what it decides on (the action, the bank line, the bank account, the book's cash figures, the
+organization's mandate activations, the sample workspace), so of two at once the second sees the first
+(`tests/engines/test_helm_concurrency_live.py`, `test_helm_worker_gates_live.py`).
+
 ## 11. API
 
 Routes under `/organizations/{organization_id}/helm/…` (`app/api/v1/helm.py`), every one in the
 threadpool, behind `get_organization_context` (role, billing write gate, sign-in policy) and the
-capability or preview gate as its first statement. Enterprise API keys get `helm:read` and
-`helm:write` (`ROUTE_SCOPE_MAP`); default deny stays.
+capability or preview gate as its first statement. `GET …/helm/backtests/{tid}/pdf` downloads a finished
+replay as a PDF report (§14).
+
+Enterprise API keys reach Helm (`capability.helm_api`) with two scopes in `ROUTE_SCOPE_MAP`
+(`app/core/scopes.py`): `helm:read` for every GET, `helm:write` for the POST, PATCH and DELETE a key
+may make, previews included. A key may **feed Helm facts and ask it to work**: cash positions, an
+invoice marked paid, bank accounts, statements and their lines, a re-plan, a mandate preview, the
+Time machine. It may **not decide or set Helm's rules**: approving, rejecting or undoing an action
+(and approve-all), books, settings, counterparties, mandates (create, edit, draft, activate, pause,
+archive) and the sample company are `PEOPLE_ONLY_ROUTES`, refused 403 in words whatever the key
+holds. A Helm key on a plan without `capability.helm_api` is refused 402 `CAPABILITY_REQUIRED` in
+words by Helm's gate (`gate.assert_api_access`, the first statement of every route); a person signed
+in is not affected. A member's key never carries Helm's scopes, a billing member's only `helm:read`.
+Default deny stays: a route no scope names is refused. A key works only in the organization that
+issued it (`deps._assert_organization_access_policy`, 404 elsewhere). API-key refusals are audited
+through the denial aggregation (`record_threshold_denial`): one row each until 50 an hour, then
+exponential summary rows, so a script cannot fill the audit log. What-if (§21) and the replay PDF are on the key routes too (`helm:write` and `helm:read`).
 
 ## 12. Frontend
 
@@ -293,6 +316,9 @@ capability or preview gate as its first statement. Enterprise API keys get `helm
   own sidebar: Cockpit, Plan, Mandates, Promise ledger, Time machine, Certificates, Settings.
 - Visual identity: `frontend/src/styles/helm.css` (instrument-panel tokens, one luminous accent,
   JetBrains Mono for numbers, thin rings, reduced-motion respected). Hand-built SVG flight path.
+- A finished replay (in the Time machine and in the first run) has a "Download the PDF" button. Under the honesty
+rule the page shows the replay's fingerprint, which the PDF footer also prints. The download goes through the
+API client as a Blob (`downloadBlob`) and is saved under the server's ASCII file name.
 
 ## 13. Performance budget (measured on the sandbox, 2026-10-15)
 
@@ -343,6 +369,32 @@ held?" It never executes anything; draft mandates may be backtested.
    deterministic sentence built from those numbers; no model writes it.
 5. The result keeps per-mandate findings (up to 200 each; counts and totals cover all), totals by
    class and currency, value by category, a timeline and the cash history the flight path scrubs.
+6. **The report** (`helm/backtest_report.py`). `GET …/helm/backtests/{tid}/pdf` turns a finished replay into a
+   PDF the owner can hand to an accountant or board. It has the same access as reading the replay: owners,
+   admins and billing; members 403; another organization's replay 404. A Billing member who cannot read the
+   book's workspace gets the totals but no findings, as on the page. A replay still queued or running, or one
+   that failed, is refused in words (409, `BACKTEST_NOT_FINISHED` / `BACKTEST_FAILED`). Each download is
+   audited (`HELM_BACKTEST`, `EXPORTED`, with the fingerprint and whether the findings were listed). The report
+   is honest by construction:
+   - every page says it is "a replay of what Helm WOULD have done, not what happened". The sample company is
+     labelled "Sample company" on the first page and in every footer.
+   - the three levels are shown in three separate panels, per currency, and nothing in the report adds them
+     together.
+   - each finding shows its date, what Helm would have done, its level, its amount, its mandate and the
+     documents it rests on. A document known only by its id (a renewal notice, a certificate) is named by its
+     file name, looked up in the book's own workspaces.
+   - "What Helm could not see" gives the visibility meter, a period with no cash balance, potential amounts
+     resting on missing facts, and mandates whose list stopped at 200.
+   - every footer has the page number and the SHA-256 of the replay's stored result (canonical JSON,
+     `ledger.canonical`). The replay's JSON (`report.result_sha256`), the page and the `X-Helm-Result-SHA256`
+     header show the same value, so a reader can check the paper against the page.
+
+   The report uses reportlab with the standard Helvetica fonts, so nothing is embedded or fetched. Helvetica
+   has no rupee glyph (reportlab would draw a black box), so INR amounts are printed as "INR 1,23,456.00"
+   with Indian grouping. Other text is limited to cp1252, and any other character becomes "?". reportlab
+   runs in invariant mode, and the creation date in the file is the moment the replay finished. So the same
+   replay always gives the same bytes. 2,600 findings (200 for each of 13 mandates) render in about 0.8 s
+   (test budget 5 s). The sample's 9-month replay takes 0.09 s through the route.
 
 ## 15. The sample company (`helm/sample_company.py`)
 
@@ -458,7 +510,7 @@ The chain applies only while the plan carries `capability.helm_approval_chains` 
 
 One rule for every path: `approvals.requirement` is read by approve one, approve all (`{approved, waiting, skipped}`) and the planner. In Act mode a payment the chain covers waits for its people whatever the act cap, and Helm's own approval never counts towards a chain.
 
-`executor.approve` locks the action row (`SELECT … FOR UPDATE`) before counting, so two people approving at the same moment both count. The same person again gets 409 `HELM_SAME_APPROVER`; a role the chain does not take gets 403 `HELM_CHAIN_ROLE`. An action needs the stricter of the number stored at plan time and the current chain. The chain counts as a plan input (`plan_digest(..., chain=)`; a book without a chain keeps its old digest), so a change re-plans and `required_approvals` is stored on PROPOSED actions. The plan's `counts.needs_approval` includes payments the chain holds back.
+At execution the executor reads the chain again: a payment it covers whose people's approvals fall short (Helm approved it in Act mode before a chain was saved) goes back to PROPOSED with the chain's count, audited. `executor.approve` locks the action row (`SELECT … FOR UPDATE`) before counting, so two people approving at the same moment both count. The same person again gets 409 `HELM_SAME_APPROVER`; a role the chain does not take gets 403 `HELM_CHAIN_ROLE`. An action needs the stricter of the number stored at plan time and the current chain. The chain counts as a plan input (`plan_digest(..., chain=)`; a book without a chain keeps its old digest), so a change re-plans and `required_approvals` is stored on PROPOSED actions. The plan's `counts.needs_approval` includes payments the chain holds back.
 
 Settings: PATCH `approval_chain` (owners and admins; 402 below Enterprise, audited as DENIED with operation `helm.approval_chain.update`; an accepted change is audited with the chain before and after, read under the row lock). `validate` refuses contradictions (a higher tier needing fewer approvals, duplicate amounts), more than six tiers, unknown roles, and a tier the organization's active members could never meet. GET returns `sentences` and `warnings` (a kept tier the organization can no longer meet).
 

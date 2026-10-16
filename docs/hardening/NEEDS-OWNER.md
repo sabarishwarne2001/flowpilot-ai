@@ -1542,3 +1542,44 @@ finds. Invented names only; it is also the data for the website's screenshots.
 - Three levers only for now: a one-off cash change, customers paying later (0 to 90 days), invoices
   held out of the plan. More levers (a lost customer, a price rise) can follow once owners ask.
 
+## N-101 — The replay as a PDF (DECIDED (flagship session); box 7)
+
+- the replay PDF is available wherever the replay can be read, on every plan:
+  Helm preview downloads its own preview replay, and every plan can download the sample company's replay.
+  The plan's replay rules (3 / 6 / 24 months, preview once a week) apply when the replay is run, not when it
+  is downloaded, because the PDF holds nothing the page does not already show.
+- a replay run on a bigger plan stays downloadable after a downgrade, as the
+  replay itself stays readable. It was within the plan when it ran, and it is the customer's own data.
+- a replay that failed gets a 409 (`BACKTEST_FAILED`, "could not finish …, so
+  there is no report to download. Replay the period again."), not a 404. The replay exists; its state is
+  what blocks the report. A running replay also gets a 409 (`BACKTEST_NOT_FINISHED`).
+- a Billing member who cannot read the book's workspace gets the PDF with the
+  totals, the mandates and what Helm could not see, but no findings, plus a sentence saying why. This
+  matches what the page shows them.
+- money in the PDF uses the screen's symbol when Helvetica can draw it ($, €, £)
+  and the currency code otherwise ("INR 1,23,456.00"; "₹2.4 lakh" in a summary becomes "INR 2.4 lakh").
+  Embedding a font with the rupee glyph would mean shipping a font file in the image. The code is also
+  unambiguous for an accountant.
+- the file name is `helm-replay-<book name, ASCII>-<start>-to-<end>.pdf`.
+  Accents are dropped and other scripts fall back to "book", so no browser or mail client mangles it. The
+  page uses the same name, taken from the replay's JSON, because the browser cannot read
+  `Content-Disposition` cross-origin (it is not in `CORS_EXPOSED_HEADERS`).
+- each download is audited as an export (`HELM_BACKTEST` / `EXPORTED`) with the
+  fingerprint, `findings_listed` and the size. This follows the other data exports (corroboration, tables,
+  obligations, audit log). The certificate JSON download is not audited today; that was left as it is.
+
+## N-102 — Helm through API keys and webhooks (DECIDED (flagship session); Enterprise, box 7)
+
+- A key may feed Helm facts and ask it to work (cash positions, an invoice marked paid, bank accounts
+  and statements, a re-plan, a mandate preview, a what-if, the Time machine and its PDF). It may not
+  decide or set Helm's rules: approving, rejecting or undoing an action, books, settings,
+  counterparties, mandates and the sample company stay with people, refused in words whatever the
+  key holds. Approving a payment is a person's act.
+- `helm:read` for every read, `helm:write` for the writes a key may make, previews and what-if
+  included (they are POSTs that save nothing).
+- A member's key never carries Helm's scopes; a billing member's key only `helm:read`.
+- Three events: a new plan, an action that ran, a mandate newly breached. Never for the sample
+  company. Payloads carry ids, kinds, states, counts, dates and money in micros with its currency;
+  never document text, a person's or supplier's name, an explanation or a mandate's sentence.
+- Every refusal of a key is audited (rate-limited summary rows past 50 an hour).
+

@@ -47,7 +47,8 @@ INR, GST invoices, the MSMED Act and income-tax section 43B(h); any currency wor
    they have not applied. Helm drafts the reconciliation email for you to send.
 8. **The Time machine.** Replay the last 6 months (24 on Enterprise) of your own documents as if Helm
    had been on: what it would have held, each amount marked confirmed, likely or potential, never
-   added up as if certain.
+   added up as if certain. Download it as a PDF for your accountant or board, with a fingerprint
+   on every page that matches the one on screen.
 9. **What if…** Beside the flight path: "what if customers pay 30 days later", "what if we hold
    these invoices", "what if ₹20 lakh comes in". Helm plans both and shows the difference, on the same
    1,000 futures, and saves nothing.
@@ -64,7 +65,7 @@ INR, GST invoices, the MSMED Act and income-tax section 43B(h); any currency wor
 |---|---|
 | Trial and Developer | **Helm preview**: the sample company, the guided tour, one replay a week of up to 3 months of your own documents |
 | Business | Helm: the mandate library, Propose and Act, bank statement import, supplier reconciliation, a 6-month replay, the 90-day forecast, what-if, up to 15 active mandates |
-| Enterprise | adds unlimited mandates, planning across all workspaces, a 24-month replay, custom condition mandates and approval chains; API keys and webhooks are in the plan (N-082) and are being finished (STATE box 7) |
+| Enterprise | adds unlimited mandates, planning across all workspaces, a 24-month replay, custom condition mandates, approval chains, and Helm through API keys (`helm:read`, `helm:write`) and webhooks (a new plan, an action that ran, a mandate breached) |
 
 ## Proof points (the sample company, Meridian Wholesale Pvt Ltd, an invented Pune distributor)
 

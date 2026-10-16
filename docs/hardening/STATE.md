@@ -1,6 +1,6 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-15 (flagship session: Helm, in progress)_
+_Last updated: 2026-10-16 (flagship session: Helm, finished; PR #24 ready for review)_
 
 ## Current phase — Flagship session: Helm, the flagship engine
 Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
@@ -50,11 +50,19 @@ below. Never restart.**
     reconciliation are within budget at 10,000 documents; the ledger update after one change is
     not, 2.9 s against 1 s, above about 2,000 documents a workspace: next step in HANDOFF. The run
     found F-423, F-424 and F-425. Spec 83 checks every Helm page for accessibility and widths.)
-- [ ] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
-  API scopes.
-- [ ] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
+- [x] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
+  API scopes. (ARCHITECTURE §11, §14.6, §19–§21; N-098 to N-102; spec 84 walks what-if, a custom
+  condition and the approval chain, spec 80 downloads the replay PDF. Found and fixed, each proven
+  by a failing test first: F-429 to F-437, among them an API key that opened every organization its
+  issuer belonged to (F-435, High) and a payment Helm approved in Act mode that still ran after an
+  approval chain was saved (F-438).)
+- [x] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
   worker gates, performance budget, accessibility and widths, logs clean.
-- [ ] 9. Finish (§13): full backend and browser suites, frontend checks, one Alembic head with
+  (`test_helm_role_matrix_live.py`, `test_helm_api_scopes_live.py`, `test_helm_concurrency_live.py`
+  (every Helm write sent 3 to 8 times at once), `test_helm_worker_gates_live.py`, the 10,000-document
+  budget (§13), spec 83. The concurrency and gate tests failed 23 times before their fixes: F-439
+  to F-441. COVERAGE.csv has a row for every Helm route, page, job and migration.)
+- [x] 9. Finish (§13): full backend and browser suites, frontend checks, one Alembic head with
   up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
   `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
 
