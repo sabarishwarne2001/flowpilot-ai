@@ -61,6 +61,9 @@ ALLOWED_LINES = (
     re.compile(r"flowpilot_default_(api_key_pepper_secret|redis_identity_pepper)_2026"),
     re.compile(r'b"flowpilot-backup-key-id\\x00"'),
     re.compile(r"KNOWN_DEV_PASSWORDS = \{"),
+    # The old name stays a word passwords may not be built from, and the test that proves it.
+    re.compile(r'^_PRODUCT_WORDS = \("servabo", "flowpilot", "flow pilot"\)$'),
+    re.compile(r'"flowpilot2026"'),
     re.compile(r"github\.com/sabarishwarne2001/flowpilot-ai(\.git)?\b"),
 )
 BLOCK_START, BLOCK_END = ">>> one-release names", "<<< one-release names"
