@@ -16,7 +16,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app import crud
-from app.core import security
+from app.core import api_key_secret, security
 from app.core.audit_routes import resolve_route_audit
 from app.core.config import settings
 from app.core.exceptions import (
@@ -197,7 +197,7 @@ def _audit_key_refusal(request: Request, db: Session, key: Any, principal: Optio
 def _authenticate(db: Session, token: str) -> _Authenticated:
     credentials_exception = _credentials_exception()
 
-    if token and token.startswith(("svb_live_", "svb_test_")):
+    if token and token.startswith(api_key_secret.TOKEN_PREFIXES):
         res = api_key_service.authenticate_api_key_token(db, token=token)
         if res is None:
             raise credentials_exception
@@ -1034,7 +1034,7 @@ async def require_api_key(
     from app.core.rate_limit.limiter import consume_rate_limit
     from app.core.rate_limit.policy import FailureMode, RateLimitPolicy, RateLimitScope
 
-    if not token or not token.startswith(("svb_live_", "svb_test_")):
+    if not token or not token.startswith(api_key_secret.TOKEN_PREFIXES):
         raise _gateway_unauthorized("A Servabo API key is required for the public API.")
 
     # F-218. The key, organization and plan lookups, the Redis rate limit and the

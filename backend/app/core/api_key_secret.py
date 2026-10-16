@@ -21,6 +21,15 @@ from app.core.config import settings
 ENV_PREFIX_LIVE = "svb_live_"
 ENV_PREFIX_TEST = "svb_test_"
 
+# >>> one-release names (website and payments session, A4): keys issued before the rename to
+# Servabo carry fp_live_ / fp_test_. They keep working, with the same key and secret, for one
+# release while their owners rotate them (CHANGELOG). Remove with app/core/legacy_names.py.
+LEGACY_PREFIX = {ENV_PREFIX_LIVE: "fp_live_", ENV_PREFIX_TEST: "fp_test_"}
+# <<< one-release names
+
+#: Every prefix a presented token may carry (callers check this before parsing).
+TOKEN_PREFIXES = (ENV_PREFIX_LIVE, ENV_PREFIX_TEST, *LEGACY_PREFIX.values())
+
 
 class ParsedApiKeyToken(NamedTuple):
     key_id: uuid.UUID
@@ -63,7 +72,10 @@ def parse_api_key_token(token: str) -> Optional[ParsedApiKeyToken]:
 
     prefix = current_env_prefix()
     if not token.startswith(prefix):
-        return None
+        # A key from before the rename, for this same environment.
+        prefix = LEGACY_PREFIX[prefix]
+        if not token.startswith(prefix):
+            return None
 
     raw_payload = token[len(prefix) :]
     parts = raw_payload.split("_", 1)

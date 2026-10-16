@@ -35,7 +35,8 @@ def test_api_key_issuance_and_authentication(client: TestClient, tenant):
     assert res.status_code == 201
     data = res.json()
     assert "token" in data
-    assert data["token"].startswith("fp_")
+    # Website and payments session (A4): keys are issued as svb_ since the rename (CHANGELOG).
+    assert data["token"].startswith("svb_")
     token = data["token"]
     key_id = data["api_key"]["id"]
 
@@ -70,3 +71,24 @@ def test_api_key_issuance_and_authentication(client: TestClient, tenant):
 
     # Revoked token receives 401
     assert client.get(f"/api/v1/organizations/{org_id}/audit-logs", headers={"Authorization": f"Bearer {new_token}"}).status_code == 401
+
+
+def test_a_key_issued_before_the_rename_still_works(client: TestClient, tenant):
+    """Website and payments session (A4). Keys were issued as `fp_live_` / `fp_test_` before the
+    rename to Servabo; an integration holding one must keep working for one release while its
+    owner rotates it (CHANGELOG). Same key and secret, the old prefix."""
+    org_id = tenant.organization.id
+    res = client.post(
+        f"/api/v1/organizations/{org_id}/api-keys",
+        json={"name": "Integration from before the rename", "scopes": ["audit_logs:read"]},
+        headers=tenant.org_admin.headers,
+    )
+    assert res.status_code == 201
+    token = res.json()["token"]
+    old = "fp_" + token.removeprefix("svb_")
+    assert old.startswith(("fp_live_", "fp_test_"))
+    answer = client.get(f"/api/v1/organizations/{org_id}/audit-logs", headers={"Authorization": f"Bearer {old}"})
+    assert answer.status_code == 200, answer.text
+    # A made-up secret under the old prefix is still refused.
+    forged = old[:-4] + ("AAAA" if not old.endswith("AAAA") else "BBBB")
+    assert client.get(f"/api/v1/organizations/{org_id}/audit-logs", headers={"Authorization": f"Bearer {forged}"}).status_code == 401
