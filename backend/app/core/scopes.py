@@ -56,7 +56,72 @@ SCOPES_BY_ROLE: dict[OrganizationRole, frozenset[ApiKeyScope]] = {
     OrganizationRole.BILLING: frozenset({
         ApiKeyScope.ORGANIZATIONS_READ,
         ApiKeyScope.BILLING_READ,
+        # Billing sees all of Helm's figures; what it may change in Helm it changes signed in.
+        ApiKeyScope.HELM_READ,
     }),
+}
+
+#: Helm's routes (app/api/v1/helm.py) an API key may call: a GET reads (helm:read); a POST, PATCH or
+#: DELETE needs helm:write, previews included, so a read-only key never sends Helm a body. A key may
+#: feed Helm facts (cash, payments, bank statements and their lines) and ask it to work (a plan, a
+#: mandate preview, the Time machine). It reaches them only on a plan with capability.helm_api
+#: (`helm.gate.assert_api_access`, 402 otherwise).
+_HELM = "/organizations/{organization_id}/helm"
+_HELM_KEY_ROUTES: tuple[tuple[str, str], ...] = (
+    ("GET", ""),
+    ("GET", "/workspaces/{workspace_id}/card"),
+    ("GET", "/library"),
+    ("GET", "/books/{book_id}"),
+    ("GET", "/books/{book_id}/settings"),
+    ("POST", "/books/{book_id}/cash-positions"),
+    ("GET", "/books/{book_id}/counterparties"),
+    ("GET", "/books/{book_id}/cockpit"),
+    ("POST", "/books/{book_id}/plan"),
+    ("GET", "/books/{book_id}/mandates"),
+    ("POST", "/books/{book_id}/mandates/preview"),
+    ("GET", "/books/{book_id}/ledger"),
+    ("GET", "/books/{book_id}/payment-run"),
+    ("POST", "/books/{book_id}/invoices/{work_item_id}/paid"),
+    ("GET", "/books/{book_id}/certificates"),
+    ("GET", "/actions/{action_id}"),
+    ("GET", "/certificates/{certificate_id}"),
+    ("GET", "/certificates/{certificate_id}/download"),
+    ("GET", "/books/{book_id}/bank-accounts"),
+    ("POST", "/books/{book_id}/bank-accounts"),
+    ("PATCH", "/books/{book_id}/bank-accounts/{account_id}"),
+    ("POST", "/books/{book_id}/bank-statements/preview"),
+    ("POST", "/books/{book_id}/bank-statements"),
+    ("GET", "/books/{book_id}/bank-imports"),
+    ("GET", "/books/{book_id}/bank-lines"),
+    ("POST", "/bank-lines/{line_id}/match"),
+    ("POST", "/bank-lines/{line_id}/ignore"),
+    ("POST", "/bank-lines/{line_id}/reopen"),
+    ("POST", "/backtests"),
+    ("GET", "/books/{book_id}/backtests"),
+    ("GET", "/backtests/{backtest_id}"),
+)
+
+_HELM_DECISION = ("No API key scope covers approving, rejecting or undoing a Helm action. That is a person's "
+                  "decision, and Helm records who made it: sign in to do it.")
+_HELM_RULES = ("No API key scope covers changing Helm's rules or set-up (books, settings, counterparties, "
+               "mandates, the sample company). An owner or an admin does that signed in.")
+#: Helm's routes no API key may call, whatever its scopes, and the words it is refused with (403).
+_HELM_PEOPLE_ONLY: dict[tuple[str, str], str] = {
+    ("POST", "/books/{book_id}/plan/approve-all"): _HELM_DECISION,
+    ("POST", "/actions/{action_id}/approve"): _HELM_DECISION,
+    ("POST", "/actions/{action_id}/reject"): _HELM_DECISION,
+    ("POST", "/actions/{action_id}/undo"): _HELM_DECISION,
+    ("POST", "/books"): _HELM_RULES,
+    ("PATCH", "/books/{book_id}/settings"): _HELM_RULES,
+    ("PATCH", "/books/{book_id}/counterparties/{counterparty_id}"): _HELM_RULES,
+    ("POST", "/books/{book_id}/mandates"): _HELM_RULES,
+    ("POST", "/books/{book_id}/mandates/draft"): _HELM_RULES,
+    ("PATCH", "/books/{book_id}/mandates/{mandate_id}"): _HELM_RULES,
+    ("POST", "/books/{book_id}/mandates/{mandate_id}/activate"): _HELM_RULES,
+    ("POST", "/books/{book_id}/mandates/{mandate_id}/pause"): _HELM_RULES,
+    ("POST", "/books/{book_id}/mandates/{mandate_id}/archive"): _HELM_RULES,
+    ("POST", "/sample"): _HELM_RULES,
+    ("DELETE", "/sample"): _HELM_RULES,
 }
 
 ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
@@ -97,6 +162,15 @@ ROUTE_SCOPE_MAP: dict[tuple[str, str], ApiKeyScope] = {
     ("POST", "/public/query"): ApiKeyScope.PUBLIC_QUERY_WRITE,
     ("GET", "/public/workflows"): ApiKeyScope.PUBLIC_WORKFLOWS_READ,
     ("POST", "/public/workflows/{rule_id}/trigger"): ApiKeyScope.PUBLIC_WORKFLOWS_WRITE,
+    # --- Helm (see _HELM_KEY_ROUTES) ---
+    **{(method, f"{_HELM}{path}"): ApiKeyScope.HELM_READ if method == "GET" else ApiKeyScope.HELM_WRITE
+       for method, path in _HELM_KEY_ROUTES},
+}
+
+#: Routes no API key may call whatever scopes it holds, each with the words it is refused with (403).
+#: Default deny refuses them anyway (no scope names them); this says why, in plain words.
+PEOPLE_ONLY_ROUTES: dict[tuple[str, str], str] = {
+    (method, f"{_HELM}{path}"): words for (method, path), words in _HELM_PEOPLE_ONLY.items()
 }
 
 PUBLIC_API_SCOPES: frozenset[ApiKeyScope] = frozenset({

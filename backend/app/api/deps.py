@@ -34,7 +34,7 @@ from app.core.principal import (
     get_current_principal,
     set_current_principal,
 )
-from app.core.scopes import ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
+from app.core.scopes import PEOPLE_ONLY_ROUTES, ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import ReadSessionLocal, SessionLocal
@@ -142,12 +142,18 @@ def _route_scope(request: Request) -> Optional[ApiKeyScope]:
         call = getattr(dependency, "dependency", None)
         if isinstance(call, RequireScope) and call.required_scope is not None:
             return call.required_scope
+    method, template = _route_key(request)
+    return ROUTE_SCOPE_MAP.get((method, template)) or ROUTE_SCOPE_MAP.get((method, template.rstrip("/")))
+
+
+def _route_key(request: Request) -> tuple[str, str]:
+    """The matched route as `ROUTE_SCOPE_MAP` keys it: the method and the template without /api/v1."""
+    route = request.scope.get("route")
     template = getattr(route, "path_format", None) or getattr(route, "path", None) or request.url.path
     prefix = getattr(settings, "API_V1_STR", "")
     if prefix and template.startswith(prefix):
         template = template[len(prefix):]
-    method = request.method.upper()
-    return ROUTE_SCOPE_MAP.get((method, template)) or ROUTE_SCOPE_MAP.get((method, template.rstrip("/")))
+    return request.method.upper(), template
 
 
 def _assert_api_key_route_scope(request: Request, key: Any, membership: Any) -> None:
@@ -159,8 +165,10 @@ def _assert_api_key_route_scope(request: Request, key: Any, membership: Any) -> 
     """
     required = _route_scope(request)
     if required is None:
+        # A route kept for people (approving a payment in Helm, say) says why in its own words.
         raise OrganizationPermissionDeniedError(
-            "API keys cannot call this route: no API key scope covers it."
+            PEOPLE_ONLY_ROUTES.get(_route_key(request))
+            or "API keys cannot call this route: no API key scope covers it."
         )
     if required not in effective_scopes(key, membership):
         raise OrganizationPermissionDeniedError(
