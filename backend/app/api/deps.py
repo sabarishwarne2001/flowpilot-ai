@@ -563,13 +563,23 @@ def _assert_organization_access_policy(
     *,
     organization_id: uuid.UUID,
     membership: OrganizationMember,
+    not_found: Optional[Exception] = None,
 ) -> None:
     """The organization's sign-in policy, checked on every request into it (campaign session 3).
 
     Called by every organization- and workspace-scoped context dependency, so a route added later
     is covered without anyone remembering a guard.
+
+    An API key goes no further than the organization that issued it. Its scopes come from its
+    issuer's role THERE; a person who belongs to two organizations could otherwise use a key from
+    one on the other, past that organization's sign-in rules, plan and administrators. It is
+    refused as a stranger is (`not_found`, 404), so it learns nothing about the organization.
     """
     from app.core.client_ip import trusted_client_ip
+
+    key = getattr(request.state, "api_key_obj", None) if request is not None else None
+    if key is not None and getattr(key, "organization_id", None) != organization_id:
+        raise not_found or OrganizationAccessDeniedError("Organization not found.")
 
     assert_organization_sign_in_policy(
         db,
@@ -677,6 +687,7 @@ def get_workspace_context(
         db,
         organization_id=workspace.organization_id,
         membership=access.organization_membership,
+        not_found=WorkspaceAccessDeniedError("Workspace not found."),
     )
 
     # ARCH-30 Tranche 3 (D-11). Same gate for every workspace-scoped route.
@@ -723,6 +734,7 @@ def get_archived_workspace_context(
         db,
         organization_id=workspace.organization_id,
         membership=access.organization_membership,
+        not_found=WorkspaceAccessDeniedError("Workspace not found."),
     )
     return TenantContext(
         user=current_user,
