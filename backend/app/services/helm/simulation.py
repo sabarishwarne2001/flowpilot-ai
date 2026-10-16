@@ -6,7 +6,8 @@ HOW A FUTURE IS BUILT
 * **Customers pay late the way they have before.** Each open receivable's delay is drawn from that
   customer's own history of days late (a bootstrap of `behaviour.days_late`). With fewer than five
   observations Helm uses a cautious default instead: a quarter on time, and the rest 15, 30, 45 or 60
-  days late, with one in ten not paying inside the horizon at all.
+  days late, with one in ten not paying inside the horizon at all. A what-if may add a fixed number
+  of days on top (`Receivable.expected_delay_days`: "customers pay 15 days later than usual").
 * **Recurring suppliers keep invoicing.** A supplier with a regular cadence (at least three
   invoices) is expected to invoice again: the next dates step by its usual gap, with the gap's own
   spread as noise, at its usual amount (±15%), due after its usual terms. Those are outflows the
@@ -109,7 +110,7 @@ def simulate(snapshot: Snapshot, *, seed: int, horizon_days: Optional[int] = Non
             delays = rng.choice(DEFAULT_DELAYS, size=(futures, len(group)), p=DEFAULT_WEIGHTS)
         for column, receivable in enumerate(group):
             base_index = _day_index(as_of, receivable.due_date or as_of, horizon)
-            index = base_index + delays[:, column]
+            index = base_index + delays[:, column] + int(receivable.expected_delay_days or 0)
             index = np.maximum(index, 0)
             inside = index < n_days
             np.add.at(flows[receivable.currency], (rows[inside], index[inside]), float(receivable.amount_micros))

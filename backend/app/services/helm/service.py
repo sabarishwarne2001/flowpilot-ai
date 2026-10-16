@@ -513,10 +513,9 @@ def create_mandate(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any]
     problems = unstated_problems(unstated_params(raw)) + registry.validate(spec, _facts(db, book))
     if problems:
         raise HelmInvalid(" ".join(problems), reason="MANDATE_INVALID", details={"problems": problems})
-    template = registry.template(spec.template)
     mandate = HelmMandate(organization_id=book.organization_id, book_id=book.id, template=spec.template,
                           status=v.MANDATE_DRAFT, current_version=1,
-                          title=(raw.get("title") or template.title)[:200], created_by_user_id=who.user_id)
+                          title=(raw.get("title") or _title_of(spec))[:200], created_by_user_id=who.user_id)
     db.add(mandate)
     db.flush()
     _write_version(db, who, mandate, spec, 1)
@@ -524,6 +523,12 @@ def create_mandate(db: Session, who: Viewer, book: HelmBook, raw: dict[str, Any]
     if activate:
         return set_status(db, who, book, mandate.id, v.MANDATE_ACTIVE)
     return mandate_json(db, mandate)
+
+
+def _title_of(spec: MandateSpec) -> str:
+    """The template's title, or the one its parameters give (a custom condition is called what its owner named it)."""
+    template = registry.template(spec.template)
+    return template.title_from(registry.params_of(spec)) if template.title_from else template.title
 
 
 def _check_act_cap(who: Viewer, spec: MandateSpec) -> None:
@@ -576,6 +581,8 @@ def update_mandate(db: Session, who: Viewer, book: HelmBook, mandate_id: uuid.UU
     mandate.current_version = version
     if raw.get("title"):
         mandate.title = str(raw["title"])[:200]
+    elif registry.template(spec.template).title_from:
+        mandate.title = _title_of(spec)[:200]
     mandate.updated_at = datetime.now(timezone.utc)
     db.flush()
     _audit(db, who, book, "HELM_MANDATE", mandate.id, "UPDATED", {"version": version})

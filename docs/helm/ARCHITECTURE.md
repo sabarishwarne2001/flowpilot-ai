@@ -168,7 +168,9 @@ kept. The e2e model stand-in answers the drafting prompt for the test sentences.
 Runs on a ledger change (debounced per book: the `helm.plan` job is enqueued 20 seconds later with
 an idempotency key per book and minute), hourly, and on "Re-plan". If the inputs digest equals the
 current plan's, the current plan is kept. One run per book at a time
-(`pg_try_advisory_xact_lock` on the book).
+(`pg_try_advisory_xact_lock` on the book). Once that minute's job has been claimed or has
+finished, a later change gets a job of its own (`plan_store.enqueue`); pending or retrying jobs still
+absorb a burst of changes.
 
 Steps: snapshot → evaluate mandates (drift) → candidate actions → optimise payment timing →
 simulate → Guard every action → persist a new plan version (the old one superseded) → notify on new
@@ -252,6 +254,8 @@ emails cannot, and the screen says so.
 | Create, edit, activate, pause mandates; set act caps | yes | yes | — | — |
 | Approve and reject actions | yes | yes | payment actions | — |
 | Settings, identities, cash positions, counterparties | yes | yes | cash positions | — |
+| Approval chain (Enterprise, §19) | yes | yes | reads it | — |
+| What if… (§21) | yes | yes | yes | — |
 | Receive Helm tasks in the review hub | as today | as today | as today | as today |
 
 Reads follow today's workspace rules (`resolve_effective_workspace_role`): an organization owner or
@@ -302,6 +306,7 @@ statement of account per supplier) and times each step on real Postgres. It runs
 |---|---|---|---|
 | Plan for the open payables over 30 days | ≤ 10 s for 1,000 open payables | 2.9 s (88 open) | **5.8 s (1,080 open)** |
 | 1,000 seeded futures of cash | ≤ 3 s | 0.01 s | 0.01 s |
+| What if… (today's plan and the scenario's; §21, measured 2026-10-16) | ≤ 10 s (a person waits) | 0.3 s | 2.4 s |
 | Ledger update after one document changes | ≤ 1 s | 0.7 s | **2.9 s: over budget** |
 | Snapshot (every input the plan reads) | — | 0.2 s | 1.7 s |
 | Every supplier statement reconciled (40) | — | 0.9 s | 1.3 s |
@@ -445,3 +450,56 @@ the page it explains (`data-tour="…"`) and scrolls it into view; the panel is 
 whose heading takes focus; Escape or "End the tour" closes it. Spec 82 walks it and approves the
 sample's reconciliation.
 
+## 19. Approval chains (Enterprise; `helm/approvals.py`)
+
+A book's chain lives in `helm_settings.preferences["approval_chain"]` (an existing JSONB column, no migration): `{"tiers": [{"above_micros", "currency", "approvals": 2|3, "roles": ["OWNER","ADMIN","BILLING"] | null}], "updated_at", "updated_by_user_id"}`. A payment (`schedule_payment`, `approve_payment`) in a tier's currency and strictly above its amount needs that many approvals from different people. When `roles` is set, only those roles count; otherwise owners, admins and the billing role all count. When several tiers apply, the one with the highest amount decides. Holds, releases, `mark_paid` (a person recording a payment, or the bank-line confirm) and every action that moves no money keep a single approval.
+
+The chain applies only while the plan carries `capability.helm_approval_chains` (`approvals.chain_for`). After a downgrade it stays stored, shown as `available: false`, and applies again after an upgrade.
+
+One rule for every path: `approvals.requirement` is read by approve one, approve all (`{approved, waiting, skipped}`) and the planner. In Act mode a payment the chain covers waits for its people whatever the act cap, and Helm's own approval never counts towards a chain.
+
+`executor.approve` locks the action row (`SELECT … FOR UPDATE`) before counting, so two people approving at the same moment both count. The same person again gets 409 `HELM_SAME_APPROVER`; a role the chain does not take gets 403 `HELM_CHAIN_ROLE`. An action needs the stricter of the number stored at plan time and the current chain. The chain counts as a plan input (`plan_digest(..., chain=)`; a book without a chain keeps its old digest), so a change re-plans and `required_approvals` is stored on PROPOSED actions. The plan's `counts.needs_approval` includes payments the chain holds back.
+
+Settings: PATCH `approval_chain` (owners and admins; 402 below Enterprise, audited as DENIED with operation `helm.approval_chain.update`; an accepted change is audited with the chain before and after, read under the row lock). `validate` refuses contradictions (a higher tier needing fewer approvals, duplicate amounts), more than six tiers, unknown roles, and a tier the organization's active members could never meet. GET returns `sentences` and `warnings` (a kept tier the organization can no longer meet).
+
+Action JSON: `required_approvals`, `approvals_given` (approvals that count), `approver_roles`, and `approvals[]` with `role`, `at`, `by_helm`, `by_you` (never names).
+
+Frontend: the PlanDiff row shows "1 of 2 approvals: owner (you)" with one dot per approval needed (`.helm-pips`/`.helm-pip`), the button reads "Add the second approval", and the person who already approved sees that it waits for someone else. HelmSettings has an "Approval chain" section, locked below Enterprise with the upgrade note.
+
+## 20. Custom conditions (Enterprise; `mandates/library/custom_condition.py`)
+
+The owner's own rule over an invoice's facts: "hold any invoice where the amount is above ₹5 lakh and
+the supplier is new". A rule is `all` or `any` of one to eight rows `fact, comparison, value` over a
+closed list of facts (`FIELDS`: amount, days until due, days since the invoice date, a new supplier,
+a micro or small enterprise, the supplier's name, the currency, …), so a rule reads only what the
+ledger already holds. One outcome per rule: **hold** (Helm holds a matching invoice under its own code
+`CUSTOM_CONDITION:<mandate id>`, so one rule never releases another's hold, and proposes the release
+once the condition stops holding; the Guard refuses paying or releasing a matching invoice and the
+optimiser leaves it out), **approval** (the Guard asks a person before a matching invoice is paid,
+never a refusal) or **notify** (owners and admins are told once per matching invoice). Several custom
+conditions may be active at once; the library says so.
+
+The parameter model refuses an unknown fact, a comparison that does not fit the fact and a value of
+the wrong kind, each in plain words ("Condition 3, days until due: …"); `validate` adds what only the
+whole rule shows (rows that contradict each other). The mandate editor builds the rows
+(`ConditionsEditor.tsx`); a sentence can draft them too (the drafting prompt is told the facts and
+converts amounts), and a drafted row naming a fact Helm cannot test shows "Choose a fact".
+
+Plans: only Enterprise creates, edits or re-activates one. After a move to Business a rule already in
+force keeps holding what it matches until a person pauses or archives it, is shown locked with the
+upgrade note, and the Time machine still replays it; a new custom rule is refused (402).
+
+## 21. What if… (`helm/what_if.py`; the cockpit's "What if…" panel)
+
+`POST …/helm/books/{bid}/what-if` with any of a one-off cash change, customers paying 0 to 90 days
+later than usual, and invoices to hold out of the plan, over 7 to 90 days (the cockpit's 90 by
+default). The snapshot is taken as a plan takes it, the scenario is applied to a copy, and the
+Planner's composition (drift, candidates, payment timing, the 1,000 futures, the Guard) runs on both.
+The copy keeps today's digest, so both runs draw the same futures: any difference is the scenario's,
+not chance. The answer shows both flight paths, both probabilities of staying above the cash floor,
+the mandates whose state changes, the plan's payments, and one paragraph in plain words.
+
+Nothing is saved: no plan, action, certificate, audit row or notice, and the route ends with a
+rollback. Same gate and roles as "Re-plan" (`capability.helm`, or the sample company). Every value is
+checked by `what_if.parse`, which refuses in plain words ("The delay is a whole number of days.");
+an invoice to hold must be one we owe in this book and in a workspace the person can read.

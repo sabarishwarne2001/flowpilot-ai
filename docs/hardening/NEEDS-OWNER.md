@@ -1508,3 +1508,37 @@ finds. Invented names only; it is also the data for the website's screenshots.
 - On the sample company only, six steps, started from Start or the sample's cockpit; it never runs
   on a customer's own book. The step lives in the page address, nothing is stored.
 
+## N-098 — Approval chains (DECIDED (flagship session); Enterprise, box 7)
+
+- A chain is a list of tiers per book: above an amount in one currency, a payment needs 2 or 3
+  approvals from different people, optionally only from chosen roles (owner, admin, billing). The
+  highest tier that applies decides. Holds, releases, recording a payment and anything that moves no
+  money keep one approval. Helm's own approval (Act mode) never counts towards a chain, whatever the
+  act cap.
+- A chain the organization's active members could never meet is refused when it is typed. A saved
+  chain the organization later cannot meet (someone left or changed role) is kept and the settings
+  page warns; those payments wait.
+- An approval counts with the role the person had when they gave it; an approval from someone who
+  later leaves still counts (it was valid when given and is in the audit log).
+- A partial approval does not carry over when a re-plan replaces the action with a different one (a
+  changed amount or date is a new decision).
+- Raising a chain applies at once; lowering it applies after the re-plan the change triggers.
+- Below Enterprise a saved chain stays stored and stops applying; it applies again after an upgrade.
+- The same person approving twice gets a clear "ask someone else" (409), not a silent no-op.
+
+## N-099 — Custom condition mandates (DECIDED (flagship session); Enterprise, box 7)
+
+- A rule is one to eight rows of fact, comparison and value over a closed list of an invoice's facts,
+  with one outcome: hold, ask a person before paying, or notify. Several may be active at once.
+- After a move to Business a rule already in force keeps working (holding what it matches) until a
+  person pauses or archives it; it cannot be edited or switched back on, and new ones are refused.
+  Turning a working safety rule off silently on a downgrade would be worse than keeping it.
+- The MSME fact means micro or small (the MSMED Act's 45-day rule), not medium.
+
+## N-100 — What if… (DECIDED (flagship session); box 7)
+
+- On every plan that has Helm (Business and above, and the sample company), for owners, admins and
+  billing: a what-if saves nothing and moves nothing, so it needs no Enterprise gate.
+- Three levers only for now: a one-off cash change, customers paying later (0 to 90 days), invoices
+  held out of the plan. More levers (a lost customer, a price rise) can follow once owners ask.
+

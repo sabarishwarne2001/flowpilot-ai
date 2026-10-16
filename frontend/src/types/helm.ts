@@ -294,6 +294,67 @@ export interface TrendPoint {
   state: DriftState | null;
 }
 
+/** A what-if (POST …/books/{id}/what-if): leave out what does not change. */
+export interface HelmWhatIfInput {
+  /** A one-off change to today's cash, signed, in millionths of the currency. */
+  cash_change_micros?: number;
+  /** The cash change's currency; may be left out when the book holds cash in one currency. */
+  currency?: string;
+  /** Customers pay this many days later than their own history says (0 to 90). */
+  delay_receivables_days?: number;
+  /** Invoices we owe (promise ids) to hold out of the plan. */
+  hold_promise_ids?: string[];
+  /** How far ahead to compare (7 to 90 days; 90 when left out, like the flight path). */
+  horizon_days?: number;
+}
+
+/** One side of a what-if: today's plan ("baseline") or the scenario's. */
+export interface HelmWhatIfSide {
+  cash_paths: Record<string, CashPoint[]>;
+  floor_probability: Record<string, number>;
+  lowest: Record<string, { on: string; p10: number } | null>;
+  end: Record<string, CashPoint>;
+  cash_today: Record<string, number>;
+  status: HelmPlan["status"];
+  conflict: { headline: string; options: string[] } | null;
+  payments: number;
+  payments_by_currency: Record<string, number>;
+  deferred: number;
+}
+
+export interface HelmWhatIfChange {
+  mandate_id: string;
+  title: string;
+  template: string;
+  baseline: { state: DriftState; figure: string; detail: string };
+  scenario: { state: DriftState; figure: string; detail: string };
+}
+
+export interface HelmWhatIf {
+  as_of: string;
+  horizon_days: number;
+  futures: number;
+  seed: string;
+  inputs: {
+    cash_change_micros: number;
+    currency: string | null;
+    delay_receivables_days: number;
+    hold_promise_ids: string[];
+    horizon_days: number;
+  };
+  /** currency -> the highest active cash floor */
+  floors: Record<string, number>;
+  baseline: HelmWhatIfSide;
+  scenario: HelmWhatIfSide;
+  /** Only the mandates whose state changes. */
+  mandates: HelmWhatIfChange[];
+  summary: string;
+  approximate: boolean;
+  readable: boolean;
+  saved: false;
+  note: string;
+}
+
 export interface LibraryTemplate {
   key: string;
   title: string;
@@ -311,6 +372,36 @@ export interface LibraryTemplate {
   recommended_for: string[];
   /** Parameters with no default: the value shown is an example the person must set before adding. */
   required: string[];
+  /** Several mandates may use it, each with its own rule (the custom condition): never "Already yours". */
+  repeatable: boolean;
+  /** The custom condition's rows editor: the facts it may test, their comparisons and the outcomes. */
+  editor?: ConditionEditorSpec;
+}
+
+/** A comparison a custom condition makes (backend mandates/library/custom_condition.py OP_WORDS). */
+export type ConditionOp = ">" | ">=" | "<" | "<=" | "=" | "!=" | "contains" | "in";
+
+export interface ConditionField {
+  key: string;
+  label: string;
+  type: "money" | "number" | "text" | "bool" | "choice";
+  ops: { op: ConditionOp; words: string }[];
+  unit: string | null;
+  choices: { value: string; label: string }[];
+}
+
+export interface ConditionEditorSpec {
+  fields: ConditionField[];
+  matches: { value: "all" | "any"; label: string }[];
+  outcomes: { value: "hold" | "approval" | "notify"; label: string; help: string }[];
+  max_conditions: number;
+}
+
+/** One stored condition: `field op value` (money as {amount_micros, currency}; "in" as a list). */
+export interface CustomCondition {
+  field: string;
+  op: ConditionOp;
+  value: unknown;
 }
 
 export interface HelmLibrary {

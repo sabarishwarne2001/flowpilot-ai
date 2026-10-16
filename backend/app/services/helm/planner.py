@@ -30,6 +30,7 @@ RELEASE_WHY = {
     "PRICE_ABOVE_AGREED": "No line is above the agreed price any more (a corrected invoice or a credit note).",
     "BANK_ACCOUNT_CHANGED": "The new bank account was verified.",
     "NO_MATCHED_PO": "It now has a matching purchase order (or is no longer above the amount).",
+    "CUSTOM_CONDITION": "It no longer matches the custom condition that held it.",
 }
 
 
@@ -130,6 +131,18 @@ def _plan_destination(candidate: base.Candidate, snapshot: Snapshot) -> tuple[Op
     return True, f"Email to {contact}; the mail server and egress are checked again when it runs."
 
 
+def cash_floors(mandates: Sequence[base.ActiveMandate]) -> dict[str, int]:
+    """The floor per currency the simulation measures: the highest active "keep cash above" floor,
+    the one the flight path draws and the optimiser plans against (staying above it keeps every lower
+    floor too)."""
+    floors: dict[str, int] = {}
+    for m in mandates:
+        if m.status == v.MANDATE_ACTIVE and m.template == "keep_cash_above":
+            currency, amount = m.params.floor.currency, m.params.floor.amount_micros
+            floors[currency] = max(amount, floors.get(currency, amount))
+    return floors
+
+
 def _owner(mandates: Sequence[base.ActiveMandate], template_key: str) -> Optional[base.ActiveMandate]:
     return next((m for m in mandates if m.template == template_key), None)
 
@@ -147,10 +160,10 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
         template = TEMPLATES[mandate.template]
         candidates.extend(template.propose(snapshot, mandate))
         # A hold this mandate placed whose reason is gone: propose releasing it.
-        if template.hold_code and template.still_holds is not None:
+        code = base.hold_code_of(template, mandate)
+        if code and template.still_holds is not None:
             for payable in base.payables_in_scope(snapshot, mandate):
-                if payable.held_by_helm_for(template.hold_code) and not template.still_holds(snapshot, payable,
-                                                                                             mandate):
+                if payable.held_by_helm_for(code) and not template.still_holds(snapshot, payable, mandate):
                     candidates.append(base.release_candidate(payable, mandate, RELEASE_WHY.get(
                         template.hold_code, "Its reason is gone.")))
 
@@ -237,8 +250,7 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
                 payable.currency and payable.promise_id not in {c.promise_id for c in candidates
                                                                 if c.kind == v.ACTION_SCHEDULE_PAYMENT}:
             planned.setdefault(payable.currency, []).append((payable.run_date, payable.amount_micros))
-    floors_all = {m.params.floor.currency: m.params.floor.amount_micros for m in active
-                  if m.template == "keep_cash_above"}
+    floors_all = cash_floors(active)
     sim = simulation.simulate(snapshot, seed=seed, horizon_days=snapshot.horizon_days, planned=planned,
                               floors=floors_all)
     forecast = simulation.simulate(snapshot, seed=seed, horizon_days=forecast_days, planned=planned,
@@ -276,4 +288,4 @@ def compose(snapshot: Snapshot, mandates: Sequence[base.ActiveMandate], *, issue
                        sim=sim, forecast_sim=forecast, seed=seed, status=status, conflict=conflict, risks=risks)
 
 
-__all__ = ["Composition", "Proposal", "TIMING_TEMPLATES", "compose"]
+__all__ = ["Composition", "Proposal", "TIMING_TEMPLATES", "cash_floors", "compose"]

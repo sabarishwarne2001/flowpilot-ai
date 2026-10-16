@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { ExternalLink, Lock, Pause, Pencil, Play, Plus, Trash2 } from "lucide-react";
 
+import { EnterpriseNote } from "@/components/helm/EnterpriseNote";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { MandateComposer } from "@/components/helm/MandateComposer";
 import { MandateEditor, type EditorStart } from "@/components/helm/MandateEditor";
@@ -99,6 +100,12 @@ export const HelmMandates: React.FC = () => {
   });
 
   const inUse = useMemo(() => new Set((mandates.data ?? []).map((m) => m.template)), [mandates.data]);
+  // A mandate whose template this plan no longer carries (a custom condition after a move from
+  // Enterprise) keeps running until paused or archived, but cannot be edited or switched back on.
+  const locked = useMemo(
+    () => new Set((library.data?.templates ?? []).filter((t) => !t.available).map((t) => t.key)),
+    [library.data],
+  );
   const groups = library.data?.groups ?? [];
 
   if (library.isError || mandates.isError) {
@@ -176,10 +183,16 @@ export const HelmMandates: React.FC = () => {
                     </p>
                     <ReadbackSentence readback={mandate.readback} className="mt-1.5 text-sm" />
                     <LawLinks links={mandate.law_links} disclaimer={mandate.disclaimer} />
+                    {locked.has(mandate.template) ? (
+                      <EnterpriseNote
+                        what="Changing or switching on this mandate is"
+                        className="helm-muted mt-2 text-xs"
+                      />
+                    ) : null}
                   </div>
                   {writable ? (
                     <div className="flex shrink-0 flex-wrap gap-2">
-                      {mandate.status !== "ARCHIVED" ? (
+                      {mandate.status !== "ARCHIVED" && !locked.has(mandate.template) ? (
                         <button
                           type="button"
                           className="helm-btn"
@@ -200,7 +213,7 @@ export const HelmMandates: React.FC = () => {
                           <Pause className="h-3.5 w-3.5" aria-hidden="true" />
                           Pause
                         </button>
-                      ) : (
+                      ) : locked.has(mandate.template) ? null : (
                         <button
                           type="button"
                           className="helm-btn"
@@ -268,7 +281,9 @@ export const HelmMandates: React.FC = () => {
                   <h3 className="mb-2 text-sm font-semibold">{group}</h3>
                   <ul className="grid gap-3 md:grid-cols-2">
                     {templates.map((template) => {
-                      const used = inUse.has(template.key);
+                      // A repeatable template (the custom condition) takes one mandate per rule.
+                      const another = template.repeatable && inUse.has(template.key);
+                      const used = inUse.has(template.key) && !template.repeatable;
                       return (
                         <li key={template.key} className="helm-panel flex flex-col p-4" data-testid="helm-template">
                           <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
@@ -283,6 +298,7 @@ export const HelmMandates: React.FC = () => {
                           <ReadbackSentence readback={template.readback} className="mt-1.5 text-sm" />
                           <p className="helm-muted mt-1 text-xs">{template.summary}</p>
                           <LawLinks links={template.law_links} disclaimer={template.disclaimer} />
+                          {!template.available ? <EnterpriseNote what="It is" className="helm-muted mt-2 text-xs" /> : null}
                           {writable ? (
                             <div className="mt-auto pt-3">
                               <button
@@ -290,16 +306,24 @@ export const HelmMandates: React.FC = () => {
                                 className="helm-btn"
                                 disabled={used || !template.available || add.isPending || open.isPending}
                                 onClick={() => (template.required.length > 0 ? open.mutate(template) : add.mutate(template))}
-                                aria-label={used ? `${template.title}: already yours` : `Add ${template.title}`}
+                                aria-label={
+                                  used
+                                    ? `${template.title}: already yours`
+                                    : another
+                                      ? `Add another ${template.title.toLowerCase()}`
+                                      : `Add ${template.title}`
+                                }
                               >
                                 <Plus className="h-3.5 w-3.5" aria-hidden="true" />
                                 {used
                                   ? "Already yours"
                                   : !template.available
                                     ? "On Enterprise"
-                                    : template.required.length > 0
-                                      ? "Set it up"
-                                      : "Add in Propose mode"}
+                                    : another
+                                      ? "Add another"
+                                      : template.required.length > 0
+                                        ? "Set it up"
+                                        : "Add in Propose mode"}
                               </button>
                             </div>
                           ) : null}
