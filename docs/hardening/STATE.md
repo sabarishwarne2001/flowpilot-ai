@@ -1,8 +1,72 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-16 (flagship session: Helm, finished; PR #24 ready for review)_
+_FlowPilot AI was renamed Servabo on 2026-10-16. Entries below that date keep the old name._
 
-## Current phase — Flagship session: Helm, the flagship engine
+_Last updated: 2026-10-16 (website and payments session: started)_
+
+## Current phase — Website and payments session: Servabo, the website and Dodo Payments
+Branch `claude/new-session-3qnrpb` (the session's assigned branch), based on `main` at `906c921`
+(PR #24, the flagship session, is merged; `docs/product/FLAGSHIP.md` and HANDOFF "Flagship session →
+website and payments session" are present). The owner gave full founder authority: decisions are
+built and recorded in NEEDS-OWNER.md as `DECIDED (website and payments session)`; the brief's own
+decisions as `DECIDED (owner, planning chat, 2026-10-15)`. **If this session is cut off, paste the
+same prompt again: continue on this branch and its open pull request, from the first unticked box
+below. Never restart.**
+
+**Plan (the brief's order A → B → C → D; each defect proven by a failing test first):**
+- [ ] 0. Start-up: docs read; live stack up (Postgres 16 + pgvector 0.8.0 on :5433 e2e and :5434
+  backend tests, Redis, API, worker `--loop all --profile all`, model stand-in, production bundle
+  with CSP), logs to files; this plan; draft PR.
+- [ ] A1. Rename what people see: UI strings, titles, meta, manifest, emails, PDFs and exports,
+  calendar feed, redaction stamp, samples, notifications, OpenAPI title, README and current docs.
+- [ ] A2. Code identifiers (`FlowPilotError` → `ServaboError`, …), pure renames.
+- [ ] A3. Protocol identifiers (signature header, TXT record, WebSocket subprotocol, refresh
+  cookie, key prefixes, local-storage keys), each listed in CHANGELOG.md.
+- [ ] A4. Database-level names in a new Alembic migration (the audit sweeper setting).
+- [ ] A5. Configuration `FLOWPILOT_*` → `SERVABO_*` with a one-release alias and one startup
+  warning; database defaults and templates `servabo`, `servabo_e2e`, `servabo_test`.
+- [ ] A6. Operations: Docker names, cron files `servabo-sweepers`, `/etc/servabo/`, backup names,
+  dev scripts, CI names, the e2e seed.
+- [ ] A7. History lines at the top of FINDINGS, NEEDS-OWNER, STATE, CHANGELOG.
+- [ ] A8. Brand assets: logo mark and wordmark (SVG), favicons, sign-in screen, emails, Open Graph.
+- [ ] A9. Guard test: the old name fails outside an explicit allowlist.
+- [ ] A10. Part A checkpoint: full backend suite, browser suite, frontend checks green.
+- [ ] B1. `website/`: Astro + TypeScript + Tailwind on shared brand tokens, self-hosted fonts, no
+  third-party scripts; layout, header, footer with every Dodo-required link.
+- [ ] B2. Pricing data: `backend/scripts/export_public_pricing.py` → `website/src/data/pricing.json`,
+  drift test, build fails on an unlabelled plan.
+- [ ] B3. Pages: home, Helm (flagship), product, four solutions, pricing, security, about, contact.
+- [ ] B4. Legal: terms, privacy, refunds, acceptable use, subprocessors (data file from the code),
+  cookies; 404, sitemap, robots, canonical, OG/Twitter, structured data.
+- [ ] B5. Real screenshots (`website/scripts/capture-screenshots`), light and dark.
+- [ ] B6. `_headers` (strict CSP, HSTS…), Caddy site block, `docs/website/DEPLOY.md`,
+  `docs/website/DODO-REVIEW.md`.
+- [ ] B7. Joining to the app: `WEBSITE_URL` / `VITE_WEBSITE_URL`, app `/pricing` `/terms`
+  `/privacy` redirect, links back, email footers, Billing → refunds link, `--website` dev switch.
+- [ ] B8. CI `website` job (install, typecheck, build, links, axe in both themes, HTML validation,
+  Lighthouse ≥ 95 on home, pricing, Helm), required.
+- [ ] C1. `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
+  `scripts/e2e_stand_in.py --gateway dodo`; browser journeys on Dodo by default; Stripe journeys kept.
+- [ ] C2. Default gateway DODO everywhere; production guard (key, secret, live/test agreement).
+- [ ] C3. Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
+  add-ons, customer adoption and racing checkouts; one live concurrency test.
+- [ ] C4. Dodo payments as invoice rows, PDF download route, merchant-of-record note.
+- [ ] C5. Refunds and disputes (record, notify, RevOps, lost dispute → read-only).
+- [ ] C6. Plan changes with Dodo's preview (amount and date first), upgrades now, downgrades at
+  renewal, downgrade checks first; portal for payment method.
+- [ ] C7. Seats on Dodo proven end to end (`DODO_PREVIEW`).
+- [ ] C8. Overage capability: `ALLOW_AND_BILL` published as `REFUSE` without usage billing; copy.
+- [ ] C9. Customer details reach Dodo (or the page says where); never Stripe on a Dodo account.
+- [ ] C10. No Stripe where a customer looks; worker loop `billing` (alias `stripe`).
+- [ ] C11. Yearly products on Dodo; switch only when configured; website reads the same data.
+- [ ] C12. Dodo fees in unit economics and the margin console; ≥ 55% at ceilings after fees.
+- [ ] C13. Checkout return waits for the webhook, with a timeout message.
+- [ ] C14. `backend/scripts/dodo_setup.py` (test mode only); `docs/billing/DODO.md`.
+- [ ] D1. RUNBOOK §9 rewritten; CONFIGURATION.md and TENANCY-AND-PLANS.md regenerated.
+- [ ] D2. HANDOFF: owner launch checklist rewritten; "Website and payments session → next sessions".
+- [ ] D3. Finish: full suites, logs clean, ledgers, PR ready, final message.
+
+## Previous phase — Flagship session: Helm, the flagship engine
 Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
 (PR #23, campaign session 4, is merged). Draft PR titled `Helm: the flagship engine`. The owner gave
 full founder authority: decisions are built and recorded in NEEDS-OWNER.md as
