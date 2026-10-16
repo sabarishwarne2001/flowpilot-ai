@@ -1,11 +1,12 @@
 import React from "react";
-import { Zap } from "lucide-react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
 import { useAuthenticatedImage } from "@/hooks/useAuthenticatedImage";
 import { useImageFallback } from "@/hooks/useImageFallback";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { resolveApiAssetUrl } from "@/services/api/client";
+
+import { ServaboMark } from "./ServaboMark";
 
 export type BrandVariant =
   | "sidebar"
@@ -123,7 +124,7 @@ export const Brand: React.FC<BrandProps> = ({
   // F-143. Remembered per source, so a newly uploaded logo is tried again.
   const { failed: imgError, onError: onLogoError } = useImageFallback(logoSrc);
 
-  const initials = (workspaceName || companyName || "FP")
+  const initials = (workspaceName || companyName || "S")
     .trim()
     .split(/\s+/)
     .slice(0, 2)
@@ -157,7 +158,11 @@ export const Brand: React.FC<BrandProps> = ({
           justify-center
           overflow-hidden
           rounded-lg
-          ${logoSrc && !imgError ? "border border-border bg-background" : "bg-primary text-primary-foreground"}
+          ${logoSrc && !imgError
+            ? "border border-border bg-background"
+            : isAuthPage && !publicBrand
+              ? ""
+              : "bg-primary text-primary-foreground"}
         `}
       >
         {logoSrc && !imgError ? (
@@ -168,9 +173,7 @@ export const Brand: React.FC<BrandProps> = ({
             onError={onLogoError}
           />
         ) : isAuthPage && !publicBrand ? (
-          <div className="flex h-full w-full items-center justify-center bg-primary">
-            <Zap className="h-6 w-6 text-primary-foreground fill-primary-foreground" />
-          </div>
+          <ServaboMark className="h-full w-full" />
         ) : (
           <span className="font-semibold text-xs sm:text-sm text-primary-foreground">
             {initials}

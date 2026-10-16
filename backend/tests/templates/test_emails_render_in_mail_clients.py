@@ -115,3 +115,21 @@ def test_the_email_suits_every_mail_client(name: str) -> None:
         assert not buttons, "an email with nothing to follow has no button"
         return
     assert LINK.split("#")[0] in text_body, "the plain-text part lacks the link"
+
+
+# Website and payments session (Part A8): mail sent as Servabo carries the Servabo mark; mail sent
+# under an organization's own brand never does.
+
+
+def test_servabo_mail_shows_the_mark_beside_the_name() -> None:
+    _, html, _ = EMAILS["verify"]()
+    header = html.split('<div class="content"', 1)[0]
+    assert re.search(r'<span class="mark" aria-hidden="true" style="[^"]*background-color:#1555e0[^"]*">S</span>', header)
+    assert ">Servabo</span>" in header
+    assert "<img" not in header, "no remote image: clients hold them, and some emails must carry no address"
+
+
+def test_white_label_mail_has_no_servabo_mark() -> None:
+    _, html, _ = EMAILS["helm-briefing"]()
+    assert 'class="mark"' not in html
+    assert ">Example Cloud</span>" in html

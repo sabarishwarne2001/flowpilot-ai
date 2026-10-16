@@ -34,9 +34,25 @@ LEGACY_DIRECTORIES: dict[str, str] = {
     ".servabo_basebackups": ".flowpilot_basebackups",
 }
 
+#: The product's old names, longest first. A display setting still holding one (a `.env` copied
+#: from the old template says `PROJECT_NAME=FlowPilot AI`) shows Servabo instead.
+LEGACY_PRODUCT_NAMES = ("FlowPilot AI", "FlowPilot")
+PRODUCT_NAME = "Servabo"
+
 logger = logging.getLogger("app.core.legacy_names")
 
 _warned = False
+_rebranded: set[str] = set()
+
+
+def rebrand(setting: str, value: str) -> str:
+    """`value` with the old product name replaced by Servabo; remembers `setting` for the warning."""
+    new = value
+    for old in LEGACY_PRODUCT_NAMES:
+        new = new.replace(old, PRODUCT_NAME)
+    if new != value:
+        _rebranded.add(setting)
+    return new
 
 
 def env(name: str, default: Optional[str] = None, *, environ: Optional[Mapping[str, str]] = None) -> Optional[str]:
@@ -90,13 +106,17 @@ def warn_once(
     """Log one start-up warning if any pre-rename name is still set; returns the names found."""
     global _warned
     names = legacy_names_in_use(environ, dotenv)
-    if names and not _warned:
+    if (names or _rebranded) and not _warned:
         _warned = True
-        (log or logger).warning(
-            "FlowPilot was renamed Servabo. These settings still use the old name and work for "
-            "this release only; rename them: %s",
-            rename_advice(names),
-        )
+        parts = []
+        if names:
+            parts.append("rename these settings (the old names work for this release only): " + rename_advice(names))
+        if _rebranded:
+            parts.append(
+                "these settings still name the old product and are shown as Servabo; update them: "
+                + ", ".join(sorted(_rebranded))
+            )
+        (log or logger).warning("FlowPilot was renamed Servabo. %s", "; ".join(parts))
     return names
 
 
@@ -117,6 +137,7 @@ def local_directory(base: Path, name: str) -> Path:
 def _reset_for_tests() -> None:
     global _warned
     _warned = False
+    _rebranded.clear()
 
 
 __all__ = [
@@ -126,6 +147,7 @@ __all__ = [
     "LEGACY_STEM",
     "PREFIX",
     "env",
+    "rebrand",
     "legacy_names_in_use",
     "local_directory",
     "rename_advice",

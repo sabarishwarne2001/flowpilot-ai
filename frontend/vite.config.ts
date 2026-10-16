@@ -85,6 +85,8 @@ export default defineConfig(({ mode, command }) => {
       port: 3000,
       strictPort: true,
       open: true,
+      // The brand (tokens, mark) lives in ../brand, shared with the website.
+      fs: { allow: [__dirname, path.resolve(__dirname, "../brand")] },
     },
 
     preview: {

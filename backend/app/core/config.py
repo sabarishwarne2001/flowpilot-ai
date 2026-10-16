@@ -19,6 +19,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Literal  # noqa: E402
 from app.core.constants import APP_VERSION
 from app.core.legacy_names import LEGACY_PREFIX
+from app.core.legacy_names import rebrand as legacy_rebrand
 from app.core.production_guard import (
     HARDENED_ENVIRONMENTS,
     UnsafeConfigurationError,
@@ -41,6 +42,13 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Servabo"
     APP_VERSION: str = APP_VERSION
     API_TITLE: str = "Servabo Core API"
+
+    @field_validator("PROJECT_NAME", "API_TITLE", "PLATFORM_SMTP_FROM_NAME", mode="after")
+    @classmethod
+    def _show_the_new_product_name(cls, value: str, info) -> str:
+        # A .env copied from the template before the rename names the old product; people see
+        # Servabo, and start-up warns once so the file gets updated (app/core/legacy_names.py).
+        return legacy_rebrand(info.field_name, value)
     ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     

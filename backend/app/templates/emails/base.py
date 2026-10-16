@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from html import escape as html_escape
 
 # Campaign session 4 (§A.4): the layout is built for the mail clients customers use, not only
 # for browsers. Gmail drops <style> in some of its apps, Outlook for Windows draws with Word (no
@@ -44,7 +45,7 @@ _LAYOUT = """<!DOCTYPE html>
 <table role="presentation" class="container" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;background-color:#ffffff;border:1px solid #e1e1e1;border-radius:8px;">
 <tr><td class="inner" style="padding:40px;font-family:FONT;font-size:15px;line-height:1.6;color:#333333;">
     <div class="header" style="text-align:center;margin-bottom:30px;">
-        <span class="logo" style="font-size:24px;font-weight:bold;color:BLUE;">{brand_name}</span>
+        {brand_header}
     </div>
     <div class="content" style="margin-bottom:30px;">
         {content_html}
@@ -87,10 +88,38 @@ def _bulletproof_buttons(html: str) -> str:
     return _BUTTON.sub(one, html)
 
 
+_WORDMARK = '<span class="logo" style="font-size:24px;font-weight:bold;color:{color};vertical-align:middle;">{name}</span>'
+
+
+def _brand_header(brand_name: str) -> str:
+    """The email's header: the Servabo mark and name, or a white-label brand's name alone.
+
+    The mark is drawn in HTML (a blue rounded tile with a white "S", the app's mark at email
+    size), not loaded as an image: mail clients hold remote images until the reader allows them,
+    and an email that must carry no web address (a revocation notice, a completed transfer)
+    stays that way. Outlook for Windows ignores the rounded corners and shows a square tile.
+    An organization sending under its own brand never gets Servabo's mark in its mail.
+    """
+    from app.core.config import settings
+
+    name_html = _WORDMARK.format(color=_BRAND_BLUE, name=brand_name)
+    if brand_name != html_escape(str(settings.PROJECT_NAME)):
+        return name_html
+    tile = (
+        f'<span class="mark" aria-hidden="true" style="display:inline-block;width:30px;height:30px;'
+        f"border-radius:8px;background-color:{_BRAND_BLUE};color:#ffffff;font-family:{_FONT};"
+        'font-size:19px;font-weight:700;line-height:30px;text-align:center;vertical-align:middle;'
+        'margin-right:10px;">S</span>'
+    )
+    return tile + name_html
+
+
 class _EmailLayout(str):
     """The layout string; `format` also draws its buttons for every mail client."""
 
     def format(self, *args: object, **kwargs: object) -> str:  # type: ignore[override]
+        if "brand_header" not in kwargs:
+            kwargs["brand_header"] = _brand_header(str(kwargs.get("brand_name", "")))
         return _bulletproof_buttons(super().format(*args, **kwargs))
 
 

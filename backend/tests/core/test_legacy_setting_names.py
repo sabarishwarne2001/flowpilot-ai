@@ -81,3 +81,18 @@ def test_a_backup_directory_made_before_the_rename_is_still_found(tmp_path: Path
     assert legacy_names.local_directory(tmp_path, ".servabo_backups") == old
     (tmp_path / ".servabo_backups").mkdir()
     assert legacy_names.local_directory(tmp_path, ".servabo_backups") == tmp_path / ".servabo_backups"
+
+
+def test_an_env_file_that_still_names_flowpilot_shows_servabo(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("PROJECT_NAME=FlowPilot AI\nAPI_TITLE=FlowPilot AI Core API\nPLATFORM_SMTP_FROM_NAME=FlowPilot AI\n")
+    s = Settings(_env_file=str(dotenv))
+    assert (s.PROJECT_NAME, s.API_TITLE, s.PLATFORM_SMTP_FROM_NAME) == ("Servabo", "Servabo Core API", "Servabo")
+    with caplog.at_level(logging.WARNING, logger="app.core.legacy_names"):
+        legacy_names.warn_once(environ={}, dotenv=tmp_path / "missing")
+    message = " ".join(r.getMessage() for r in caplog.records)
+    assert "API_TITLE" in message and "PROJECT_NAME" in message and "PLATFORM_SMTP_FROM_NAME" in message
+
+
+def test_a_custom_product_name_is_left_alone() -> None:
+    assert legacy_names.rebrand("PROJECT_NAME", "Acme Docs") == "Acme Docs"
