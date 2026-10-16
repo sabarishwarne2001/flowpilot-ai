@@ -23,6 +23,7 @@
     POST   /organizations/{oid}/helm/books/{bid}/plan                 re-plan now
     POST   /organizations/{oid}/helm/books/{bid}/plan/approve-all     approve every action that passed the Guard
                                                                       (approved, waiting for someone else, skipped)
+    POST   /organizations/{oid}/helm/books/{bid}/what-if              a scenario beside today's plan (saves nothing)
     GET    /organizations/{oid}/helm/books/{bid}/mandates
     POST   /organizations/{oid}/helm/books/{bid}/mandates             create (from the gallery or a draft)
     POST   /organizations/{oid}/helm/books/{bid}/mandates/preview     validate and read back without saving
@@ -227,6 +228,24 @@ class BacktestIn(BaseModel):
     mandates: Optional[list[BacktestMandateIn]] = Field(default=None, max_length=20)
 
 
+class WhatIfIn(BaseModel):
+    """A scenario. Values are deliberately loose here: `helm/what_if.parse` checks each type and range
+    and refuses in plain words ("The delay is a whole number of days."), not in a validator's."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: A one-off change to today's cash: a signed whole number of millionths of the currency.
+    cash_change_micros: Optional[Any] = None
+    #: The cash change's currency; may be left out when the book holds cash in one currency.
+    currency: Optional[Any] = None
+    #: Customers pay this many days later than usual (0 to 90).
+    delay_receivables_days: Optional[Any] = None
+    #: Invoices we owe (their promise ids) to hold out of the plan.
+    hold_promise_ids: Optional[list[Any]] = Field(default=None, max_length=200)
+    #: How far ahead to compare the flight paths (7 to 90 days; the cockpit's 90 when left out).
+    horizon_days: Optional[Any] = None
+
+
 class PaidIn(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -377,6 +396,19 @@ def helm_approve_all(organization_id: uuid.UUID, book_id: uuid.UUID, db: Session
     who = _viewer(db, context)
     result = service.approve_all(db, who, service.book_for(db, who, book_id))
     db.commit()
+    return result
+
+
+@router.post(f"{P}/books/{{book_id}}/what-if")
+def helm_what_if(organization_id: uuid.UUID, book_id: uuid.UUID, payload: WhatIfIn, db: Session = Depends(get_db),
+                 context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """Today's plan and a scenario's, side by side: both flight paths, both chances of staying above
+    the cash floor, the mandates whose state changes and a summary in words. Nothing is saved."""
+    from app.services.helm import what_if
+
+    who = _viewer(db, context)
+    result = what_if.run(db, who, service.book_for(db, who, book_id), payload.model_dump())
+    db.rollback()  # nothing a what-if read is kept; this also releases the ledger's shared locks
     return result
 
 

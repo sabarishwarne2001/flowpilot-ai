@@ -261,6 +261,19 @@
 .helm-chart-today { stroke: hsl(var(--helm-ink)); stroke-width: 1; stroke-dasharray: 2 2; }
 .helm-chart-pin { fill: hsl(var(--helm-accent)); }
 .helm-chart-past { stroke: hsl(var(--helm-ink-muted)); fill: none; stroke-width: 1.5; }
+/* A what-if's middle estimate: ink, long dashes, so it reads apart from the accent line and the floor. */
+.helm-chart-scenario { stroke: hsl(var(--helm-ink)); fill: none; stroke-width: 2; stroke-dasharray: 7 4; }
+
+/* The What if… panel: its comparison table keeps two figures side by side at phone width. */
+.helm-what-if-table th,
+.helm-what-if-table td {
+  padding: 0.25rem 0.5rem 0.25rem 0;
+  vertical-align: top;
+}
+
+.helm-what-if-table td:last-child {
+  font-weight: 600;
+}
 
 /* An instrument's small trend: ink, not a status colour (the badge says the state in words). */
 .helm-trend-line { stroke: hsl(var(--helm-ink-muted)); }
