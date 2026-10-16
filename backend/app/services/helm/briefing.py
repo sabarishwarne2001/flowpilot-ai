@@ -130,7 +130,7 @@ def sweep(*, now: Optional[datetime] = None) -> dict[str, Any]:
                 continue
             if inactive_reason(db, organization_id=book.organization_id) or \
                     unpaid_reason(db, organization_id=book.organization_id) or \
-                    not gate.helm_held(db, book.organization_id):
+                    gate.book_closed(db, book) or not gate.helm_held(db, book.organization_id):
                 continue
             week = due(db, book, settings, now)
             if week is None:

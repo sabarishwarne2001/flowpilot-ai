@@ -205,6 +205,22 @@ def summarise(result: dict[str, Any], *, months: int) -> str:
     return money_line + facts + " Confirmed amounts have evidence; likely and potential ones are not counted as value held."
 
 
+def _stopped(db: Session, row: HelmBacktest, book: HelmBook) -> Optional[str]:
+    """Why a queued backtest no longer runs, in words for the Time machine: its book was archived (the
+    sample company deleted) or the workspace it reads closed, or the plan lost Helm after a backtest only
+    Helm runs (more than Helm preview's weekly one) was asked for."""
+    closed = gate.book_closed(db, book)
+    if closed is not None:
+        if book.status != v.BOOK_ACTIVE:
+            return "This Helm book was archived before the backtest ran, so it did not run."
+        subject, _, state = closed.partition(" ")
+        return f"The {subject} this book belongs to is {state}, so the backtest did not run."
+    if not row.preview and book.kind != v.BOOK_SAMPLE and not gate.helm_held(db, book.organization_id):
+        return ("The organization's plan no longer includes Helm, so this backtest did not run. Helm preview "
+                f"replays up to {gate.PREVIEW_BACKTEST_MONTHS} months once a week.")
+    return None
+
+
 def run(db: Session, *, backtest_id: uuid.UUID) -> dict[str, Any]:
     row = db.get(HelmBacktest, backtest_id)
     if row is None:
@@ -216,6 +232,11 @@ def run(db: Session, *, backtest_id: uuid.UUID) -> dict[str, Any]:
         row.status, row.error = v.BACKTEST_FAILED, "The Helm book no longer exists."
         db.flush()
         return {"backtest_id": str(row.id), "status": row.status}
+    stopped = _stopped(db, row, book)
+    if stopped is not None:
+        row.status, row.error, row.finished_at = v.BACKTEST_FAILED, stopped, datetime.now(timezone.utc)
+        db.flush()
+        return {"backtest_id": str(row.id), "status": row.status, "reason": stopped}
     started = time.monotonic()
     row.status, row.started_at = v.BACKTEST_RUNNING, datetime.now(timezone.utc)
     db.flush()

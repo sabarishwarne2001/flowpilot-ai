@@ -145,6 +145,23 @@ def assert_mandate_room(db: Session, organization_id: uuid.UUID) -> None:
             requested=active + 1, plan=None)
 
 
+def book_closed(db: Session, book: Optional[Any], *, workspace_id: Optional[uuid.UUID] = None) -> Optional[str]:
+    """Why Helm's background work for this book stops, or None: the book is gone or archived (the sample
+    company deleted), or a workspace the work is about (the book's own, or an action's) is archived or
+    suspended (F-134: no background work for an archived workspace). The organization's own state is the
+    tenant gate's (`app/workers/tenant_gate.py`)."""
+    from app.workers.tenant_gate import inactive_reason
+
+    if book is None:
+        return "book not found"
+    if book.status != v.BOOK_ACTIVE:
+        return f"book {str(book.status).lower()}"
+    for wid in sorted({w for w in (book.workspace_id, workspace_id) if w is not None}, key=str):
+        reason = inactive_reason(db, workspace_id=wid)
+        if reason is not None:
+            return reason
+    return None
+
 
 def preview_backtest_allowed(db: Session, organization_id: uuid.UUID, *, now: Optional[datetime] = None) -> \
         tuple[bool, Optional[datetime]]:
@@ -203,6 +220,6 @@ def readable_workspaces(db: Session, *, organization_id: uuid.UUID, user_id: uui
 
 __all__ = ["HELM_DECIDER_ROLES", "HELM_VIEWER_ROLES", "PREVIEW_BACKTEST_MONTHS", "active_mandate_count",
            "all_workspaces_held", "api_held", "approval_chains_held", "assert_api_access", "assert_mandate_room",
-           "backtest_months_limit", "can_approve", "can_decide", "can_view", "custom_held",
+           "backtest_months_limit", "book_closed", "can_approve", "can_decide", "can_view", "custom_held",
            "helm_held", "lock_mandates", "mandates_limit", "preview_backtest_allowed", "preview_error",
            "readable_workspaces", "require", "through_api_key"]

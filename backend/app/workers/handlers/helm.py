@@ -52,6 +52,19 @@ def _books_reading(db: Any, workspace_id: uuid.UUID):
     )).scalars().all()
 
 
+def _closed(db: Any, *, workspace_id: uuid.UUID) -> Any:
+    from app.workers.tenant_gate import inactive_reason
+
+    return inactive_reason(db, workspace_id=workspace_id)
+
+
+def _skipped(job_type: str, payload: dict[str, Any], reason: str) -> dict[str, Any]:
+    """Nothing to do for this tenant: said in the job's result and logged, as the tenant gate does."""
+    logger.info("jobs.skipped_inactive_tenant",
+                extra={"job_type": job_type, "job_id": payload.get("job_id"), "reason": reason})
+    return {"skipped": reason}
+
+
 def _may_plan(db: Any, book: Any) -> bool:
     from app.services.helm import gate
     from app.services.helm import vocabulary as v
@@ -73,13 +86,17 @@ def handle_ledger_build(payload: dict[str, Any]) -> dict[str, Any]:
                 from app.models.workspace import Workspace
 
                 workspace = db.get(Workspace, workspace_id)
-                if workspace is None or not _org_active(db, workspace.organization_id):
+                if workspace is None or not _org_active(db, workspace.organization_id) or \
+                        _closed(db, workspace_id=workspace_id) is not None:
+                    continue
+                # Like the rebuild a document asks for: only for a book that may plan.
+                books = [b for b in _books_reading(db, workspace_id) if _may_plan(db, b)]
+                if not books:
                     continue
                 try:
                     ledger_store.rebuild_workspace(db, workspace_id=workspace_id)
-                    for book in _books_reading(db, workspace_id):
-                        if _may_plan(db, book):
-                            plan_store.enqueue(db, book, triggered_by=v.TRIGGER_SCHEDULE)
+                    for book in books:
+                        plan_store.enqueue(db, book, triggered_by=v.TRIGGER_SCHEDULE)
                     db.commit()
                     rebuilt += 1
                 except Exception:  # noqa: BLE001 - one tenant's bad data must not stop the others
@@ -107,7 +124,7 @@ def handle_ledger_build(payload: dict[str, Any]) -> dict[str, Any]:
 def handle_plan(payload: dict[str, Any]) -> dict[str, Any]:
     from app.db.session import SessionLocal
     from app.models.helm import HelmBook
-    from app.services.helm import plan_store
+    from app.services.helm import gate, plan_store
     from app.services.helm import vocabulary as v
 
     if not payload.get("book_id"):
@@ -118,7 +135,8 @@ def handle_plan(payload: dict[str, Any]) -> dict[str, Any]:
         for book_id, organization_id in books:
             with SessionLocal() as db:
                 book = db.get(HelmBook, book_id)
-                if book is None or not _org_active(db, organization_id) or not _may_plan(db, book):
+                if book is None or not _org_active(db, organization_id) or gate.book_closed(db, book) or \
+                        not _may_plan(db, book):
                     continue
                 try:
                     if plan_store.run(db, book, triggered_by=v.TRIGGER_SCHEDULE) is not None:
@@ -131,8 +149,9 @@ def handle_plan(payload: dict[str, Any]) -> dict[str, Any]:
 
     with SessionLocal() as db:
         book = db.get(HelmBook, _uuid(payload["book_id"]))
-        if book is None or book.status != v.BOOK_ACTIVE:
-            return {"skipped": "book not found"}
+        closed = gate.book_closed(db, book)
+        if closed is not None:
+            return _skipped(v.JOB_PLAN, payload, closed)
         if not _may_plan(db, book):
             return {"skipped": "capability.helm not held"}
         plan = plan_store.run(db, book, triggered_by=payload.get("triggered_by") or v.TRIGGER_LEDGER,
@@ -145,14 +164,28 @@ def handle_plan(payload: dict[str, Any]) -> dict[str, Any]:
 
 def handle_execute(payload: dict[str, Any]) -> dict[str, Any]:
     from app.db.session import SessionLocal
-    from app.services.helm import executor
+    from app.models.helm import HelmAction, HelmBook
+    from app.services.helm import executor, gate
+    from app.services.helm import vocabulary as v
 
     with SessionLocal() as db:
+        waiting = db.get(HelmAction, _uuid(payload["action_id"]))
+        if waiting is not None:
+            closed = gate.book_closed(db, db.get(HelmBook, waiting.book_id), workspace_id=waiting.workspace_id)
+            if closed is not None:
+                return _skipped(v.JOB_EXECUTE, payload, closed)
         action = executor.execute(db, action_id=_uuid(payload["action_id"]))
         db.commit()
         if action is None:
             return {"skipped": "the action is not waiting to run (already ran, or not approved)"}
-        return {"action_id": str(action.id), "state": action.state}
+        out = {"action_id": str(action.id), "state": action.state}
+        if action.state == v.ACTION_BLOCKED:  # why, in the Guard's words (the plan lost Helm, a limit...)
+            checks = (action.guard or {}).get("checks") or []
+            failed = [c.get("detail") for c in checks if c.get("result") == v.CHECK_FAIL]
+            out["reason"] = "; ".join(d for d in failed if d) or "the Guard blocked it"
+        elif action.state == v.ACTION_FAILED:
+            out["reason"] = (action.result or {}).get("message") or "the action could not be carried out"
+        return out
 
 
 def handle_backtest(payload: dict[str, Any]) -> dict[str, Any]:
