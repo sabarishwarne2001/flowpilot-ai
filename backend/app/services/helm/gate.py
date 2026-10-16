@@ -76,9 +76,18 @@ def through_api_key() -> bool:
 def assert_api_access(db: Session, organization_id: uuid.UUID) -> None:
     """An API key reaches Helm only on a plan with `capability.helm_api` (Enterprise). Its scope
     (`helm:read` for reading, `helm:write` for changing) was checked before the route ran; a person
-    signed in is not affected. Not audited: a refused key is refused on every call it makes."""
+    signed in is not affected. Audited through the denial aggregation (one row each, then summary
+    rows), so a refused key calling again and again cannot fill the audit log."""
     if not through_api_key() or api_held(db, organization_id):
         return
+    from app.core.principal import get_current_principal
+    from app.models.audit_log import AuditAction, AuditResourceType
+    from app.services.denial_aggregation_service import record_threshold_denial
+
+    record_threshold_denial(db=db, organization_id=organization_id, resource_type=AuditResourceType.ORGANIZATION,
+                            action=AuditAction.ACCESSED, principal=get_current_principal(),
+                            details={"reason": "capability_required",
+                                     "capability_key": entitlements.HELM_API_CAPABILITY})
     raise CapabilityRequiredError(
         "Helm through API keys and webhooks is part of the Enterprise plan. Sign in to use Helm on your plan, "
         "or upgrade to Enterprise to reach Helm from your own systems.",

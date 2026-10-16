@@ -123,7 +123,8 @@ async def get_current_user(
             request.state.api_key_id = authenticated.key.id
             request.state.api_key_obj = authenticated.key
             request.state.api_key_membership = authenticated.membership
-            _assert_api_key_route_scope(request, authenticated.key, authenticated.membership)
+            await run_in_threadpool(_assert_api_key_route_scope, request, db, authenticated.key,
+                                    authenticated.membership, authenticated.principal)
         if authenticated.session_id is not None:
             request.state.session_id = authenticated.session_id
 
@@ -156,24 +157,41 @@ def _route_key(request: Request) -> tuple[str, str]:
     return request.method.upper(), template
 
 
-def _assert_api_key_route_scope(request: Request, key: Any, membership: Any) -> None:
+def _assert_api_key_route_scope(request: Request, db: Session, key: Any, membership: Any,
+                                principal: Optional[Principal] = None) -> None:
     """Campaign session 2. An API key may call only routes a scope covers, and only with that scope.
 
     Before, scopes were checked only on routes that declared `RequireScope`; every other
     tenant route accepted any key with the full rights of the member who issued it, so a
     read-only key could upload, delete documents and read the member list.
+
+    Each refusal is audited with the key and the reason, through the denial aggregation (one row
+    each, then summary rows), so a script calling with a refused key cannot fill the audit log.
     """
+    method, template = _route_key(request)
     required = _route_scope(request)
     if required is None:
         # A route kept for people (approving a payment in Helm, say) says why in its own words.
+        words = PEOPLE_ONLY_ROUTES.get((method, template))
+        _audit_key_refusal(request, db, key, principal, {
+            "reason": "people_only" if words else "api_key_unmapped_route", "route": f"{method} {template}"})
         raise OrganizationPermissionDeniedError(
-            PEOPLE_ONLY_ROUTES.get(_route_key(request))
-            or "API keys cannot call this route: no API key scope covers it."
+            words or "API keys cannot call this route: no API key scope covers it."
         )
     if required not in effective_scopes(key, membership):
+        _audit_key_refusal(request, db, key, principal, {
+            "reason": "api_key_scope", "route": f"{method} {template}", "required_scope": required.value})
         raise OrganizationPermissionDeniedError(
             f"API key lacks the required scope: {required.value}"
         )
+
+
+def _audit_key_refusal(request: Request, db: Session, key: Any, principal: Optional[Principal],
+                       details: dict[str, Any]) -> None:
+    res_type, action = resolve_route_audit(request, default_resource=AuditResourceType.ORGANIZATION)
+    record_threshold_denial(db=db, organization_id=key.organization_id, actor_id=getattr(key, "user_id", None),
+                            resource_type=res_type, action=action, request=request, principal=principal,
+                            details=details)
 
 
 def _authenticate(db: Session, token: str) -> _Authenticated:

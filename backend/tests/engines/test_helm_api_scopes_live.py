@@ -212,3 +212,39 @@ def test_a_billing_members_key_never_carries_helm_write() -> None:
     member = OrganizationMember(role=OrganizationRole.MEMBER, status=MembershipStatus.ACTIVE)
     assert effective_scopes(key, billing) == frozenset({ApiKeyScope.HELM_READ})
     assert effective_scopes(key, member) == frozenset()
+
+
+def _refusals(db: Session, tenant: Fixture) -> list:
+    from sqlalchemy import select
+
+    from app.models.audit_log import AuditLog, AuditOutcome
+
+    db.expire_all()
+    return list(db.execute(select(AuditLog).where(AuditLog.organization_id == tenant.organization.id,
+                                                  AuditLog.outcome == AuditOutcome.DENIED)
+                           .order_by(AuditLog.created_at)).scalars())
+
+
+def test_every_refusal_of_a_key_is_audited_with_the_key_and_the_reason(client: TestClient, db_session: Session,
+                                                                         tenant: Fixture) -> None:
+    """Through the denial aggregation (one row each, then summary rows past 50 an hour), so a script
+    hammering Helm with a refused key cannot fill the audit log."""
+    url = f"{API}/organizations/{tenant.organization.id}/helm"
+    reader = _key(db_session, tenant, [ApiKeyScope.HELM_READ.value])
+    writer = _key(db_session, tenant, [ApiKeyScope.HELM_READ.value, ApiKeyScope.HELM_WRITE.value])
+    assert client.post(f"{url}/backtests", json={}, headers=reader).status_code == 403
+    assert client.post(f"{url}/actions/{uuid.uuid4()}/approve", headers=writer).status_code == 403
+    put_on_plan(db_session, tenant.organization, "business")
+    db_session.commit()
+    assert client.get(url, headers=writer).status_code == 402
+
+    rows = _refusals(db_session, tenant)
+    reasons = [row.details.get("reason") for row in rows]
+    assert reasons == ["api_key_scope", "people_only", "capability_required"], [row.details for row in rows]
+    scope, people, plan = rows
+    assert scope.api_key_id is not None and scope.details["required_scope"] == "helm:write", scope.details
+    assert scope.details["route"] == "POST /organizations/{organization_id}/helm/backtests", scope.details
+    assert people.details["route"] == "POST /organizations/{organization_id}/helm/actions/{action_id}/approve"
+    assert plan.details["capability_key"] == "capability.helm_api" and plan.api_key_id == people.api_key_id
+    # The platform's convention for a key's acts: the key is the actor, its owner is in the details.
+    assert scope.details["key_owner_user_id"] == str(tenant.owner.user.id), scope.details
