@@ -7,7 +7,7 @@ floats appear only inside the simulation's arrays and are rounded back before an
 
 from __future__ import annotations
 
-from decimal import ROUND_HALF_EVEN, Decimal
+from decimal import InvalidOperation, ROUND_HALF_EVEN, Decimal
 from typing import Optional, Union
 
 MICROS = 1_000_000
@@ -23,7 +23,12 @@ def to_micros(value: Optional[Number]) -> Optional[int]:
         amount = Decimal(str(value).replace(",", "").strip())
     except Exception:  # noqa: BLE001 - unreadable is "unknown", never a guess
         return None
-    return int((amount * MICROS).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN))
+    if not amount.is_finite():  # "Infinity", "NaN": no one holds that amount
+        return None
+    try:
+        return int((amount * MICROS).quantize(Decimal("1"), rounding=ROUND_HALF_EVEN))
+    except InvalidOperation:  # more digits than any amount anyone holds (and than the context keeps)
+        return None
 
 
 def from_micros(micros: Optional[int]) -> Optional[Decimal]:
