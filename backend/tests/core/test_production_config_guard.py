@@ -73,6 +73,9 @@ def good_production_env() -> dict[str, str]:
         "RERANKER_INTERNAL_TOKEN": secrets.token_hex(32),
         "OPERATOR_ALERT_EMAILS": "ops@example.com",
         "GROQ_API_KEY": "gsk_" + secrets.token_hex(24),
+        # Website and payments session (C2): Dodo Payments is the default gateway.
+        "DODO_API_KEY": "dodo_test_" + secrets.token_hex(16),
+        "DODO_WEBHOOK_SECRET": "whsec_" + secrets.token_hex(24),
     }
 
 
@@ -356,7 +359,7 @@ def test_a_test_publishable_key_with_live_mode_is_refused(env) -> None:
 
 
 def test_a_dodo_key_without_a_webhook_secret_is_refused(env) -> None:
-    text = refusal(env, BILLING_GATEWAY="DODO", DODO_API_KEY="dodo_" + "a1B2c3D4" * 4)
+    text = refusal(env, BILLING_GATEWAY="DODO", DODO_API_KEY="dodo_" + "a1B2c3D4" * 4, DODO_WEBHOOK_SECRET=None)
     assert "DODO_WEBHOOK_SECRET" in text
 
 
@@ -369,6 +372,41 @@ def test_staging_may_not_use_live_payment_mode(env) -> None:
         STRIPE_LIVEMODE="true",
     )
     assert "staging" in text.lower() and "live" in text.lower()
+
+
+# Website and payments session (C2): Dodo Payments, merchant of record, is the gateway.
+
+
+def test_dodo_is_the_default_gateway(env) -> None:
+    env(good_production_env())
+    assert build().BILLING_GATEWAY == "DODO"
+
+
+@pytest.mark.parametrize("missing", ["DODO_API_KEY", "DODO_WEBHOOK_SECRET"])
+def test_production_on_dodo_needs_its_key_and_webhook_secret(env, missing) -> None:
+    """Without the key no one can subscribe; without the secret no payment is ever confirmed."""
+    assert missing in refusal(env, **{missing: None})
+
+
+def test_a_dodo_deployment_may_not_say_stripe_is_live(env) -> None:
+    """Live and test must agree: a live Stripe flag on a Dodo deployment means the operator
+    believes real payments go somewhere they do not."""
+    text = refusal(env, STRIPE_LIVEMODE="true")
+    assert "STRIPE_LIVEMODE" in text and "DODO" in text
+
+
+def test_production_may_take_test_payments_while_it_is_checked(env) -> None:
+    """The launch checklist runs the production server against Dodo's test mode first."""
+    env(good_production_env(), DODO_LIVEMODE="false")
+    settings = build()
+    assert settings.DODO_LIVEMODE is False and settings.DODO_API_BASE == "https://test.dodopayments.com"
+
+
+def test_a_stripe_deployment_does_not_need_dodo_keys(env) -> None:
+    """The Stripe adapter stays, switched off; a deployment that turns it on needs no Dodo keys."""
+    env(good_production_env(), BILLING_GATEWAY="STRIPE", DODO_API_KEY=None, DODO_WEBHOOK_SECRET=None,
+        STRIPE_SECRET_KEY="sk_test_" + "a1B2c3D4" * 4, STRIPE_WEBHOOK_SECRETS="whsec_" + "a1B2c3D4" * 4)
+    assert build().BILLING_GATEWAY == "STRIPE"
 
 
 def test_an_unknown_billing_gateway_is_refused(env) -> None:

@@ -307,7 +307,19 @@ def _billing_problems(settings: "Settings", environment: str) -> list[str]:
         if not settings.STRIPE_LIVEMODE and publishable.startswith("pk_live_"):
             problems.append("STRIPE_PUBLISHABLE_KEY: is a live-mode key but STRIPE_LIVEMODE is false.")
 
-    if _text(settings.DODO_API_KEY) and not _text(settings.DODO_WEBHOOK_SECRET):
+    # Website and payments session (C2): Dodo Payments is the gateway customers pay through.
+    if gateway == "DODO" and not _text(settings.DODO_API_KEY):
+        problems.append(
+            "DODO_API_KEY: is not set although BILLING_GATEWAY is DODO. No one could subscribe. "
+            "Create a key in the Dodo Payments dashboard (Developer > API keys), in test mode "
+            "until you go live."
+        )
+    if gateway == "DODO" and settings.STRIPE_LIVEMODE:
+        problems.append(
+            "STRIPE_LIVEMODE: is true although BILLING_GATEWAY is DODO. Payments go through Dodo; "
+            "set STRIPE_LIVEMODE=false and use DODO_LIVEMODE for live or test payments."
+        )
+    if (gateway == "DODO" or _text(settings.DODO_API_KEY)) and not _text(settings.DODO_WEBHOOK_SECRET):
         problems.append(
             "DODO_WEBHOOK_SECRET: is not set although DODO_API_KEY is. Payments could never be "
             "confirmed, because unsigned events must be refused."

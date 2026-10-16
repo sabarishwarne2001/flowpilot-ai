@@ -2,8 +2,8 @@
   "generated_by": "backend/scripts/export_public_pricing.py",
   "as_of": "2026-01-01",
   "billing": {
-    "usage_billing": true,
-    "merchant_of_record": false
+    "usage_billing": false,
+    "merchant_of_record": true
   },
   "trial": {
     "plan_key": "free",
@@ -117,7 +117,7 @@
           "key": "ocr.page",
           "limit_quantity": 5000,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "assistant.message",
@@ -147,7 +147,7 @@
           "key": "storage.gb_month",
           "limit_quantity": 25,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "llm.platform_key",
@@ -201,7 +201,7 @@
           "key": "ocr.page",
           "limit_quantity": 40000,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "assistant.message",
@@ -231,7 +231,7 @@
           "key": "storage.gb_month",
           "limit_quantity": 250,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "llm.platform_key",
@@ -294,7 +294,7 @@
           "key": "ocr.page",
           "limit_quantity": 100000,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "assistant.message",
@@ -324,7 +324,7 @@
           "key": "storage.gb_month",
           "limit_quantity": 1000,
           "period": "MONTH",
-          "overage_policy": "ALLOW_AND_BILL"
+          "overage_policy": "REFUSE"
         },
         {
           "key": "llm.platform_key",

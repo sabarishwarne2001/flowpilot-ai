@@ -109,7 +109,11 @@ def build(gateway: Optional[str] = None) -> dict[str, Any]:
     from app.services import plan_catalog
     from app.services.billing.payment_gateway import get_payment_gateway, normalize_gateway
 
-    name = normalize_gateway(gateway or settings.BILLING_GATEWAY)
+    # The website describes the hosted service, so the default is the gateway production uses
+    # (the setting's own default), not whatever a developer's local .env says.
+    from app.core.config import Settings
+
+    name = normalize_gateway(gateway or Settings.model_fields["BILLING_GATEWAY"].default)
     tiers = _tiers(name)
     catalog = plan_catalog.catalog_from_tiers(
         tiers, _yearly_prices(), trial_days=int(settings.FREE_TRIAL_DAYS), at=AS_OF
@@ -137,7 +141,7 @@ def render(gateway: Optional[str] = None) -> str:
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     parser.add_argument("--check", action="store_true", help="fail if the committed file differs")
-    parser.add_argument("--gateway", help="price for this gateway instead of BILLING_GATEWAY")
+    parser.add_argument("--gateway", help="price for this gateway instead of production's (DODO)")
     args = parser.parse_args(argv)
     text = render(args.gateway)
     if args.check:

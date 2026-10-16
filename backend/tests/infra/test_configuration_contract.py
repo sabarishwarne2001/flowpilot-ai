@@ -133,6 +133,8 @@ REQUIRED_IN_PRODUCTION: dict[str, dict[str, str]] = {
     "S3_SECRET_ACCESS_KEY": {"STORAGE_BACKEND": "s3"},
     "STRIPE_WEBHOOK_SECRETS": {"STRIPE_SECRET_KEY": _STRIPE_TEST_KEY},
     "DODO_WEBHOOK_SECRET": {"BILLING_GATEWAY": "DODO", "DODO_API_KEY": _DODO_KEY},
+    # Website and payments session (C2): Dodo Payments is the gateway; no one can subscribe without it.
+    "DODO_API_KEY": {"BILLING_GATEWAY": "DODO"},
 }
 
 #: Further settings a production deployment sets for itself (its own addresses, its payment
@@ -141,8 +143,7 @@ PRODUCTION_SETS_ITSELF = {
     "ENVIRONMENT", "LOG_LEVEL", "POSTGRES_USER", "POSTGRES_DB", "STORAGE_BACKEND", "S3_REGION",
     "S3_ENDPOINT_URL", "ACME_CONTACT_EMAIL", "PUBLIC_API_URL", "PLATFORM_RESERVED_HOSTS",
     "TRUSTED_PROXY_HOPS", "TRUSTED_PROXY_HOPS_CONFIRMED", "RERANKER_ENABLED", "BILLING_GATEWAY",
-    "STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_LIVEMODE", "DODO_API_KEY",
-    "DODO_LIVEMODE", "PLATFORM_SMTP_PORT", "PLATFORM_SMTP_USERNAME", "PLATFORM_SMTP_PASSWORD",
+    "STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_LIVEMODE", "DODO_LIVEMODE", "PLATFORM_SMTP_PORT", "PLATFORM_SMTP_USERNAME", "PLATFORM_SMTP_PASSWORD",
     "PLATFORM_SMTP_ENCRYPTION", "PLATFORM_SMTP_FROM_EMAIL", "PLATFORM_SMTP_FROM_NAME",
 }
 
@@ -430,6 +431,7 @@ def good_production_env() -> dict[str, str]:
         "GROQ_API_KEY": "gsk_" + secrets.token_hex(24),
         "STRIPE_WEBHOOK_SECRETS": "whsec_" + secrets.token_hex(16),
         "DODO_WEBHOOK_SECRET": "whsec_" + secrets.token_hex(16),
+        "DODO_API_KEY": _DODO_KEY,
     }
 
 

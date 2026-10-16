@@ -287,7 +287,7 @@ def get_payment_gateway(name: Optional[str] = None) -> PaymentGateway:
     pays for its SDK import, and — worse — a missing optional dependency for the
     gateway you are NOT using becomes a startup crash.
     """
-    resolved = normalize_gateway(name or getattr(settings, "BILLING_GATEWAY", _STRIPE))
+    resolved = normalize_gateway(name or getattr(settings, "BILLING_GATEWAY", _DODO))
 
     if resolved == _STRIPE:
         from app.services.billing.stripe_gateway import get_gateway
@@ -310,7 +310,7 @@ def get_payment_gateway(name: Optional[str] = None) -> PaymentGateway:
 
 def active_gateway_name() -> str:
     """The configured gateway name, for stamping onto rows."""
-    return normalize_gateway(getattr(settings, "BILLING_GATEWAY", _STRIPE))
+    return normalize_gateway(getattr(settings, "BILLING_GATEWAY", _DODO))
 
 
 __all__ = [

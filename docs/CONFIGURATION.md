@@ -218,7 +218,7 @@ guard), and the comment written above it in the code.
 | `LLM_METERING_ENABLED` | `bool` | `True` | example, production, guard |  |
 | `LLM_REQUEST_DEADLINE_SECONDS` | `float` | `25.0` | — |  |
 | `AI_CONNECTION_TEST_DEADLINE_SECONDS` | `float` | `20.0` | — | HARDENING-T1:D1. Short and single-attempt: a connection test that takes the full extraction deadline reads to an admin as a hang. |
-| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts Servabo next to an internal relay lists that relay here (hostna… |
+| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts Servabo next to an internal relay lists that relay here (hostname… |
 | `SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT` | `bool` | `True` | — | Development only: local catchers (Mailpit, MailHog) run on localhost. |
 | `PIPELINE_STUCK_AFTER_MINUTES` | `int` | `90` | — | HARDENING-T1:D25. How long a document may sit in a working stage with no live job before the sweep fails it. Longer than the slowest legitimate OCR run plus retry backoff. |
 | `BILLING_PORTAL_ALLOW_LEGACY_GATEWAY` | `bool` | `False` | — | HARDENING-FINAL:billing-B. Off: the customer portal follows BILLING_GATEWAY strictly. On only during a planned gateway migration. |
@@ -285,7 +285,7 @@ guard), and the comment written above it in the code.
 | `STRIPE_INBOUND_BATCH_SIZE` | `int` | `25` | — |  |
 | `STRIPE_INBOUND_LEASE_SECONDS` | `int` | `60` | — |  |
 | `STRIPE_INBOUND_MAX_ATTEMPTS` | `int` | `8` | — |  |
-| `BILLING_GATEWAY` | `str` | `'STRIPE'` | example, production, guard | ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carrying both Stripe and Dodo keys during migration must not have its payment … |
+| `BILLING_GATEWAY` | `str` | `'DODO'` | example, production, guard | ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carrying both Stripe and Dodo keys during migration must not have its payment … |
 | `DODO_API_KEY` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_WEBHOOK_SECRET` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_API_BASE` | `str` | `''` | example, production | HARDENING-T1:D16. Empty means "derive from DODO_LIVEMODE". The default was the live host while DODO_LIVEMODE defaulted to false, so a test key was sent to the live API (401) with nothing saying why. |

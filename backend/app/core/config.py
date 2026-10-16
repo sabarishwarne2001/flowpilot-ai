@@ -817,7 +817,9 @@ class Settings(BaseSettings):
     # than inferred from which credentials happen to be present: a deployment
     # carrying both Stripe and Dodo keys during migration must not have its
     # payment routing decided by import order.
-    BILLING_GATEWAY: str = "STRIPE"
+    # Website and payments session (C2): Dodo Payments, the merchant of record, is the gateway
+    # customers see. The Stripe adapter stays, switched off.
+    BILLING_GATEWAY: str = "DODO"
 
     DODO_API_KEY: SecretStr | None = None
     DODO_WEBHOOK_SECRET: SecretStr | None = None
