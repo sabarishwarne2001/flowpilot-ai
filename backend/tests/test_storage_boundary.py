@@ -37,6 +37,8 @@ FS_ALLOWLIST = {
 #: still caught. E10 protects tenant documents: everything a customer uploads
 #: goes through the storage driver. None of these reads or writes one.
 NOT_TENANT_STORAGE: dict[tuple[str, str], str] = {
+    ("app/core/legacy_names.py", 'lines: Iterable[str] = dotenv.read_text(encoding="utf-8", errors="replace").splitlines()'):
+        "reads the operator's own .env file to warn about setting names from before the rename",
     ("app/evaluation/golden_set.py", "raw = resolved.read_bytes()"):
         "reads the operator's labelled golden-set JSON for offline evaluation",
     ("app/services/erp/formats/xsd.py", 'text = path.read_text(encoding="utf-8")'):
