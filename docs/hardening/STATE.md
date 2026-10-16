@@ -14,40 +14,46 @@ same prompt again: continue on this branch and its open pull request, from the f
 below. Never restart.**
 
 **Plan (the brief's order A → B → C → D; each defect proven by a failing test first):**
-- [ ] 0. Start-up: docs read; live stack up (Postgres 16 + pgvector 0.8.0 on :5433 e2e and :5434
+- [x] 0. Start-up: docs read; live stack up (Postgres 16 + pgvector 0.8.0 on :5433 e2e and :5434
   backend tests, Redis, API, worker `--loop all --profile all`, model stand-in, production bundle
   with CSP), logs to files; this plan; draft PR.
-- [ ] A1. Rename what people see: UI strings, titles, meta, manifest, emails, PDFs and exports,
+- [x] A1. Rename what people see: UI strings, titles, meta, manifest, emails, PDFs and exports,
   calendar feed, redaction stamp, samples, notifications, OpenAPI title, README and current docs.
-- [ ] A2. Code identifiers (`FlowPilotError` → `ServaboError`, …), pure renames.
-- [ ] A3. Protocol identifiers (signature header, TXT record, WebSocket subprotocol, refresh
+- [x] A2. Code identifiers (`FlowPilotError` → `ServaboError`, …), pure renames.
+- [x] A3. Protocol identifiers (signature header, TXT record, WebSocket subprotocol, refresh
   cookie, key prefixes, local-storage keys), each listed in CHANGELOG.md.
-- [ ] A4. Database-level names in a new Alembic migration (the audit sweeper setting).
-- [ ] A5. Configuration `FLOWPILOT_*` → `SERVABO_*` with a one-release alias and one startup
+- [x] A4. Database-level names in a new Alembic migration (the audit sweeper setting).
+- [x] A5. Configuration `FLOWPILOT_*` → `SERVABO_*` with a one-release alias and one startup
   warning; database defaults and templates `servabo`, `servabo_e2e`, `servabo_test`.
-- [ ] A6. Operations: Docker names, cron files `servabo-sweepers`, `/etc/servabo/`, backup names,
+- [x] A6. Operations: Docker names, cron files `servabo-sweepers`, `/etc/servabo/`, backup names,
   dev scripts, CI names, the e2e seed.
-- [ ] A7. History lines at the top of FINDINGS, NEEDS-OWNER, STATE, CHANGELOG.
-- [ ] A8. Brand assets: logo mark and wordmark (SVG), favicons, sign-in screen, emails, Open Graph.
-- [ ] A9. Guard test: the old name fails outside an explicit allowlist.
-- [ ] A10. Part A checkpoint: full backend suite, browser suite, frontend checks green.
-- [ ] B1. `website/`: Astro + TypeScript + Tailwind on shared brand tokens, self-hosted fonts, no
+- [x] A7. History lines at the top of FINDINGS, NEEDS-OWNER, STATE, CHANGELOG.
+- [x] A8. Brand assets: logo mark and wordmark (SVG), favicons, sign-in screen, emails, Open Graph.
+- [x] A9. Guard test: the old name fails outside an explicit allowlist.
+- [x] A10. Part A checkpoint: full backend suite, browser suite, frontend checks green.
+  Checkpoint (2026-10-16): browser 825 passed, 1 skipped (1,472 jobs SUCCEEDED); backend 5,064
+  passed with the 8 sandbox-only failures main also has, plus 4 the rename caused, now fixed with
+  tests (old API key prefix, old-name passwords, a half-renamed test, a storage-boundary entry).
+- [x] B1. `website/`: Astro + TypeScript + Tailwind on shared brand tokens, self-hosted fonts, no
   third-party scripts; layout, header, footer with every Dodo-required link.
-- [ ] B2. Pricing data: `backend/scripts/export_public_pricing.py` → `website/src/data/pricing.json`,
+- [x] B2. Pricing data: `backend/scripts/export_public_pricing.py` → `website/src/data/pricing.json`,
   drift test, build fails on an unlabelled plan.
-- [ ] B3. Pages: home, Helm (flagship), product, four solutions, pricing, security, about, contact.
-- [ ] B4. Legal: terms, privacy, refunds, acceptable use, subprocessors (data file from the code),
+- [x] B3. Pages: home, Helm (flagship), product, four solutions, pricing, security, about, contact.
+- [x] B4. Legal: terms, privacy, refunds, acceptable use, subprocessors (data file from the code),
   cookies; 404, sitemap, robots, canonical, OG/Twitter, structured data.
-- [ ] B5. Real screenshots (`website/scripts/capture-screenshots`), light and dark.
-- [ ] B6. `_headers` (strict CSP, HSTS…), Caddy site block, `docs/website/DEPLOY.md`,
+- [x] B5. Real screenshots (`website/scripts/capture-screenshots`), light and dark.
+- [x] B6. `_headers` (strict CSP, HSTS…), Caddy site block, `docs/website/DEPLOY.md`,
   `docs/website/DODO-REVIEW.md`.
-- [ ] B7. Joining to the app: `WEBSITE_URL` / `VITE_WEBSITE_URL`, app `/pricing` `/terms`
+- [x] B7. Joining to the app: `WEBSITE_URL` / `VITE_WEBSITE_URL`, app `/pricing` `/terms`
   `/privacy` redirect, links back, email footers, Billing → refunds link, `--website` dev switch.
-- [ ] B8. CI `website` job (install, typecheck, build, links, axe in both themes, HTML validation,
+- [x] B8. CI `website` job (install, typecheck, build, links, axe in both themes, HTML validation,
   Lighthouse ≥ 95 on home, pricing, Helm), required.
+  Checkpoint (2026-10-16): 18 pages build; 1,275 links resolve; HTML valid; axe clean in both themes
+  at 360 and 1280 px; Lighthouse 97/100/100/100 on home, pricing and Helm; `npm audit` 0. Browser
+  specs 70, 72, 74 (signed out), 30, 01, 60 pass against the new bundle.
 - [ ] C1. `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
   `scripts/e2e_stand_in.py --gateway dodo`; browser journeys on Dodo by default; Stripe journeys kept.
-- [ ] C2. Default gateway DODO everywhere; production guard (key, secret, live/test agreement).
+- [x] C2. Default gateway DODO everywhere; production guard (key, secret, live/test agreement).
 - [ ] C3. Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
   add-ons, customer adoption and racing checkouts; one live concurrency test.
 - [ ] C4. Dodo payments as invoice rows, PDF download route, merchant-of-record note.
