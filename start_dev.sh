@@ -15,6 +15,9 @@ FRONTEND_PORT="${FRONTEND_PORT:-5173}"
 DO_RESET=0
 DO_STOP=0
 NO_FRONTEND=0
+WITH_WEBSITE=0
+WEBSITE_DIR="${REPO_ROOT}/website"
+WEBSITE_PORT=4321
 SKIP_MIGRATIONS=0
 
 C_RESET=$'\033[0m'; C_CYAN=$'\033[36m'; C_GREEN=$'\033[32m'
@@ -36,6 +39,7 @@ while [[ $# -gt 0 ]]; do
         --reset)           DO_RESET=1 ;;
         --stop)            DO_STOP=1 ;;
         --no-frontend)     NO_FRONTEND=1 ;;
+        --website)         WITH_WEBSITE=1 ;;
         --skip-migrations) SKIP_MIGRATIONS=1 ;;
         --api-port)        API_PORT="$2"; shift ;;
         --frontend-port)   FRONTEND_PORT="$2"; shift ;;
@@ -310,6 +314,18 @@ if (( ! NO_FRONTEND )); then
     wait_for_port 'Frontend' "${FRONTEND_PORT}" 120 || warn 'Vite has not bound yet; check .dev/logs/vite.log'
 fi
 
+# Website session: the public website (website/) on its own port; the app's /pricing, /terms and
+# /privacy and its sign-in footer link here in development.
+if (( WITH_WEBSITE )); then
+    if [[ ! -d "${WEBSITE_DIR}/node_modules" ]]; then
+        (cd "${WEBSITE_DIR}" && npm install)
+    fi
+    (cd "${WEBSITE_DIR}" && setsid npm run dev > "${LOG_DIR}/website.log" 2>&1 &
+     echo "website=$!" >> "${PID_FILE}")
+    ok "Website starting -> ${LOG_DIR}/website.log"
+    wait_for_port 'Website' "${WEBSITE_PORT}" 120 || warn 'The website has not bound yet; check .dev/logs/website.log'
+fi
+
 step '8/8  Ready'
 cat <<BANNER
 
@@ -317,6 +333,7 @@ cat <<BANNER
    ${C_GREEN}Servabo is running${C_RESET}
   ${C_DIM}---------------------------------------------------------------${C_RESET}
    App          http://localhost:${FRONTEND_PORT}
+$( (( WITH_WEBSITE )) && echo "   Website      http://localhost:${WEBSITE_PORT}" )
    API docs     http://localhost:${API_PORT}/docs
    Health       http://localhost:${API_PORT}/api/v1/health
    MinIO        http://localhost:9001   (minioadmin / minioadmin)

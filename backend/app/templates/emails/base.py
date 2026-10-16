@@ -51,7 +51,7 @@ _LAYOUT = """<!DOCTYPE html>
         {content_html}
     </div>
     <div class="footer" style="font-size:12px;color:#666666;text-align:center;border-top:1px solid #eeeeee;padding-top:20px;margin-top:30px;">
-        <p style="margin:0;">{footer_text}</p>
+        <p style="margin:0;">{footer_text}</p>{legal_links}
     </div>
 </td></tr>
 </table>
@@ -114,12 +114,33 @@ def _brand_header(brand_name: str) -> str:
     return tile + name_html
 
 
+def _legal_links(brand_name: str, content_html: str) -> str:
+    """The footer's links to Servabo's terms, privacy policy and refund policy (website session, B7).
+
+    Only in Servabo's own mail (never under an organization's brand), and only in an email that
+    already carries a web link: a revocation notice or a completed transfer stays free of
+    addresses, as the security emails promise.
+    """
+    from app.core.config import settings
+
+    if brand_name != html_escape(str(settings.PROJECT_NAME)) or 'href="http' not in content_html:
+        return ""
+    site = settings.WEBSITE_URL
+    links = " &middot; ".join(
+        f'<a href="{site}/legal/{path}" style="color:#666666;text-decoration:underline;">{label}</a>'
+        for path, label in (("terms", "Terms"), ("privacy", "Privacy"), ("refunds", "Refunds"))
+    )
+    return f'\n        <p class="legal" style="margin:8px 0 0 0;">{links}</p>'
+
+
 class _EmailLayout(str):
     """The layout string; `format` also draws its buttons for every mail client."""
 
     def format(self, *args: object, **kwargs: object) -> str:  # type: ignore[override]
         if "brand_header" not in kwargs:
             kwargs["brand_header"] = _brand_header(str(kwargs.get("brand_name", "")))
+        if "legal_links" not in kwargs:
+            kwargs["legal_links"] = _legal_links(str(kwargs.get("brand_name", "")), str(kwargs.get("content_html", "")))
         return _bulletproof_buttons(super().format(*args, **kwargs))
 
 

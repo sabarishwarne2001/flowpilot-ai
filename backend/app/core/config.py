@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     field_validator,
     SecretStr,
+    ValidationInfo,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -224,6 +225,9 @@ class Settings(BaseSettings):
         return [part.strip() for part in (self.OPERATOR_ALERT_EMAILS or "").split(",") if part.strip()]
 
     FRONTEND_URL: str = "http://localhost:3000"
+    # Website session (B7): the public website (pricing, terms, privacy, refunds). Emails link
+    # its legal pages; the fallback domain is https://getservabo.com.
+    WEBSITE_URL: str = "https://servabo.app"
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
 
     RATE_LIMIT_ENABLED: bool = True
@@ -1014,14 +1018,13 @@ class Settings(BaseSettings):
             )
         return normalized
 
-    @field_validator("FRONTEND_URL")
+    @field_validator("FRONTEND_URL", "WEBSITE_URL")
     @classmethod
-    def validate_frontend_url(cls, v: str) -> str:
+    def validate_frontend_url(cls, v: str, info: ValidationInfo) -> str:
         cleaned = v.strip().rstrip("/")
         if not cleaned.startswith(("http://", "https://")):
-            raise ValueError(
-                "FRONTEND_URL must include a scheme, e.g. https://app.servabo.app"
-            )
+            example = "https://servabo.app" if info.field_name == "WEBSITE_URL" else "https://app.servabo.app"
+            raise ValueError(f"{info.field_name} must include a scheme, e.g. {example}")
         return cleaned
 
     @model_validator(mode="after")

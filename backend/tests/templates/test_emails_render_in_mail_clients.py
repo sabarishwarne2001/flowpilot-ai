@@ -133,3 +133,24 @@ def test_white_label_mail_has_no_servabo_mark() -> None:
     _, html, _ = EMAILS["helm-briefing"]()
     assert 'class="mark"' not in html
     assert ">Example Cloud</span>" in html
+
+
+# Website and payments session (Part B7): Servabo's own mail links its terms, privacy policy and
+# refund policy on the website, in emails that already carry a link; never under another brand,
+# and never in an email that must stay free of addresses.
+
+
+def test_servabo_mail_with_a_link_ends_with_the_legal_pages() -> None:
+    from app.core.config import settings
+
+    _, html, _ = EMAILS["verify"]()
+    footer = html.split('<div class="footer"', 1)[1]
+    for path, label in (("terms", "Terms"), ("privacy", "Privacy"), ("refunds", "Refunds")):
+        assert f'href="{settings.WEBSITE_URL}/legal/{path}"' in footer and f">{label}</a>" in footer, path
+    assert settings.WEBSITE_URL == "https://servabo.app"
+
+
+@pytest.mark.parametrize("name", sorted(LINKLESS | {"helm-briefing"}))
+def test_linkless_or_white_label_mail_has_no_legal_links(name: str) -> None:
+    _, html, _ = EMAILS[name]()
+    assert 'class="legal"' not in html and "/legal/" not in html

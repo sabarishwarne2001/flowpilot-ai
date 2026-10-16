@@ -20,6 +20,7 @@ import { useSessionGuardStore } from "@/store/useSessionGuardStore";
 import { canManageBilling as canManageBillingFor } from "@/permissions/organizationPermissions";
 import type { OrganizationRole } from "@/types/tenancy";
 import { PageHeader } from "@/components/ui/PageHeader";
+import { WEBSITE } from "@/config/website";
 
 
 export const BillingHub: React.FC = () => {
@@ -179,8 +180,23 @@ export const BillingHub: React.FC = () => {
           </>
         )}
 
+        {/* Website session (B7): the refund and cancellation policy, where people pay. */}
+        <p data-testid="billing-refund-policy" className="border-t border-border pt-4 text-xs text-muted-foreground">
+          Cancel any time: the plan stays active to the end of the paid period. The first payment of a
+          new subscription has a 14-day money-back guarantee. Read the{" "}
+          <a
+            href={WEBSITE.refunds}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary underline-offset-4 hover:underline dark:text-[hsl(var(--primary-on-dark))]"
+          >
+            refund and cancellation policy
+          </a>
+          .
+        </p>
+
         {!canManageBilling && (
-          <p className="border-t border-border pt-4 text-xs text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             You can see the plan, usage, limits and invoices. Changing the plan or
             payment method needs an organization owner; owners, admins and billing
             managers can add or remove seats.

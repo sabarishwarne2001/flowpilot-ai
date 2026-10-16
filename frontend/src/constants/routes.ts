@@ -1,6 +1,7 @@
 /**
  * Global route constants for Servabo.
  */
+import { WEBSITE } from "@/config/website";
 
 export const ROUTES = {
   LOGIN: "/login",
@@ -18,7 +19,7 @@ export const ROUTES = {
   WORKSPACES: "/workspaces",
   NO_ACCESS: "/no-access",
   INVITATION_ACCEPT: "/invitations/accept",
-  // Campaign session 4: public pages, readable signed out and signed in.
+  // Campaign session 4: public pages. Website session (B7): they redirect to the website.
   PRICING: "/pricing",
   TERMS: "/terms",
   PRIVACY: "/privacy",
@@ -38,9 +39,12 @@ export const ROUTES = {
 
 export type RouteValue = (typeof ROUTES)[keyof typeof ROUTES];
 
-/** Campaign session 4. The public pages, as the footers of the public and sign-in pages link them. */
-export const PUBLIC_PAGE_LINKS: ReadonlyArray<{ readonly to: RouteValue; readonly label: string }> = [
-  { to: ROUTES.PRICING, label: "Pricing" },
-  { to: ROUTES.TERMS, label: "Terms of service" },
-  { to: ROUTES.PRIVACY, label: "Privacy policy" },
+/**
+ * Campaign session 4. The public pages, as the sign-in and sign-up pages' footers link them.
+ * Website session (B7): on the public website, so these are full addresses.
+ */
+export const PUBLIC_PAGE_LINKS: ReadonlyArray<{ readonly href: string; readonly label: string }> = [
+  { href: WEBSITE.pricing, label: "Pricing" },
+  { href: WEBSITE.terms, label: "Terms of service" },
+  { href: WEBSITE.privacy, label: "Privacy policy" },
 ];

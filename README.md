@@ -26,6 +26,9 @@ cd servabo
 
 Open <http://localhost:5173> and sign in as `admin@servabo.app` with the
 password the launcher prints (development default `Servabo!Dev123`).
+The public website (`website/`, the pages at <https://servabo.app>) runs too with
+`./start_dev.sh --website` (Windows: `.\start_dev.ps1 -Website`) at
+<http://localhost:4321>; the app's Pricing, Terms and Privacy links go there.
 API health: <http://localhost:8000/api/v1/health>. API schema (development
 only; production and staging do not serve it):
 <http://localhost:8000/api/v1/openapi.json>.
@@ -80,6 +83,8 @@ backend/            FastAPI app, workers, Alembic migrations, tests, scripts
   docker-compose.yml       local development services
   docker-compose.prod.yml  production stack
 frontend/           React web app; e2e/ holds the Playwright browser suite
+website/            the public website (Astro, static): pricing, legal pages, product tour
+brand/              the Servabo mark, colours and fonts shared by the app and the website
 docs/               RUNBOOK, configuration reference, hardening campaign records
 archive/            historical development records (not used to run anything)
 start_dev.sh/.ps1   one-command local development launchers

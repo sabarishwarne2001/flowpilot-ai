@@ -73,7 +73,9 @@ for (const scheme of ["light", "dark"] as const) {
 
   test.describe(`accessibility, ${scheme} theme — signed out`, () => {
     test.use({ colorScheme: scheme });
-    for (const path of ["/login", "/register", "/forgot-password", "/pricing", "/terms", "/privacy"]) {
+    // Website session (B7): /pricing, /terms and /privacy are the website's pages now (spec 70
+    // checks the redirect); the website CI job checks their accessibility in both themes.
+    for (const path of ["/login", "/register", "/forgot-password"]) {
       test(`public ${path}`, async ({ page }, testInfo) => {
         await page.goto(path);
         await audit(page, testInfo, path);

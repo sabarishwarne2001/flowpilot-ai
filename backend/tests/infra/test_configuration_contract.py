@@ -395,12 +395,14 @@ def test_each_non_setting_variable_has_its_reader(name: str) -> None:
 
 
 def test_the_frontend_template_names_only_what_the_web_app_reads() -> None:
-    """F-010: the web app reads VITE_API_URL alone; VITE_APP_NAME, VITE_APP_VERSION and
-    VITE_ENVIRONMENT were listed and never read."""
+    """F-010: the web app reads VITE_API_URL and (website session) VITE_WEBSITE_URL;
+    VITE_APP_NAME, VITE_APP_VERSION and VITE_ENVIRONMENT were listed and never read."""
     names = _template_names(FRONTEND_EXAMPLE)
-    assert names == {"VITE_API_URL"}, names
+    assert names == {"VITE_API_URL", "VITE_WEBSITE_URL"}, names
     client = (REPO / "frontend" / "src" / "services" / "api" / "client.ts").read_text(encoding="utf-8")
     assert "import.meta.env.VITE_API_URL" in client
+    website = (REPO / "frontend" / "src" / "config" / "website.ts").read_text(encoding="utf-8")
+    assert "import.meta.env.VITE_WEBSITE_URL" in website
 
 
 # ---------------------------------------------------------------------------------------

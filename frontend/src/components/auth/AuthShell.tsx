@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
-
 import { Brand } from "@/components/branding/Brand";
+import { WEBSITE, WEBSITE_HOST } from "@/config/website";
 import { PUBLIC_PAGE_LINKS } from "@/constants/routes";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { isHexColour } from "@/utils/brandTheme";
@@ -84,13 +83,17 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
 
         <footer className="relative z-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
           {/* Campaign session 4: pricing, terms and privacy, on the platform's own address only.
-              On a white-labelled domain Servabo's pages would name the vendor the tenant hides. */}
+              On a white-labelled domain Servabo's pages would name the vendor the tenant hides.
+              Website session (B7): they are the website's pages, with a way back to its home. */}
           {custom ? null : (
             <nav aria-label="Pricing and legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <a href={WEBSITE.home} className={AUTH_MUTED_LINK}>
+                Back to {WEBSITE_HOST}
+              </a>
               {PUBLIC_PAGE_LINKS.map((link) => (
-                <Link key={link.to} to={link.to} className={AUTH_MUTED_LINK}>
+                <a key={link.href} href={link.href} className={AUTH_MUTED_LINK}>
                   {link.label}
-                </Link>
+                </a>
               ))}
             </nav>
           )}

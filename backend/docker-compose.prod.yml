@@ -67,6 +67,7 @@ x-app-env: &app-env
   EMAIL_ENCRYPTION_KEYS: ${EMAIL_ENCRYPTION_KEYS:?EMAIL_ENCRYPTION_KEYS must be set. Newest Fernet key first}
 
   FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL must be set, e.g. https://app.example.com}
+  WEBSITE_URL: ${WEBSITE_URL:-https://servabo.app}
   CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
 
   STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}

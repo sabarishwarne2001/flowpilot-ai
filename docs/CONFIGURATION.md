@@ -14,7 +14,7 @@ in the containers unless you add it to the service's `environment:` in `docker-c
 is not read by any code, is missing from this page, or is one production cannot run without and
 is missing from `.env.production.template` (or does not stop the app from starting when unset).
 
-294 settings. Columns: name, type, default, where it appears (`example` =
+295 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
@@ -77,6 +77,7 @@ guard), and the comment written above it in the code.
 | `OPERATOR_ALERT_5XX_THRESHOLD` | `int` | `20` | production | Server errors (5xx answers, all API processes together) in five minutes that count as a burst worth an alert. |
 | `OPERATOR_ALERT_REPEAT_MINUTES` | `int` | `60` | production | The same alert is emailed again at most this often while it keeps happening. |
 | `FRONTEND_URL` | `str` | `'http://localhost:3000'` | example, production, guard |  |
+| `WEBSITE_URL` | `str` | `'https://servabo.app'` | production | Website session (B7): the public website (pricing, terms, privacy, refunds). Emails link its legal pages; the fallback domain is https://getservabo.com. |
 | `EMAIL_ENCRYPTION_KEYS` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `RATE_LIMIT_ENABLED` | `bool` | `True` | example, guard |  |
 | `RATE_LIMIT_BACKEND` | `str` | `'redis'` | example, guard |  |

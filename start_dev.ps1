@@ -10,7 +10,7 @@
       4. Runs alembic upgrade head.
       5. Seeds price books, quota tiers and the bootstrap admin.
       6. Starts the API and a single supervised worker (--loop all).
-      7. Starts the Vite dev server.
+      7. Starts the Vite dev server (and, with -Website, the public website on port 4321).
       8. Automatically opens the browser to http://localhost:5173.
 #>
 
@@ -20,6 +20,7 @@ param(
     [switch]$NoFrontend,
     [switch]$Stop,
     [switch]$SkipMigrations,
+    [switch]$Website,
     [int]$ApiPort = 8000,
     [int]$FrontendPort = 5173
 )
@@ -394,7 +395,26 @@ if (-not (Wait-ForPort 'API' $ApiPort 90)) {
     if (Test-Path $apiLog) {
         Get-Content -LiteralPath $apiLog -Tail 40 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     }
-    $tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
+    # Website session: the public website (website/) on port 4321; the app's /pricing, /terms and
+# /privacy and its sign-in footer link here in development.
+if ($Website) {
+    $websiteDir = Join-Path $RepoRoot 'website'
+    if (-not (Test-Path (Join-Path $websiteDir 'node_modules'))) {
+        Write-Host '    installing website dependencies (first run) ...'
+        Push-Location $websiteDir
+        try { npm install } finally { Pop-Location }
+    }
+    $websiteLog = Join-Path $LogDir 'website.log'
+    $websiteProc = Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList @('/c', "npm run dev > ""$websiteLog"" 2>&1") `
+        -WorkingDirectory $websiteDir `
+        -WindowStyle Hidden -PassThru
+    $tracked['website'] = $websiteProc.Id
+    Write-Ok "Website starting -> $websiteLog"
+    Wait-ForPort 'Website' 4321 120 | Out-Null
+}
+
+$tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
     exit 1
 }
 
@@ -426,6 +446,9 @@ Write-Host '   Servabo is running' -ForegroundColor Green
 Write-Host '  ---------------------------------------------------------------' -ForegroundColor DarkGray
 if (-not $NoFrontend) {
     Write-Host "   App          http://localhost:$FrontendPort" -ForegroundColor White
+}
+if ($Website) {
+    Write-Host '   Website      http://localhost:4321' -ForegroundColor White
 }
 Write-Host "   API docs     http://localhost:$ApiPort/docs" -ForegroundColor White
 Write-Host "   Health       http://localhost:$ApiPort/api/v1/health" -ForegroundColor White
