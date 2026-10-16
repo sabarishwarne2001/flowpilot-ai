@@ -1183,11 +1183,97 @@ def backtest_json(db: Session, who: Viewer, backtest_id: uuid.UUID) -> dict[str,
     if row is None or row.organization_id != who.organization_id:
         raise HelmNotFound("Backtest not found.")
     book = _book(db, who, row.book_id)
-    return backtest.json_of(row, readable=book.kind == v.BOOK_SAMPLE or who.can_read(book.workspace_id))
+    out = backtest.json_of(row, readable=book.kind == v.BOOK_SAMPLE or who.can_read(book.workspace_id))
+    if row.status == v.BACKTEST_DONE:
+        from app.services.helm import backtest_report
+
+        # The PDF's file name and the fingerprint its footer prints, so the page can show the same one.
+        out["report"] = {"filename": backtest_report.filename(book.name, row.period_start, row.period_end),
+                         "result_sha256": backtest_report.result_sha256(row.result)}
+    return out
+
+
+def _evidence_names(db: Session, book: HelmBook, result: dict[str, Any]) -> dict[str, str]:
+    """File names of the documents findings rest on that carry neither a number nor a name (a renewal
+    notice, a supplier certificate), read from the book's own workspaces only."""
+    from app.models.work_item import WorkItem
+
+    wanted: dict[uuid.UUID, str] = {}
+    for mandate in result.get("mandates") or []:
+        for finding in mandate.get("findings") or []:
+            for item in finding.get("evidence") or []:
+                if not isinstance(item, dict) or not item.get("work_item_id") or \
+                        item.get("document_number") or item.get("document"):
+                    continue
+                try:
+                    wanted[uuid.UUID(str(item["work_item_id"]))] = str(item["work_item_id"])
+                except ValueError:
+                    continue
+    if not wanted:
+        return {}
+    workspaces = list(ledger_store.book_workspace_ids(db, book))
+    rows = db.execute(select(WorkItem.id, WorkItem.original_filename)
+                      .where(WorkItem.id.in_(list(wanted)), WorkItem.workspace_id.in_(workspaces))).all()
+    return {wanted[item_id]: name for item_id, name in rows if name}
+
+
+def backtest_report_bundle(db: Session, who: Viewer, backtest_id: uuid.UUID) -> dict[str, Any]:
+    """Everything the replay's PDF prints, as plain data (`backtest_report.to_pdf` is pure).
+
+    The same access as reading the replay: owners, admins and billing; another organization's replay
+    is not found; a reader who may not see the book's workspace gets the totals without the findings,
+    exactly as the page shows them. A replay that is still running or that failed has no report, and
+    says so in words (409)."""
+    from app.models.helm import HelmBacktest
+    from app.services.helm import backtest, backtest_report
+
+    row = db.get(HelmBacktest, backtest_id)
+    if row is None or row.organization_id != who.organization_id:
+        raise HelmNotFound("Backtest not found.")
+    book = _book(db, who, row.book_id)
+    if row.status in (v.BACKTEST_QUEUED, v.BACKTEST_RUNNING):
+        raise HelmError("This replay is still running. Its PDF can be downloaded as soon as it finishes.",
+                        reason="BACKTEST_NOT_FINISHED", details={"status": row.status})
+    if row.status != v.BACKTEST_DONE:
+        raise HelmError(f"This replay could not finish ({row.error or 'an unexpected error'}), so there is no "
+                        "report to download. Replay the period again.", reason="BACKTEST_FAILED",
+                        details={"status": row.status})
+    readable = book.kind == v.BOOK_SAMPLE or who.can_read(book.workspace_id)
+    result = row.result or {}
+    return {
+        "id": str(row.id), "book_id": str(book.id), "book_name": book.name, "book_kind": book.kind,
+        "workspace_name": _workspace_name(db, book.workspace_id), "sample": book.kind == v.BOOK_SAMPLE,
+        "preview": row.preview, "months": row.months, "period_start": row.period_start.isoformat(),
+        "period_end": row.period_end.isoformat(),
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "started_at": row.started_at.isoformat() if row.started_at else None,
+        "finished_at": row.finished_at.isoformat() if row.finished_at else None,
+        "summary": row.summary, "readable": readable,
+        "mandates": [{"title": m.get("title"), "version": m.get("version")} for m in row.mandates or []],
+        # The fingerprint is always of the stored result; what is printed follows the reader's access.
+        "result_sha256": backtest_report.result_sha256(result),
+        "result": result if readable else backtest.json_of(row, readable=False)["result"],
+        "document_names": _evidence_names(db, book, result) if readable else {},
+    }
+
+
+def backtest_pdf(db: Session, who: Viewer, backtest_id: uuid.UUID) -> dict[str, Any]:
+    """The replay's PDF report, audited as an export (who, which replay, the fingerprint)."""
+    from app.services.helm import backtest_report
+
+    bundle = backtest_report_bundle(db, who, backtest_id)
+    content = backtest_report.to_pdf(bundle)
+    book = _book(db, who, uuid.UUID(bundle["book_id"]))
+    _audit(db, who, book, "HELM_BACKTEST", uuid.UUID(bundle["id"]), "EXPORTED",
+           {"format": "pdf", "result_sha256": bundle["result_sha256"], "findings_listed": bundle["readable"],
+            "bytes": len(content)})
+    return {"content": content, "sha256": bundle["result_sha256"],
+            "filename": backtest_report.filename(bundle["book_name"], bundle["period_start"], bundle["period_end"])}
 
 
 __all__ = [
-    "Viewer", "action_for", "action_json", "add_cash_position", "approve", "approve_all", "backtest_json", "book_for",
+    "Viewer", "action_for", "action_json", "add_cash_position", "approve", "approve_all", "backtest_json",
+    "backtest_pdf", "backtest_report_bundle", "book_for",
     "book_json", "build_sample", "delete_sample", "list_backtests", "request_backtest", "sample_state",
     "certificate_json", "cockpit", "create_book", "create_mandate", "ledger_view", "list_books",
     "list_certificates", "list_counterparties", "list_mandates", "mark_paid", "payment_run", "preview_spec",
