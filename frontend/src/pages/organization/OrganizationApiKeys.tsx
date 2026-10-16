@@ -22,8 +22,9 @@ import { apiKeyKeys } from "@/services/api/queryKeys";
 import { useResolvedOrganization } from "@/routes/OrganizationGuard";
 import { PlanLockBanner } from "@/components/billing/PlanLockBanner";
 import { CAPABILITY } from "@/constants/capabilities";
+import { useCapabilityAccess } from "@/hooks/useCapabilityAccess";
 import { canManageMembers } from "@/permissions/organizationPermissions";
-import { API_KEY_SCOPES } from "@/types/apiKey";
+import { API_KEY_SCOPES, HELM_API_KEY_SCOPES } from "@/types/apiKey";
 import type { ApiKeyRead, ApiKeyScope } from "@/types/apiKey";
 import type { OrganizationRole } from "@/types/tenancy";
 import { ApiError } from "@/services/api/client";
@@ -43,6 +44,10 @@ const SCOPE_BLURB: Readonly<Record<string, string>> = {
   "webhooks:write": "Create and modify webhook endpoints.",
   "webhooks:admin": "Rotate webhook secrets and redeliver events.",
   "billing:read": "Read invoices, plan, and usage. Read-only by design.",
+  "helm:read": "Read Helm: plans, mandates, the Promise ledger and certificates. Enterprise.",
+  "helm:write":
+    "Feed Helm: re-plan, add cash positions, mark invoices paid, import bank statements. " +
+    "Approving actions and changing mandates stay with people. Enterprise.",
 };
 
 export const OrganizationApiKeys: React.FC = () => {
@@ -57,6 +62,8 @@ export const OrganizationApiKeys: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
   const [scopes, setScopes] = useState<Set<ApiKeyScope>>(new Set());
+  // A key reaches Helm only on the Enterprise plan (capability.helm_api); elsewhere it is refused.
+  const helmApi = useCapabilityAccess(organizationId, CAPABILITY.helmApi);
   const [expiresAt, setExpiresAt] = useState("");
 
   const [revealed, setRevealed] = useState<{ token: string; name: string } | null>(
@@ -453,22 +460,39 @@ export const OrganizationApiKeys: React.FC = () => {
                 permissions cannot be granted to a key at all.
               </p>
               <div className="grid gap-1.5 sm:grid-cols-2">
-                {API_KEY_SCOPES.map((scope) => (
-                  <label
-                    key={scope}
-                    title={SCOPE_BLURB[scope]}
-                    className="flex items-start gap-2 text-sm text-foreground cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={scopes.has(scope)}
-                      onChange={() => toggleScope(scope)}
-                      className="mt-0.5"
-                    />
-                    <span className="font-mono text-xs">{scope}</span>
-                  </label>
-                ))}
+                {API_KEY_SCOPES.map((scope) => {
+                  const helm = HELM_API_KEY_SCOPES.has(scope);
+                  const locked = helm && !helmApi.granted;
+                  return (
+                    <label
+                      key={scope}
+                      title={SCOPE_BLURB[scope]}
+                      className={`flex items-start gap-2 text-sm text-foreground ${
+                        locked ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={scopes.has(scope)}
+                        onChange={() => toggleScope(scope)}
+                        disabled={locked}
+                        className="mt-0.5"
+                      />
+                      <span className="font-mono text-xs">{scope}</span>
+                      {helm && (
+                        <span className="rounded border border-border px-1 text-[10px] text-muted-foreground">
+                          Enterprise
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
               </div>
+              <p className="mt-2 text-xs text-muted-foreground">
+                {helmApi.granted
+                  ? "A Helm key can read Helm and feed it facts. Approving actions and changing mandates stay with people signed in."
+                  : "Helm keys work on the Enterprise plan."}
+              </p>
             </fieldset>
 
             <div>

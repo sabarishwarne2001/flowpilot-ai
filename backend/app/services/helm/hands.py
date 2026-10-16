@@ -1,9 +1,10 @@
-"""The effects of Helm's actions that reach beyond a settlement: tasks, notices, emails, requests.
+"""The effects of Helm's actions that reach beyond a settlement: tasks, notices, emails, requests, webhooks.
 
 Each function reuses the underlying service the rest of the product uses (never a copy of its
 logic): mail climbs the organization's TRANSACTIONAL sender ladder (`email_resolution`) and leaves
 through `email_service` (which enforces egress); notices go through
-`organization_notification_service.emit`; tasks are `helm_tasks` rows the review hub lists.
+`organization_notification_service.emit`; tasks are `helm_tasks` rows the review hub lists;
+webhooks are outbox events the platform's webhook service delivers (`helm/webhooks.py`).
 """
 
 from __future__ import annotations
@@ -256,9 +257,66 @@ def send_reminder(db: Session, *, action: HelmAction, book: HelmBook, snapshot=N
     return {"draft": draft, "sent": sent}
 
 
+def webhook_destination(db: Session, *, organization_id: uuid.UUID, event: Optional[str] = None) -> tuple[bool, str]:
+    """May Helm send a webhook for this organization? Enterprise (`capability.helm_api`), an ACTIVE
+    endpoint subscribed to the event (to any of Helm's events when None), and egress allows its host."""
+    from urllib.parse import urlsplit
+
+    from app.core import egress
+    from app.services.helm import gate, webhooks
+
+    if not gate.api_held(db, organization_id):
+        return False, "Helm's webhooks are part of the Enterprise plan."
+    endpoints = webhooks.listening(db, organization_id, event)
+    if not endpoints:
+        what = f"Helm's {event} event" if event else "Helm's events"
+        return False, f"No webhook endpoint listens for {what}. Add one under Settings, Webhooks."
+    allowed: list[str] = []
+    refused: list[tuple[str, str]] = []
+    for endpoint in endpoints:
+        parts = urlsplit(endpoint.url)
+        host = parts.hostname or ""
+        decision = egress.decide(egress.WEBHOOK, host, parts.port or 443, organization_id=organization_id, db=db)
+        if decision.allowed:
+            allowed.append(host)
+        else:
+            refused.append((host, (decision.explanation or "refused").rstrip(".")))
+    if not allowed:
+        host, why = refused[0]
+        return False, f"Egress does not allow the webhook endpoint {host}: {why}."
+    hosts = ", ".join(sorted(set(allowed)))
+    detail = f"Webhook to {len(allowed)} endpoint{'' if len(allowed) == 1 else 's'} ({hosts})."
+    if refused:
+        detail += f" Egress does not allow {len(refused)} more."
+    return True, detail
+
+
+def webhook(db: Session, *, action: HelmAction, book: HelmBook, snapshot=None) -> dict[str, Any]:
+    """The `webhook` hand (Enterprise): one of Helm's events about this action, through the platform's
+    webhook service (the outbox, then the signed, egress-checked, retried delivery). The payload carries
+    the action's ids and figures, never its title, explanation or a document's text."""
+    from app.services.helm import webhooks
+
+    event = webhooks.action_event(action)
+    if event not in v.WEBHOOK_EVENTS:
+        raise HandError("HELM_WEBHOOK_EVENT", f"Helm has no webhook event called {event!r}.")
+    if book.kind == v.BOOK_SAMPLE:
+        return {"sent": None, "note": "The sample company sends no webhooks."}
+    allowed, detail = webhook_destination(db, organization_id=action.organization_id, event=event)
+    if not allowed:
+        raise HandError("HELM_WEBHOOK_REFUSED", detail)
+    written = webhooks.emit(db, book=book, event=event, payload=webhooks.action_payload(action),
+                            resource_id=action.id, idempotency_key=f"{event}:action:{action.id}")
+    if written is None:
+        raise HandError("HELM_WEBHOOK_FAILED", "The webhook could not be queued, so nothing was sent.")
+    return {"event": event, "outbox_event_id": str(written), "detail": detail,
+            "queued_at": datetime.now(timezone.utc).isoformat()}
+
+
 def say(micros: Optional[int], currency: Optional[str]) -> str:
     return money.say(micros, currency)
 
 
 __all__ = ["COMPLIANCE_TEMPLATE_KEY", "HandError", "create_task", "draft_dispute", "draft_reconciliation",
-           "email_destination", "notify", "request_document", "send_mail", "send_reminder"]
+           "email_destination", "notify", "request_document", "send_mail", "send_reminder", "webhook",
+           "webhook_destination"]

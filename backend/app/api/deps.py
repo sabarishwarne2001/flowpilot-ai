@@ -34,7 +34,7 @@ from app.core.principal import (
     get_current_principal,
     set_current_principal,
 )
-from app.core.scopes import ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
+from app.core.scopes import PEOPLE_ONLY_ROUTES, ApiKeyScope, ROUTE_SCOPE_MAP, effective_scopes
 from app.core.workspace_permissions import is_at_least
 from app.crud.membership_filters import ACTIVE_ONLY
 from app.db.session import ReadSessionLocal, SessionLocal
@@ -123,7 +123,8 @@ async def get_current_user(
             request.state.api_key_id = authenticated.key.id
             request.state.api_key_obj = authenticated.key
             request.state.api_key_membership = authenticated.membership
-            _assert_api_key_route_scope(request, authenticated.key, authenticated.membership)
+            await run_in_threadpool(_assert_api_key_route_scope, request, db, authenticated.key,
+                                    authenticated.membership, authenticated.principal)
         if authenticated.session_id is not None:
             request.state.session_id = authenticated.session_id
 
@@ -142,30 +143,55 @@ def _route_scope(request: Request) -> Optional[ApiKeyScope]:
         call = getattr(dependency, "dependency", None)
         if isinstance(call, RequireScope) and call.required_scope is not None:
             return call.required_scope
+    method, template = _route_key(request)
+    return ROUTE_SCOPE_MAP.get((method, template)) or ROUTE_SCOPE_MAP.get((method, template.rstrip("/")))
+
+
+def _route_key(request: Request) -> tuple[str, str]:
+    """The matched route as `ROUTE_SCOPE_MAP` keys it: the method and the template without /api/v1."""
+    route = request.scope.get("route")
     template = getattr(route, "path_format", None) or getattr(route, "path", None) or request.url.path
     prefix = getattr(settings, "API_V1_STR", "")
     if prefix and template.startswith(prefix):
         template = template[len(prefix):]
-    method = request.method.upper()
-    return ROUTE_SCOPE_MAP.get((method, template)) or ROUTE_SCOPE_MAP.get((method, template.rstrip("/")))
+    return request.method.upper(), template
 
 
-def _assert_api_key_route_scope(request: Request, key: Any, membership: Any) -> None:
+def _assert_api_key_route_scope(request: Request, db: Session, key: Any, membership: Any,
+                                principal: Optional[Principal] = None) -> None:
     """Campaign session 2. An API key may call only routes a scope covers, and only with that scope.
 
     Before, scopes were checked only on routes that declared `RequireScope`; every other
     tenant route accepted any key with the full rights of the member who issued it, so a
     read-only key could upload, delete documents and read the member list.
+
+    Each refusal is audited with the key and the reason, through the denial aggregation (one row
+    each, then summary rows), so a script calling with a refused key cannot fill the audit log.
     """
+    method, template = _route_key(request)
     required = _route_scope(request)
     if required is None:
+        # A route kept for people (approving a payment in Helm, say) says why in its own words.
+        words = PEOPLE_ONLY_ROUTES.get((method, template))
+        _audit_key_refusal(request, db, key, principal, {
+            "reason": "people_only" if words else "api_key_unmapped_route", "route": f"{method} {template}"})
         raise OrganizationPermissionDeniedError(
-            "API keys cannot call this route: no API key scope covers it."
+            words or "API keys cannot call this route: no API key scope covers it."
         )
     if required not in effective_scopes(key, membership):
+        _audit_key_refusal(request, db, key, principal, {
+            "reason": "api_key_scope", "route": f"{method} {template}", "required_scope": required.value})
         raise OrganizationPermissionDeniedError(
             f"API key lacks the required scope: {required.value}"
         )
+
+
+def _audit_key_refusal(request: Request, db: Session, key: Any, principal: Optional[Principal],
+                       details: dict[str, Any]) -> None:
+    res_type, action = resolve_route_audit(request, default_resource=AuditResourceType.ORGANIZATION)
+    record_threshold_denial(db=db, organization_id=key.organization_id, actor_id=getattr(key, "user_id", None),
+                            resource_type=res_type, action=action, request=request, principal=principal,
+                            details=details)
 
 
 def _authenticate(db: Session, token: str) -> _Authenticated:
@@ -563,13 +589,23 @@ def _assert_organization_access_policy(
     *,
     organization_id: uuid.UUID,
     membership: OrganizationMember,
+    not_found: Optional[Exception] = None,
 ) -> None:
     """The organization's sign-in policy, checked on every request into it (campaign session 3).
 
     Called by every organization- and workspace-scoped context dependency, so a route added later
     is covered without anyone remembering a guard.
+
+    An API key goes no further than the organization that issued it. Its scopes come from its
+    issuer's role THERE; a person who belongs to two organizations could otherwise use a key from
+    one on the other, past that organization's sign-in rules, plan and administrators. It is
+    refused as a stranger is (`not_found`, 404), so it learns nothing about the organization.
     """
     from app.core.client_ip import trusted_client_ip
+
+    key = getattr(request.state, "api_key_obj", None) if request is not None else None
+    if key is not None and getattr(key, "organization_id", None) != organization_id:
+        raise not_found or OrganizationAccessDeniedError("Organization not found.")
 
     assert_organization_sign_in_policy(
         db,
@@ -677,6 +713,7 @@ def get_workspace_context(
         db,
         organization_id=workspace.organization_id,
         membership=access.organization_membership,
+        not_found=WorkspaceAccessDeniedError("Workspace not found."),
     )
 
     # ARCH-30 Tranche 3 (D-11). Same gate for every workspace-scoped route.
@@ -723,6 +760,7 @@ def get_archived_workspace_context(
         db,
         organization_id=workspace.organization_id,
         membership=access.organization_membership,
+        not_found=WorkspaceAccessDeniedError("Workspace not found."),
     )
     return TenantContext(
         user=current_user,

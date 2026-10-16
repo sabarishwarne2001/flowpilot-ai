@@ -296,6 +296,12 @@ NOTIFICATION_CATEGORY: Final = "helm"
 NOTIFICATION_ACTION: Final = "helm"
 BRIEFING_CATEGORY: Final = "helm_briefing"
 
+#: Helm's outgoing webhook events (Enterprise, `capability.helm_api`; `helm/webhooks.py`).
+WEBHOOK_PLAN_READY: Final = "helm.plan.ready"
+WEBHOOK_ACTION_EXECUTED: Final = "helm.action.executed"
+WEBHOOK_MANDATE_BREACHED: Final = "helm.mandate.breached"
+WEBHOOK_EVENTS: Final = (WEBHOOK_PLAN_READY, WEBHOOK_ACTION_EXECUTED, WEBHOOK_MANDATE_BREACHED)
+
 
 def sql_in(values: tuple[str, ...]) -> str:
     """`'A', 'B'` for a CHECK constraint."""
