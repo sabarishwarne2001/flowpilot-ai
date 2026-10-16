@@ -5,7 +5,7 @@
  * then lives through one part of a customer's life in the real web app, against the real API and
  * worker. Two things a sandbox browser cannot do are played by `backend/scripts/e2e_stand_in.py`:
  * the clock (a trial reaching its end) and the payment gateway's side (paying at checkout, a
- * declined renewal, the card fixed, a cancellation), through FlowPilot's own reconcile code.
+ * declined renewal, the card fixed, a cancellation), through Servabo's own reconcile code.
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -115,7 +115,7 @@ export async function signInAs(page: Page, email: string): Promise<ApiSession> {
 /** A one-page invoice PDF on disk, unique to this run (in a plain folder: a test title's characters
  *  in the path made Chromium's file chooser drop the file without a word). */
 export function invoicePdf(label: string): string {
-  const dir = path.join(os.tmpdir(), "flowpilot-e2e-journeys");
+  const dir = path.join(os.tmpdir(), "servabo-e2e-journeys");
   fs.mkdirSync(dir, { recursive: true });
   const file = path.join(dir, `${label}-${runId()}.pdf`);
   fs.writeFileSync(file, buildPdf([[`TAX INVOICE ${label}`, `Invoice Number: INV-${runId()}`,

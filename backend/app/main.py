@@ -43,6 +43,7 @@ from app.services.branding.errors import BrandingError
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
 from app.workers.handlers import register_all
+from app.core import legacy_names
 
 setup_logging()
 logger = logging.getLogger("app.main")
@@ -122,6 +123,7 @@ def assert_public_route_registry(app: FastAPI) -> None:
 async def lifespan(app: FastAPI):
     logger.info("Starting FlowPilot AI Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
+    legacy_names.warn_once(logger)
     logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
 
     try:

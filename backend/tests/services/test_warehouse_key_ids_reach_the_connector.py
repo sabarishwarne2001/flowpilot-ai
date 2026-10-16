@@ -76,7 +76,7 @@ def test_a_snowflake_destination_stages_with_its_own_key(uploads: list, monkeypa
     ).decode()
     config, secret = _saved(SnowflakeCredential(
         account="acme-xy12345", user="FLOWPILOT", warehouse="LOAD_WH", database="ANALYTICS",
-        stage_name="FLOWPILOT_STAGE", stage_bucket="acme-stage", stage_region="eu-west-1",
+        stage_name="SERVABO_STAGE", stage_bucket="acme-stage", stage_region="eu-west-1",
         private_key=pem, stage_access_key_id="AKIASTAGEEXAMPLE0001", stage_secret_access_key="t" * 40,
     ))
     monkeypatch.setattr(snowflake.SnowflakeConnector, "_execute", lambda *a, **k: {"code": "090001"}, raising=False)

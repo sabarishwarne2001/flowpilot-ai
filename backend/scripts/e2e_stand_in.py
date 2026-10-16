@@ -7,17 +7,17 @@ and worker. Two things a browser cannot do in a sandbox are played here instead:
 
 * **the clock** — a free trial that reaches its last days or its end (`trial-ending`,
   `trial-ends`), and the hourly job that emails about it (`run-job trial.reminders`);
-* **the payment gateway's side** — what Stripe does after the customer leaves FlowPilot (pays at
+* **the payment gateway's side** — what Stripe does after the customer leaves Servabo (pays at
   checkout, changes seats or plan or cancels in the portal, a renewal whose card is declined, the
-  retries running out, the card fixed). Each is a Stripe event handed to FlowPilot's own
+  retries running out, the card fixed). Each is a Stripe event handed to Servabo's own
   `reconcile_service.reconcile_event`, the code a signed webhook reaches through the `--loop
-  stripe` worker, with a gateway that answers its re-fetches from FlowPilot's database (as the
+  stripe` worker, with a gateway that answers its re-fetches from Servabo's database (as the
   test suite's fake gateway does). Everything that follows (plan, seats, statements, dunning
-  emails, read-only access) is FlowPilot's real behaviour;
+  emails, read-only access) is Servabo's real behaviour;
 * **the customer's DNS provider and identity provider** — `dns-publish` puts a TXT record where
-  the journeys' DNS server (`scripts/e2e_dns.py`) answers FlowPilot's real lookup, and `saml-idp`
+  the journeys' DNS server (`scripts/e2e_dns.py`) answers Servabo's real lookup, and `saml-idp`
   / `saml-response` play the SAML provider (a signing certificate, then a signed assertion that
-  answers FlowPilot's own AuthnRequest), with the backend's test IdP (`tests/engines/saml_idp.py`).
+  answers Servabo's own AuthnRequest), with the backend's test IdP (`tests/engines/saml_idp.py`).
 
 Development and test databases only: it refuses to run when ENVIRONMENT is production.
 """
@@ -95,7 +95,7 @@ def _epoch(moment: datetime) -> int:
 
 
 class StandInGateway(StripeGateway):
-    """Stripe's answers to FlowPilot's re-fetches, kept in a small state file. No network."""
+    """Stripe's answers to Servabo's re-fetches, kept in a small state file. No network."""
 
     def __init__(self, state: dict[str, Any], organization_id: uuid.UUID) -> None:
         super().__init__(api_key="sk_test_e2e_stand_in", api_version="2026-07-29.dahlia")
@@ -171,7 +171,7 @@ def _subscription_id(db, account: BillingAccount, state: dict[str, Any]) -> str:
                      .order_by(Subscription.created_at.desc()).limit(1)).scalar_one_or_none()
     if row is None or not row.stripe_subscription_id:
         raise SystemExit("this organization has no subscription; run `subscribe` first")
-    # A seeded subscription: describe it as Stripe would, from FlowPilot's own record.
+    # A seeded subscription: describe it as Stripe would, from Servabo's own record.
     state["subscriptions"][row.stripe_subscription_id] = _raw_subscription(
         row.stripe_subscription_id, account.stripe_customer_id, row.status.value.lower(), row.quota_tier_key,
         row.seats_purchased, row.current_period_start, row.current_period_end)
@@ -213,8 +213,8 @@ def _identity_provider(args: argparse.Namespace) -> int:
     """The customer's SAML identity provider (Okta, Entra ID), stood in by the backend's test IdP.
 
     `saml-idp` makes the provider's signing key and certificate (the certificate is what the owner
-    pastes into the identity console); `saml-response` answers FlowPilot's AuthnRequest with a signed
-    assertion for one person, addressed to FlowPilot's own ACS URL, as the provider would after they
+    pastes into the identity console); `saml-response` answers Servabo's AuthnRequest with a signed
+    assertion for one person, addressed to Servabo's own ACS URL, as the provider would after they
     signed in there.
     """
     from tests.engines.saml_idp import TestIdp, keypair
@@ -259,7 +259,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument("--value", help="dns-publish: the TXT value")
     parser.add_argument("--domain", help="saml-idp, saml-response: the customer's email domain")
     parser.add_argument("--email", help="saml-response: who signs in")
-    parser.add_argument("--saml-request", help="saml-response: the SAMLRequest FlowPilot sent (redirect binding)")
+    parser.add_argument("--saml-request", help="saml-response: the SAMLRequest Servabo sent (redirect binding)")
     args = parser.parse_args(argv)
 
     if args.command != "run-job":  # run-job waits on the worker and touches no shared state
@@ -267,11 +267,11 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     if args.command == "dns-publish":
         # The customer publishes the TXT record at their DNS provider; the journeys' DNS server
-        # (scripts/e2e_dns.py, started by start-stack.sh) answers it to FlowPilot's resolver.
+        # (scripts/e2e_dns.py, started by start-stack.sh) answers it to Servabo's resolver.
         from scripts import e2e_dns
 
         records = os.environ.get("E2E_DNS_RECORDS") or str(
-            Path(os.environ.get("E2E_LOG_DIR", "/tmp/flowpilot-e2e-logs")) / "dns-records.json")
+            Path(os.environ.get("E2E_LOG_DIR", "/tmp/servabo-e2e-logs")) / "dns-records.json")
         e2e_dns.publish(Path(records), args.name, args.value)
         print(json.dumps({"published": args.name, "value": args.value}))
         return 0
@@ -374,7 +374,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                         _bump(raw)
                         out.append(_apply(db, gateway, "customer.subscription.deleted", sub_id, "subscription"))
                     elif args.command == "renewal-fails":
-                        # The period ends: Stripe opens the renewal (FlowPilot closes the period on it),
+                        # The period ends: Stripe opens the renewal (Servabo closes the period on it),
                         # charges the card an hour later, and the card is declined.
                         start = item["current_period_start"]
                         end = min(item["current_period_end"], _epoch(NOW))

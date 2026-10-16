@@ -13,8 +13,8 @@
   3. delete STALE and FAILED comparisons older than RETENTION_DAYS in which
      nobody decided a discrepancy (reviewer work is never deleted).
 
-Dispatched by `flowpilot-sweep corroboration` (deploy/bin/flowpilot-sweep) and
-scheduled in deploy/cron.d/flowpilot-sweepers (RH-4 G14).
+Dispatched by `servabo-sweep corroboration` (deploy/bin/servabo-sweep) and
+scheduled in deploy/cron.d/servabo-sweepers (RH-4 G14).
 """
 
 from __future__ import annotations

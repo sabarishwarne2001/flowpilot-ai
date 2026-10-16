@@ -155,8 +155,8 @@ def run() -> dict[str, Any]:
 
     original_relay = platform_email.platform_smtp_config
     platform_email.platform_smtp_config = lambda: SMTPConfig(
-        smtp_host="capture.invalid", smtp_port=587, smtp_username="noreply@flowpilot.ai",
-        smtp_password="capture", sender_name="FlowPilot", encryption=EmailEncryption.TLS)
+        smtp_host="capture.invalid", smtp_port=587, smtp_username="noreply@servabo.app",
+        smtp_password="capture", sender_name="Servabo", encryption=EmailEncryption.TLS)
 
     ctx = SimpleNamespace(workspace_id=ws, organization_id=org, user_id=user, role="ADMIN",
                           organization_membership=SimpleNamespace(role="OWNER"))
@@ -242,7 +242,7 @@ def run() -> dict[str, Any]:
         created = catalog.TRIGGERS_BY_KEY["document.created"]
         configs = {
             "webhook.send": {"endpoint_id": str(endpoint["id"])},
-            "email.send": {"recipient": "ops@flowpilot-conformance.com"},
+            "email.send": {"recipient": "ops@servabo-conformance.com"},
             "notify.role": {"roles": ["ADMIN"]},
             "review.escalate": {"reason": "ARCH-41 conformance"},
             "redaction.start": {"profile_key": "all_identifiers"},

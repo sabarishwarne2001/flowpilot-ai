@@ -43,7 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-E2E_PASSWORD = "E2e-FlowPilot-Pass-2026!"
+E2E_PASSWORD = "E2e-Servabo-Pass-2026!"
 EMAIL_DOMAIN = "e2e.example.com"
 
 
@@ -118,7 +118,7 @@ TENANTS: tuple[SeedTenant, ...] = (
     SeedTenant(
         key="P",
         slug="e2e-platform-ops",
-        name="FlowPilot Platform Ops",
+        name="Servabo Platform Ops",
         plan="free",
         workspaces=(("ops", "Platform Ops"),),
         users=(_user("P", "superadmin", "OWNER", "ADMIN", "Sam Superadmin"),),

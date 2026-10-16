@@ -18,6 +18,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # rather than at the first encrypted assertion.
 from typing import Literal  # noqa: E402
 from app.core.constants import APP_VERSION
+from app.core.legacy_names import LEGACY_PREFIX
 from app.core.production_guard import (
     HARDENED_ENVIRONMENTS,
     UnsafeConfigurationError,
@@ -588,7 +589,7 @@ class Settings(BaseSettings):
     # OPERATOR's: environment only, never a database column and never an API
     # field, so no tenant can widen egress or point the local model elsewhere.
     #
-    #   FLOWPILOT_EDITION      saas (the hosted service) | sovereign (on-premise /
+    #   SERVABO_EDITION      saas (the hosted service) | sovereign (on-premise /
     #                          air-gapped; needs a licence signed by FlowPilot's
     #                          Ed25519 key, verified offline)
     #   EGRESS_MODE            open | deny. deny: nothing leaves except the
@@ -603,7 +604,18 @@ class Settings(BaseSettings):
     #                          fallback (used when the configured provider fails
     #                          or is refused) | exclusive (every completion and
     #                          stream, whatever a tenant selected)
-    FLOWPILOT_EDITION: str = "saas"
+    # Renamed with the product on 2026-10-16; the pre-rename name is read for one
+    # release (app/core/legacy_names.py) and start-up warns when it is still set.
+    SERVABO_EDITION: str = Field(
+        default="saas",
+        validation_alias=AliasChoices("SERVABO_EDITION", LEGACY_PREFIX + "EDITION"),
+    )
+    # A sovereign licence may be bound to one deployment: this deployment's id (any string the
+    # operator chooses, written into the licence when it is issued). Renamed with the product.
+    SERVABO_DEPLOYMENT_ID: str = Field(
+        default="",
+        validation_alias=AliasChoices("SERVABO_DEPLOYMENT_ID", LEGACY_PREFIX + "DEPLOYMENT_ID"),
+    )
     EGRESS_MODE: str = "open"
     EGRESS_OPERATOR_HOSTS: str = ""
     LOCAL_LLM_MODE: str = "off"

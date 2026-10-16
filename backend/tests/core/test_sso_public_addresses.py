@@ -127,10 +127,10 @@ def test_documented_identity_settings_take_effect(build, name: str, value: str, 
     assert getattr(settings, name) == expected
 
 
-#: Read through getattr() but deliberately not settings: FLOWPILOT_DEPLOYMENT_ID is read
+#: Read through getattr() but deliberately not settings: SERVABO_DEPLOYMENT_ID is read
 #: from the process environment first (sovereign licence binding). (SCIM_TOKEN_PEPPER was
 #: exempted here until F-124 was fixed; nothing reads it now.)
-NOT_DECLARED_ON_PURPOSE = {"FLOWPILOT_DEPLOYMENT_ID"}
+NOT_DECLARED_ON_PURPOSE = {"SERVABO_DEPLOYMENT_ID"}
 
 _GETATTR = re.compile(
     r"getattr\(\s*(?:settings|_settings\(\)|get_settings\(\)|self\._settings)\s*,\s*[\"']([A-Z][A-Z0-9_]+)[\"']"

@@ -22,7 +22,7 @@ function Write-Warn2 { param([string]$m) Write-Host "    [!]  $m" -ForegroundCol
 function Write-Fail  { param([string]$m) Write-Host "    [x]  $m" -ForegroundColor Red }
 
 Write-Host ''
-Write-Host '  FlowPilot AI — environment reset' -ForegroundColor White
+Write-Host '  Servabo — environment reset' -ForegroundColor White
 Write-Host '  --------------------------------' -ForegroundColor DarkGray
 
 if (-not (Test-Path $VenvPython)) {
@@ -56,10 +56,30 @@ Start-Sleep -Seconds 2
 Write-Ok "Worker and API processes cleared."
 
 # --- 2. Backing services ---
+# >>> one-release names: Docker data made before the rename (FlowPilot became Servabo on
+# 2026-10-16) lives in volumes named flowpilot_*. Keep using them, so nothing looks lost; README
+# "Local data from before the rename" says how to move to the new names. Remove next release.
+function Use-PreRenameDockerData {
+    if ($env:COMPOSE_PROJECT_NAME) { return $false }
+    docker volume inspect flowpilot_postgres_data 2>&1 | Out-Null
+    $hasOld = ($LASTEXITCODE -eq 0)
+    docker volume inspect servabo_postgres_data 2>&1 | Out-Null
+    $hasNew = ($LASTEXITCODE -eq 0)
+    if ($hasOld -and -not $hasNew) {
+        $env:COMPOSE_PROJECT_NAME = 'flowpilot'
+        foreach ($c in @('flowpilot-db', 'flowpilot-redis', 'flowpilot-minio', 'flowpilot-minio-init')) {
+            docker rm -f $c 2>&1 | Out-Null
+        }
+        return $true
+    }
+    return $false
+}
+# <<< one-release names
 Write-Step '2/4  Verifying backing services'
 
 Push-Location $BackendDir
 try {
+    if (Use-PreRenameDockerData) { Write-Warn2 'Using your Docker data from before the rename (volumes flowpilot_*); see README.' }
     if ($DryRun) {
         Write-Ok 'would ensure db, redis, minio are up'
     } else {

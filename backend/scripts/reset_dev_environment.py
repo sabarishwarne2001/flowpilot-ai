@@ -26,12 +26,12 @@ if env_file.exists():
 
 DEFAULT_ORG_ID = uuid.UUID("00000000-0000-4000-8000-000000000001")
 DEFAULT_WORKSPACE_ID = uuid.UUID("00000000-0000-4000-8000-000000000002")
-DEFAULT_ORG_SLUG = "flowpilot-dev"
-DEFAULT_ORG_NAME = "FlowPilot Development"
+DEFAULT_ORG_SLUG = "servabo-dev"
+DEFAULT_ORG_NAME = "Servabo Development"
 DEFAULT_WORKSPACE_SLUG = "default"
 DEFAULT_WORKSPACE_NAME = "Default Workspace"
-DEFAULT_ADMIN_EMAIL = "admin@flowpilot.ai"
-DEFAULT_ADMIN_PASSWORD = "FlowPilot!Dev123"
+DEFAULT_ADMIN_EMAIL = "admin@servabo.app"
+DEFAULT_ADMIN_PASSWORD = "Servabo!Dev123"
 
 C_OK = "\033[32m"
 C_WARN = "\033[33m"
@@ -231,7 +231,7 @@ def seed_tenant(dry_run: bool) -> dict[str, str]:
                     is_active=True,
                     is_superuser=True,
                     email_verified_at=datetime.now(timezone.utc),
-                    display_name="FlowPilot Admin",
+                    display_name="Servabo Admin",
                 )
                 db.add(user)
                 db.flush()
@@ -386,7 +386,7 @@ def main(argv: Optional[list[str]] = None) -> int:
 
     guard_environment()
 
-    print("\n  FlowPilot AI — development environment reset")
+    print("\n  Servabo — development environment reset")
     print(f"  {C_DIM}{'-' * 44}{C_OFF}")
 
     total = 6

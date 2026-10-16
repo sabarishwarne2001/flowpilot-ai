@@ -12,7 +12,7 @@ A backup nobody has restored is a hypothesis. This drill:
   1. checks the file's SHA-256 against its manifest;
   2. decrypts it as a stream straight into `pg_restore` (no plaintext file),
      checking the plaintext SHA-256 on the way through;
-  3. restores into a NEW database, `flowpilot_restore_drill_<stamp>`, on the
+  3. restores into a NEW database, `servabo_restore_drill_<stamp>`, on the
      same server by default — never into the source;
   4. compares the Alembic head and the exact row count of every table with the
      counts the backup recorded inside its own snapshot;
@@ -23,7 +23,7 @@ had) and how long the restore took (the recovery time you would have needed).
 ARCH-49 turns both into stated, gated targets; here they are measured and
 printed so the numbers exist before anyone promises them.
 
-Run it weekly. `deploy/cron.d/flowpilot-backups` does.
+Run it weekly. `deploy/cron.d/servabo-backups` does.
 """
 
 from __future__ import annotations
@@ -48,7 +48,7 @@ except ImportError:  # ... or `python scripts/restore_drill.py`.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-SCRATCH_PREFIX = "flowpilot_restore_drill_"
+SCRATCH_PREFIX = "servabo_restore_drill_"
 
 
 def _admin_params(target: dict[str, str]) -> dict[str, str]:
@@ -191,8 +191,8 @@ def run_drill(
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="FlowPilot restore drill (ARCH-41)")
-    parser.add_argument("--dest", help="backup directory (default FLOWPILOT_BACKUP_DIR)")
+    parser = argparse.ArgumentParser(description="Servabo restore drill (ARCH-41)")
+    parser.add_argument("--dest", help="backup directory (default SERVABO_BACKUP_DIR)")
     parser.add_argument("--manifest", help="a specific *.manifest.json")
     parser.add_argument("--target-url", help="server to restore on (default DATABASE_URL's server)")
     parser.add_argument("--keep", action="store_true", help="keep the scratch database")

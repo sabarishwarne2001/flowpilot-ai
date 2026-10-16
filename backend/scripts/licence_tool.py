@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""ARCH50-S1:licence-tool — FlowPilot's Ed25519 keys and sovereign-edition licences, offline.
+"""ARCH50-S1:licence-tool — Servabo's Ed25519 keys and sovereign-edition licences, offline.
 
-    python scripts/licence_tool.py keygen --out flowpilot-licence.key        # a new private key (0600); prints the public key
-    python scripts/licence_tool.py trust --public-key <b64> --purpose licence --production --label "FlowPilot licence key 2026"
-    python scripts/licence_tool.py issue --key flowpilot-licence.key --licensee "Acme Bank" --expires 2027-09-30 \\
+    python scripts/licence_tool.py keygen --out servabo-licence.key        # a new private key (0600); prints the public key
+    python scripts/licence_tool.py trust --public-key <b64> --purpose licence --production --label "Servabo licence key 2026"
+    python scripts/licence_tool.py issue --key servabo-licence.key --licensee "Acme Bank" --expires 2027-09-30 \\
             --max-organizations 5 --max-seats 500 --grace-days 14 --feature egress_lockdown --feature local_llm \\
             [--deployment-id acme-prod] --out acme.licence.json
     python scripts/licence_tool.py verify acme.licence.json [--environment production]
@@ -39,7 +39,7 @@ def _licence_module():
     (importing the app.services package would)."""
     import importlib.util
 
-    name = "flowpilot_licence_offline"
+    name = "servabo_licence_offline"
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, BACKEND / "app" / "services" / "sovereign" / "licence.py")

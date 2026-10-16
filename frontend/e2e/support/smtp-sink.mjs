@@ -30,7 +30,7 @@ const server = net.createServer((socket) => {
   let data = [];
   const reply = (line) => socket.write(`${line}\r\n`);
 
-  reply("220 flowpilot-e2e-smtp ready");
+  reply("220 servabo-e2e-smtp ready");
 
   let authStep = 0; // AUTH LOGIN: 1 = expecting username, 2 = expecting password
   const handleLine = (line) => {
@@ -62,9 +62,9 @@ const server = net.createServer((socket) => {
     }
     const upper = line.toUpperCase();
     if (upper.startsWith("EHLO")) {
-      socket.write("250-flowpilot-e2e-smtp\r\n250-8BITMIME\r\n250-AUTH PLAIN LOGIN\r\n250 SMTPUTF8\r\n");
+      socket.write("250-servabo-e2e-smtp\r\n250-8BITMIME\r\n250-AUTH PLAIN LOGIN\r\n250 SMTPUTF8\r\n");
     } else if (upper.startsWith("HELO")) {
-      reply("250 flowpilot-e2e-smtp");
+      reply("250 servabo-e2e-smtp");
     } else if (upper.startsWith("MAIL FROM:")) {
       from = line.slice(10).trim().replace(/^<|>.*$/g, "");
       to = [];

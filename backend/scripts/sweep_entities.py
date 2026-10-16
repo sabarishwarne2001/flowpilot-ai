@@ -5,8 +5,8 @@
     python scripts/sweep_entities.py --apply    # commit
     python scripts/sweep_entities.py --apply --workspace <uuid>
 
-Dispatched by deploy/bin/flowpilot-sweep (`entities`) from
-deploy/cron.d/flowpilot-sweepers. What it does is in
+Dispatched by deploy/bin/servabo-sweep (`entities`) from
+deploy/cron.d/servabo-sweepers. What it does is in
 app/services/entities/sweep.py.
 """
 

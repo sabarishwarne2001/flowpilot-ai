@@ -1,6 +1,6 @@
 """N-017 — the uptime heartbeat tells a monitor whether the public site answers.
 
-`deploy/bin/flowpilot-uptime-heartbeat` runs from cron every minute. A stand-in `curl` first on
+`deploy/bin/servabo-uptime-heartbeat` runs from cron every minute. A stand-in `curl` first on
 PATH answers the readiness check (up or down) and records every URL the script called, so the
 test sees exactly which pings a real monitor would receive.
 """
@@ -15,7 +15,7 @@ import pytest
 
 pytestmark = pytest.mark.no_db
 
-SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "bin" / "flowpilot-uptime-heartbeat"
+SCRIPT = Path(__file__).resolve().parents[2] / "deploy" / "bin" / "servabo-uptime-heartbeat"
 
 
 @pytest.fixture()
@@ -39,7 +39,7 @@ def run(tmp_path: Path):
     def _run(**extra: str) -> tuple[int, list[str], str]:
         env = {
             "PATH": f"{fake}:{os.environ['PATH']}",
-            "FLOWPILOT_SWEEPER_ENV": str(tmp_path / "missing.env"),
+            "SERVABO_SWEEPER_ENV": str(tmp_path / "missing.env"),
             **extra,
         }
         result = subprocess.run([str(SCRIPT)], env=env, capture_output=True, text=True, timeout=30)
@@ -51,14 +51,14 @@ def run(tmp_path: Path):
 
 
 def test_an_up_site_pings_the_monitor(run) -> None:
-    code, urls, _ = run(FLOWPILOT_PUBLIC_URL="https://app.example.com", HEARTBEAT_BASE="https://hc.test",
+    code, urls, _ = run(SERVABO_PUBLIC_URL="https://app.example.com", HEARTBEAT_BASE="https://hc.test",
                         HEARTBEAT_UUID_UPTIME="abc")
     assert code == 0
     assert urls == ["https://app.example.com/api/v1/health/ready", "https://hc.test/abc"]
 
 
 def test_a_down_site_pings_the_failure_address_and_says_why(run) -> None:
-    code, urls, stderr = run(FLOWPILOT_PUBLIC_URL="https://app.example.com/", HEARTBEAT_BASE="https://hc.test",
+    code, urls, stderr = run(SERVABO_PUBLIC_URL="https://app.example.com/", HEARTBEAT_BASE="https://hc.test",
                              HEARTBEAT_UUID_UPTIME="abc", FAKE_SITE_UP="0")
     assert code == 1
     assert urls[-1] == "https://hc.test/abc/fail"
@@ -72,9 +72,35 @@ def test_without_a_monitor_it_still_checks(run) -> None:
 
 def test_it_refuses_to_guess_the_address(run) -> None:
     code, urls, stderr = run()
-    assert code == 64 and urls == [] and "FLOWPILOT_PUBLIC_URL" in stderr
+    assert code == 64 and urls == [] and "SERVABO_PUBLIC_URL" in stderr
 
 
 def test_cron_runs_it_every_minute() -> None:
-    cron = (SCRIPT.parents[1] / "cron.d" / "flowpilot-compose-backups").read_text(encoding="utf-8")
-    assert "* * * * *" in cron and "flowpilot-uptime-heartbeat" in cron
+    cron = (SCRIPT.parents[1] / "cron.d" / "servabo-compose-backups").read_text(encoding="utf-8")
+    assert "* * * * *" in cron and "servabo-uptime-heartbeat" in cron
+
+
+# FlowPilot was renamed Servabo (2026-10-16): a host configured before the rename keeps working for
+# one release, and the script says what to rename. The new name wins when both are set.
+from app.core.legacy_names import LEGACY_PREFIX  # noqa: E402
+
+
+def test_a_pre_rename_variable_still_works_and_is_named_in_a_warning(run) -> None:
+    code, urls, stderr = run(**{LEGACY_PREFIX + "PUBLIC_URL": "https://old.example.com"})
+    assert code == 0
+    assert urls == ["https://old.example.com/api/v1/health/ready"]
+    assert f"rename {LEGACY_PREFIX}PUBLIC_URL to SERVABO_PUBLIC_URL" in stderr
+
+
+def test_the_new_name_wins_over_the_old_one(run) -> None:
+    code, urls, _ = run(**{LEGACY_PREFIX + "PUBLIC_URL": "https://old.example.com",
+                           "SERVABO_PUBLIC_URL": "https://new.example.com"})
+    assert code == 0 and urls == ["https://new.example.com/api/v1/health/ready"]
+
+
+def test_a_config_file_still_spelling_the_old_names_is_read(run, tmp_path: Path) -> None:
+    config = tmp_path / "sweepers.env"
+    config.write_text(f"{LEGACY_PREFIX}PUBLIC_URL=https://from-file.example.com\n", encoding="utf-8")
+    code, urls, stderr = run(SERVABO_SWEEPER_ENV=str(config))
+    assert code == 0 and urls == ["https://from-file.example.com/api/v1/health/ready"]
+    assert "SERVABO_PUBLIC_URL" in stderr

@@ -25,7 +25,7 @@ import uuid
 import httpx
 
 BASE = os.environ.get("CANARY_API_ORIGIN", "http://127.0.0.1:8000") + "/api/v1"
-PW = os.environ.get("E2E_PASSWORD", "E2e-FlowPilot-Pass-2026!")
+PW = os.environ.get("E2E_PASSWORD", "E2e-Servabo-Pass-2026!")
 RUN = uuid.uuid4().hex[:6]
 LEAKS: list[str] = []
 CHECKS = 0

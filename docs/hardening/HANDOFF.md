@@ -440,7 +440,7 @@ Tick them in a copy of this file or in your notes. Nothing here needs code chang
    (N-017), `docker compose up -d`, then `seed_quota_tiers.py` and `seed_price_book.py --version auto`
    (also on every later deploy, §9.3).
 9. **Backups (§9.4):** create `/etc/flowpilot/backup.key` and copy it into your password manager
-   **now**; set `FLOWPILOT_BACKUP_MIRROR_CMD` to copy each backup to another provider; run one backup
+   **now**; set `SERVABO_BACKUP_MIRROR_CMD` to copy each backup to another provider; run one backup
    and one restore drill by hand and note the restore time.
 10. **Scheduled jobs and monitoring (§9.6):** install `/etc/flowpilot/sweepers.env` and the two cron
     files, switch off the three point-in-time lines with the command given, create free

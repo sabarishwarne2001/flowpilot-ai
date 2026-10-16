@@ -1,5 +1,5 @@
 """
-Automated isolation and workspace signature checker for FlowPilot AI CRUD layer.
+Automated isolation and workspace signature checker for Servabo CRUD layer.
 """
 import os
 import sys

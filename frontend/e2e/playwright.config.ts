@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * FlowPilot AI browser tests (Phase 3). See e2e/README.md for how to run them.
+ * Servabo browser tests (Phase 3). See e2e/README.md for how to run them.
  *
  * The backend (API, worker, Postgres, Redis) is started outside Playwright by
  * e2e/scripts/start-stack.sh; global-setup.ts checks that it answers, runs the

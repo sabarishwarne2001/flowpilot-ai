@@ -630,7 +630,7 @@ def main() -> int:
     # A drill must never inherit a role that changes what it measures.
     os.environ.setdefault("SERVICE_ROLE", "web")
 
-    print("FlowPilot AI — ARCH-19 disaster recovery drill")
+    print("Servabo — ARCH-19 disaster recovery drill")
     print(f"SERVICE_ROLE={os.environ.get('SERVICE_ROLE')}")
 
     drill_1_pool_budgets()

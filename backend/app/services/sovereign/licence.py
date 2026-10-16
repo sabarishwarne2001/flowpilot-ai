@@ -19,7 +19,7 @@ read RE-VERIFIES the signature against a key pinned in `app/core/licence_keys.py
 
 WHAT IT GOVERNS
 ===============
-Only the sovereign edition (`FLOWPILOT_EDITION=sovereign`). The hosted service (`saas`) needs none: status
+Only the sovereign edition (`SERVABO_EDITION=sovereign`). The hosted service (`saas`) needs none: status
 NOT_REQUIRED. On a sovereign deployment, creating an organization needs a VALID licence (or one inside its grace
 period) with room under `max_organizations`; that refusal is 402 `LICENCE_REQUIRED`. Existing organizations keep
 working when a licence lapses -- a licence must never be the thing that loses a customer's data -- and the
@@ -36,7 +36,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any, Mapping, Optional
 
-from app.core import licence_keys, signing
+from app.core import legacy_names, licence_keys, signing
 from app.core.exceptions import ServaboError
 
 logger = logging.getLogger("app.services.sovereign.licence")
@@ -127,12 +127,13 @@ def _settings() -> Any:
     except Exception:  # noqa: BLE001
         from types import SimpleNamespace
 
-        return SimpleNamespace(**{k: os.environ.get(k) for k in ("FLOWPILOT_EDITION", "ENVIRONMENT", "LICENCE_FILE",
-                                                                "FLOWPILOT_DEPLOYMENT_ID")})
+        return SimpleNamespace(SERVABO_EDITION=legacy_names.env("EDITION"), ENVIRONMENT=os.environ.get("ENVIRONMENT"),
+                               LICENCE_FILE=os.environ.get("LICENCE_FILE"),
+                               SERVABO_DEPLOYMENT_ID=legacy_names.env("DEPLOYMENT_ID"))
 
 
 def edition() -> str:
-    raw = str(getattr(_settings(), "FLOWPILOT_EDITION", EDITION_SAAS) or EDITION_SAAS).strip().lower()
+    raw = str(getattr(_settings(), "SERVABO_EDITION", EDITION_SAAS) or EDITION_SAAS).strip().lower()
     return raw if raw in EDITIONS else EDITION_SOVEREIGN  # an unknown edition is held to the stricter rules
 
 
@@ -217,7 +218,7 @@ def verify(doc: LicenceDocument, *, at: Optional[datetime] = None,
         return LicenceStatus(STATUS_WRONG_EDITION, reason=f"the licence is for edition {p.get('edition')!r}", **base)
     bound = p.get("deployment_id")
     if bound:
-        here = str(os.environ.get("FLOWPILOT_DEPLOYMENT_ID") or getattr(_settings(), "FLOWPILOT_DEPLOYMENT_ID", "")
+        here = str(legacy_names.env("DEPLOYMENT_ID") or getattr(_settings(), "SERVABO_DEPLOYMENT_ID", "")
                    or "")
         if here != str(bound):
             return LicenceStatus(STATUS_WRONG_DEPLOYMENT, reason="the licence is bound to another deployment", **base)

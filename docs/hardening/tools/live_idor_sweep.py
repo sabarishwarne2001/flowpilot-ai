@@ -42,7 +42,7 @@ sys.path.insert(0, os.path.dirname(__file__))
 from live_api_fuzz import SKIP, example  # noqa: E402  (schema-valid bodies, the same skip list)
 
 BASE = os.environ.get("FUZZ_API_ORIGIN", "http://127.0.0.1:8000")
-PW = os.environ.get("E2E_PASSWORD", "E2e-FlowPilot-Pass-2026!")
+PW = os.environ.get("E2E_PASSWORD", "E2e-Servabo-Pass-2026!")
 HERE = os.path.dirname(__file__)
 SPEC = json.load(open(os.path.join(HERE, "openapi.json")))
 UUID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")

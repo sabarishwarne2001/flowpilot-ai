@@ -202,7 +202,7 @@ def test_snowflake_stages_then_copies_with_a_key_pair_token(monkeypatch: pytest.
 
     request = vendor.sent[0]
     sent = json.loads(request["body"])
-    assert sent["statement"].startswith("COPY INTO FLOWPILOT_USAGE_DAILY FROM @FP_STAGE/flowpilot/run-9/usage_daily.parquet")
+    assert sent["statement"].startswith("COPY INTO SERVABO_USAGE_DAILY FROM @FP_STAGE/flowpilot/run-9/usage_daily.parquet")
     assert "FILE_FORMAT = (TYPE = PARQUET)" in sent["statement"] and "ON_ERROR = ABORT_STATEMENT" in sent["statement"]
     assert (sent["warehouse"], sent["database"], sent["schema"]) == ("LOAD_WH", "ANALYTICS", "PUBLIC")
     assert request["headers"]["X-Snowflake-Authorization-Token-Type"] == "KEYPAIR_JWT"

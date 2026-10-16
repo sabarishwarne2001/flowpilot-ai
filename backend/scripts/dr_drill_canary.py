@@ -303,7 +303,7 @@ def main() -> int:
     args = parser.parse_args()
 
     print("=" * 78)
-    print("FlowPilot AI — ARCH-28 disaster recovery canary")
+    print("Servabo — ARCH-28 disaster recovery canary")
     print("=" * 78)
 
     canary_static()

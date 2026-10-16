@@ -5,7 +5,7 @@
 The nightly and hourly sweeps, the backups and the uptime check run from the server's cron, not
 from the compose stack (RUNBOOK §9.6), and until now only their Python entry points had been run
 (`test_sweeper_entrypoints.py`). This runs each line of `backend/deploy/cron.d/` through the same
-wrapper, with the same arguments, the way RUNBOOK §9.6 installs it: `FLOWPILOT_RUNNER` names the
+wrapper, with the same arguments, the way RUNBOOK §9.6 installs it: `SERVABO_RUNNER` names the
 Python that runs inside the stack, here the test interpreter, and the database is a fresh one
 migrated to head (the sweeps commit, so they never share the test database). Each must exit 0,
 log its outcome, write its metric and ping its monitor. Then the compose backup writes an
@@ -38,7 +38,7 @@ import pytest
 BACKEND = pathlib.Path(__file__).resolve().parents[2]
 REPO = BACKEND.parent
 CRON_DIR = BACKEND / "deploy" / "cron.d"
-SERVER_ROOT = "/srv/flowpilot/backend"  # where RUNBOOK §9 puts the checkout on the server
+SERVER_ROOT = "/srv/servabo/backend"  # where RUNBOOK §9 puts the checkout on the server
 POINT_IN_TIME = {"dr-heartbeat", "base-backup", "pitr-drill"}
 
 CRON_LINE = re.compile(r"^(?P<schedule>(?:\S+\s+){5})(?P<user>\S+)\s+(?P<command>.+)$")
@@ -54,16 +54,16 @@ def _cron_lines(name: str) -> list[str]:
             continue
         match = CRON_LINE.match(line)
         assert match, f"{name}: not a cron line: {line}"
-        assert match["user"] == "flowpilot", line
+        assert match["user"] == "servabo", line
         commands.append(match["command"])
     return commands
 
 
 def _sweeps() -> list[tuple[str, list[str]]]:
     out = []
-    for command in _cron_lines("flowpilot-sweepers"):
+    for command in _cron_lines("servabo-sweepers"):
         argv = shlex.split(command)
-        if argv[0].endswith("/flowpilot-sweep"):
+        if argv[0].endswith("/servabo-sweep"):
             out.append((argv[1], argv[2:]))
     return out
 
@@ -80,8 +80,8 @@ def _connection() -> dict[str, str]:
     return {
         "host": os.environ.get("POSTGRES_HOST", "localhost"),
         "port": os.environ.get("POSTGRES_PORT", "5432"),
-        "user": os.environ.get("POSTGRES_USER", "flowpilot"),
-        "password": os.environ.get("POSTGRES_PASSWORD", "flowpilot"),
+        "user": os.environ.get("POSTGRES_USER", "servabo"),
+        "password": os.environ.get("POSTGRES_PASSWORD", "servabo"),
     }
 
 
@@ -95,7 +95,7 @@ def _connect(dbname: str):
 @pytest.fixture(scope="module")
 def cron_db() -> Iterator[dict[str, str]]:
     c = _connection()
-    name = f"flowpilot_cron_{uuid.uuid4().hex[:8]}"
+    name = f"servabo_cron_{uuid.uuid4().hex[:8]}"
     admin = _connect("postgres")
     admin.cursor().execute(f'CREATE DATABASE "{name}"')
     env = {
@@ -152,15 +152,15 @@ def monitor() -> Iterator[str]:
 
 
 def _host(tmp: pathlib.Path, database: dict[str, str], **extra: str) -> dict[str, str]:
-    """The environment cron gives a line once /etc/flowpilot/sweepers.env is read (RUNBOOK §9.6)."""
+    """The environment cron gives a line once /etc/servabo/sweepers.env is read (RUNBOOK §9.6)."""
     for sub in ("logs", "locks", "textfile", "backups"):
         (tmp / sub).mkdir(exist_ok=True)
     return {
         **os.environ, **database,
-        "FLOWPILOT_SWEEPER_ENV": str(tmp / "absent.env"),
-        "FLOWPILOT_RUNNER": f"env SERVICE_ROLE=sweeper {sys.executable}",
-        "FLOWPILOT_LOG_DIR": str(tmp / "logs"), "LOCK_DIR": str(tmp / "locks"),
-        "TEXTFILE_DIR": str(tmp / "textfile"), "FLOWPILOT_BACKUP_DIR": str(tmp / "backups"),
+        "SERVABO_SWEEPER_ENV": str(tmp / "absent.env"),
+        "SERVABO_RUNNER": f"env SERVICE_ROLE=sweeper {sys.executable}",
+        "SERVABO_LOG_DIR": str(tmp / "logs"), "LOCK_DIR": str(tmp / "locks"),
+        "TEXTFILE_DIR": str(tmp / "textfile"), "SERVABO_BACKUP_DIR": str(tmp / "backups"),
         **extra,
     }
 
@@ -188,23 +188,23 @@ def test_each_sweep_line_succeeds_and_tells_its_monitor(
     check = uuid.uuid4().hex
     env = _host(tmp_path, cron_db, HEARTBEAT_BASE=f"{monitor}/ping",
                 **{f"HEARTBEAT_UUID_{name.upper()}": check})
-    command = [str(BACKEND / "deploy/bin/flowpilot-sweep"), name, *args]
+    command = [str(BACKEND / "deploy/bin/servabo-sweep"), name, *args]
     done = subprocess.run(command, cwd=BACKEND, env=env, capture_output=True, text=True, timeout=600)
     log = (tmp_path / "logs" / f"sweep_{name}.log").read_text()
     assert done.returncode == 0, log[-3000:]
     assert f"SWEEP_WRAPPER_DONE | {name} | status=0 outcome=ok" in log
     assert "Traceback" not in log, log[-3000:]
-    metric = (tmp_path / "textfile" / f"flowpilot_sweeper_{name}.prom").read_text()
-    assert f'flowpilot_sweeper_last_success_timestamp_seconds{{sweeper="{name}"}}' in metric
+    metric = (tmp_path / "textfile" / f"servabo_sweeper_{name}.prom").read_text()
+    assert f'servabo_sweeper_last_success_timestamp_seconds{{sweeper="{name}"}}' in metric
     assert _Stand_in.pings == [check]
 
 
 def test_the_runbook_switches_the_point_in_time_lines_off() -> None:
     # RUNBOOK §9.6's command, applied to the file it installs.
     runbook = (REPO / "docs/RUNBOOK.md").read_text()
-    match = re.search(r"sudo sed -i -E '(s/.+?/.*?/)' /etc/cron\.d/flowpilot-sweepers", runbook)
+    match = re.search(r"sudo sed -i -E '(s/.+?/.*?/)' /etc/cron\.d/servabo-sweepers", runbook)
     assert match, "RUNBOOK §9.6 no longer switches the point-in-time-recovery lines off"
-    original = (CRON_DIR / "flowpilot-sweepers").read_text()
+    original = (CRON_DIR / "servabo-sweepers").read_text()
     edited = subprocess.run(["sed", "-E", match.group(1)], input=original, capture_output=True,
                             text=True, check=True).stdout
     before, after = original.splitlines(), edited.splitlines()
@@ -212,7 +212,7 @@ def test_the_runbook_switches_the_point_in_time_lines_off() -> None:
     assert len(changed) == len(POINT_IN_TIME)
     for old, new in changed:
         assert new == f"# {old}"
-        assert re.search(r"flowpilot-sweep (dr-heartbeat|base-backup|pitr-drill)\b", old)
+        assert re.search(r"servabo-sweep (dr-heartbeat|base-backup|pitr-drill)\b", old)
 
 
 # ---------------------------------------------------------------------------------------------
@@ -224,20 +224,20 @@ def _watchdog(tmp: pathlib.Path, ran: dict[str, float], monitor: str) -> tuple[i
     textfile = tmp / "textfile"
     textfile.mkdir(exist_ok=True)
     for name, when in ran.items():
-        (textfile / f"flowpilot_sweeper_{name}.prom").write_text(
-            f'flowpilot_sweeper_last_success_timestamp_seconds{{sweeper="{name}"}} {int(when)}\n')
-    env = {**os.environ, "FLOWPILOT_SWEEPER_ENV": str(tmp / "absent.env"), "TEXTFILE_DIR": str(textfile),
+        (textfile / f"servabo_sweeper_{name}.prom").write_text(
+            f'servabo_sweeper_last_success_timestamp_seconds{{sweeper="{name}"}} {int(when)}\n')
+    env = {**os.environ, "SERVABO_SWEEPER_ENV": str(tmp / "absent.env"), "TEXTFILE_DIR": str(textfile),
            "ALERT_WEBHOOK": f"{monitor}/ping/alert"}
-    command = _on_this_machine(_cron_lines("flowpilot-sweepers")[-1])
-    assert command.endswith("flowpilot-sweep-watchdog")
+    command = _on_this_machine(_cron_lines("servabo-sweepers")[-1])
+    assert command.endswith("servabo-sweep-watchdog")
     done = subprocess.run(shlex.split(command), env=env, capture_output=True, text=True, timeout=60)
-    return done.returncode, done.stderr, (textfile / "flowpilot_sweeper_watchdog.prom").read_text()
+    return done.returncode, done.stderr, (textfile / "servabo_sweeper_watchdog.prom").read_text()
 
 
 def test_the_watchdog_is_quiet_while_every_sweep_succeeds(monitor: str, tmp_path: pathlib.Path) -> None:
     status, stderr, metric = _watchdog(tmp_path, {name: time.time() for name, _ in APP_SWEEPS}, monitor)
     assert status == 0, stderr
-    assert "flowpilot_sweeper_watchdog_stale_count 0" in metric
+    assert "servabo_sweeper_watchdog_stale_count 0" in metric
 
 
 @pytest.mark.parametrize("silent", [name for name, _ in APP_SWEEPS])
@@ -247,14 +247,14 @@ def test_the_watchdog_notices_any_sweep_that_stops(silent: str, monitor: str, tm
     ran = {name: time.time() for name, _ in APP_SWEEPS}
     ran[silent] = time.time() - 3 * 86_400
     status, stderr, metric = _watchdog(tmp_path, ran, monitor)
-    assert "flowpilot_sweeper_watchdog_stale_count 1" in metric
+    assert "servabo_sweeper_watchdog_stale_count 1" in metric
     assert f"{silent}=stale-" in stderr
     assert "alert" in _Stand_in.pings
     assert status != 0
 
 
 # ---------------------------------------------------------------------------------------------
-# Backups and the timed restore drill (compose: flowpilot-compose-backups)
+# Backups and the timed restore drill (compose: servabo-compose-backups)
 # ---------------------------------------------------------------------------------------------
 
 
@@ -267,16 +267,16 @@ def _compose_env(tmp: pathlib.Path, database: dict[str, str], monitor: str) -> d
         tmp, database,
         # In the stack this is `docker compose ... exec -T db`; here the same tools reach the
         # database directly.
-        FLOWPILOT_PG_EXEC=f"env PGHOST={c['host']} PGPORT={c['port']} PGPASSWORD={c['password']}",
-        FLOWPILOT_BACKUP_KEY_FILE=str(key), HEARTBEAT_BASE=f"{monitor}/ping",
+        SERVABO_PG_EXEC=f"env PGHOST={c['host']} PGPORT={c['port']} PGPASSWORD={c['password']}",
+        SERVABO_BACKUP_KEY_FILE=str(key), HEARTBEAT_BASE=f"{monitor}/ping",
         HEARTBEAT_UUID_COMPOSE_BACKUP="backup", HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL="drill",
     )
 
 
 def _compose_line(index: int, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
-    command = _on_this_machine(_cron_lines("flowpilot-compose-backups")[index])
-    command = command.replace("/etc/flowpilot/sweepers.env", env["FLOWPILOT_SWEEPER_ENV"])
-    pathlib.Path(env["FLOWPILOT_SWEEPER_ENV"]).touch()
+    command = _on_this_machine(_cron_lines("servabo-compose-backups")[index])
+    command = command.replace("/etc/servabo/sweepers.env", env["SERVABO_SWEEPER_ENV"])
+    pathlib.Path(env["SERVABO_SWEEPER_ENV"]).touch()
     return subprocess.run(["bash", "-c", command], env=env, capture_output=True, text=True, timeout=600)
 
 
@@ -308,7 +308,7 @@ def test_the_compose_backup_and_the_timed_restore_drill(
     backup = _compose_line(0, env)
     log = (tmp_path / "logs" / "compose_backup.log").read_text()
     assert backup.returncode == 0, log[-2000:]
-    dumps = sorted((tmp_path / "backups").glob("flowpilot-*.dump.enc"))
+    dumps = sorted((tmp_path / "backups").glob("servabo-*.dump.enc"))
     assert len(dumps) == 1 and "backup ok" in log
     assert not dumps[0].read_bytes().startswith(b"PGDMP"), "the backup is written encrypted"
     assert (dumps[0].parent / f"{dumps[0].name}.sha256").exists()
@@ -330,7 +330,7 @@ def test_a_backup_that_does_not_match_its_checksum_fails_the_drill(
 ) -> None:
     env = _compose_env(tmp_path, cron_db, monitor)
     assert _compose_line(0, env).returncode == 0
-    dump = next((tmp_path / "backups").glob("flowpilot-*.dump.enc"))
+    dump = next((tmp_path / "backups").glob("servabo-*.dump.enc"))
     with dump.open("ab") as handle:
         handle.write(b"tampered")
     drill = _compose_line(1, env)
@@ -342,11 +342,11 @@ def test_a_backup_that_does_not_match_its_checksum_fails_the_drill(
 def test_the_uptime_check_pings_while_the_site_answers_and_fails_when_it_does_not(
     monitor: str, tmp_path: pathlib.Path
 ) -> None:
-    env = {**os.environ, "FLOWPILOT_SWEEPER_ENV": str(tmp_path / "sweepers.env"), "FLOWPILOT_LOG_DIR": str(tmp_path),
-           "FLOWPILOT_PUBLIC_URL": monitor, "HEARTBEAT_BASE": f"{monitor}/ping", "HEARTBEAT_UUID_UPTIME": "uptime"}
+    env = {**os.environ, "SERVABO_SWEEPER_ENV": str(tmp_path / "sweepers.env"), "SERVABO_LOG_DIR": str(tmp_path),
+           "SERVABO_PUBLIC_URL": monitor, "HEARTBEAT_BASE": f"{monitor}/ping", "HEARTBEAT_UUID_UPTIME": "uptime"}
     (tmp_path / "sweepers.env").touch()
-    command = _on_this_machine(_cron_lines("flowpilot-compose-backups")[2])
-    command = command.replace("/etc/flowpilot/sweepers.env", env["FLOWPILOT_SWEEPER_ENV"])
+    command = _on_this_machine(_cron_lines("servabo-compose-backups")[2])
+    command = command.replace("/etc/servabo/sweepers.env", env["SERVABO_SWEEPER_ENV"])
     assert subprocess.run(["bash", "-c", command], env=env, timeout=60).returncode == 0
     _Stand_in.healthy = False
     assert subprocess.run(["bash", "-c", command], env=env, timeout=60).returncode != 0
@@ -355,7 +355,7 @@ def test_the_uptime_check_pings_while_the_site_answers_and_fails_when_it_does_no
 
 
 # ---------------------------------------------------------------------------------------------
-# A server without compose (flowpilot-backups): the Python backup and drill
+# A server without compose (servabo-backups): the Python backup and drill
 # ---------------------------------------------------------------------------------------------
 
 
@@ -365,9 +365,9 @@ def test_the_python_backup_and_restore_drill_lines(cron_db: dict[str, str], moni
                          env={**os.environ, **cron_db}, capture_output=True, text=True, timeout=60)
     assert key.returncode == 0, key.stderr
     secret = key.stdout.strip().splitlines()[-1].strip()  # the key alone, base64
-    env = _host(tmp_path, cron_db, FLOWPILOT_BACKUP_KEY=secret, HEARTBEAT_BASE=f"{monitor}/ping",
+    env = _host(tmp_path, cron_db, SERVABO_BACKUP_KEY=secret, HEARTBEAT_BASE=f"{monitor}/ping",
                 HEARTBEAT_UUID_BACKUP="py-backup", HEARTBEAT_UUID_RESTORE_DRILL="py-drill")
-    for command in _cron_lines("flowpilot-backups"):
+    for command in _cron_lines("servabo-backups"):
         argv = shlex.split(_on_this_machine(command))
         done = subprocess.run(argv, cwd=BACKEND, env=env, capture_output=True, text=True, timeout=600)
         name = argv[1]

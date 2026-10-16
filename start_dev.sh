@@ -110,7 +110,7 @@ stop_tracked() {
     ok 'Tracked processes stopped.'
 }
 
-printf '\n  FlowPilot AI — local development launcher\n'
+printf '\n  Servabo — local development launcher\n'
 printf '  %s----------------------------------------%s\n' "${C_DIM}" "${C_RESET}"
 
 if (( DO_STOP )); then
@@ -186,10 +186,10 @@ declare -A HOST_DEFAULTS=(
     [POSTGRES_PORT]=5432
     [POSTGRES_USER]=postgres
     [POSTGRES_PASSWORD]=postgres
-    [POSTGRES_DB]=flowpilot
+    [POSTGRES_DB]=servabo
     [REDIS_URL]=redis://localhost:6379/0
     [STORAGE_BACKEND]=minio
-    [S3_BUCKET]=flowpilot-dev
+    [S3_BUCKET]=servabo-dev
     [S3_ENDPOINT_URL]=http://localhost:9000
     [S3_ACCESS_KEY_ID]=minioadmin
     [S3_SECRET_ACCESS_KEY]=minioadmin
@@ -226,6 +226,16 @@ env_set "${FRONTEND_DEV_ENV}" VITE_API_URL "http://localhost:${API_PORT}/api/v1"
 
 step '4/8  Docker backing services'
 cd "${BACKEND_DIR}"
+# >>> one-release names: Docker data made before the rename (FlowPilot became Servabo on
+# 2026-10-16) lives in volumes named flowpilot_*. Keep using them, so nothing looks lost; README
+# "Local data from before the rename" says how to move to the new names. Remove next release.
+if [[ -z "${COMPOSE_PROJECT_NAME:-}" ]] && docker volume inspect flowpilot_postgres_data >/dev/null 2>&1 \
+   && ! docker volume inspect servabo_postgres_data >/dev/null 2>&1; then
+    export COMPOSE_PROJECT_NAME=flowpilot
+    docker rm -f flowpilot-db flowpilot-redis flowpilot-minio flowpilot-minio-init >/dev/null 2>&1 || true
+    warn 'Using your Docker data from before the rename (volumes flowpilot_*); see README.'
+fi
+# <<< one-release names
 if (( DO_RESET )); then
     docker compose down -v >/dev/null 2>&1 || true
 fi
@@ -263,8 +273,8 @@ run_seed scripts/seed_price_book.py --version auto
 # without the flag the script refuses and no plan tier exists at all.
 run_seed scripts/seed_quota_tiers.py --allow-unpriced
 
-ADMIN_EMAIL='admin@flowpilot.local'
-ADMIN_PASSWORD='FlowPilot!Dev123'
+ADMIN_EMAIL='admin@servabo.local'
+ADMIN_PASSWORD='Servabo!Dev123'
 if SEED_JSON="$("${VENV_PY}" scripts/seed_admin.py --json 2>/dev/null)"; then
     ADMIN_EMAIL="$(printf '%s' "${SEED_JSON}"  | python3 -c 'import json,sys; print(json.load(sys.stdin)["email"])' 2>/dev/null || echo "${ADMIN_EMAIL}")"
     ADMIN_PASSWORD="$(printf '%s' "${SEED_JSON}" | python3 -c 'import json,sys; print(json.load(sys.stdin)["password"])' 2>/dev/null || echo "${ADMIN_PASSWORD}")"
@@ -304,7 +314,7 @@ step '8/8  Ready'
 cat <<BANNER
 
   ${C_DIM}---------------------------------------------------------------${C_RESET}
-   ${C_GREEN}FlowPilot AI is running${C_RESET}
+   ${C_GREEN}Servabo is running${C_RESET}
   ${C_DIM}---------------------------------------------------------------${C_RESET}
    App          http://localhost:${FRONTEND_PORT}
    API docs     http://localhost:${API_PORT}/docs

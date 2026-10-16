@@ -1,9 +1,9 @@
 """The load test: several tenants and about fifty people working at once (campaign session 4, §B.2).
 
-    python perf/load_seed.py --tenants 5 --users 10 --out /tmp/flowpilot-load-users.json
+    python perf/load_seed.py --tenants 5 --users 10 --out /tmp/servabo-load-users.json
     pip install locust==2.32.4          # in its own virtualenv; not a dependency of the app
-    LOAD_USERS=/tmp/flowpilot-load-users.json locust -f perf/locustfile.py --headless \
-        --host http://127.0.0.1:8000 -u 50 -r 5 -t 15m --csv /tmp/flowpilot-load
+    LOAD_USERS=/tmp/servabo-load-users.json locust -f perf/locustfile.py --headless \
+        --host http://127.0.0.1:8000 -u 50 -r 5 -t 15m --csv /tmp/servabo-load
 
 Each simulated person takes one of the seeded sessions and refreshes it as the web app does (the
 access token lasts ten minutes; the refresh token rotates on every use). Their work is a mix:
@@ -64,7 +64,7 @@ class _Pool:
     """Hands each simulated person a different seeded session."""
 
     def __init__(self) -> None:
-        path = os.environ.get("LOAD_USERS", "/tmp/flowpilot-load-users.json")
+        path = os.environ.get("LOAD_USERS", "/tmp/servabo-load-users.json")
         with open(path) as handle:
             self._people = itertools.cycle(json.load(handle)["users"])
         self._lock = threading.Lock()

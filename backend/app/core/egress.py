@@ -73,6 +73,7 @@ from datetime import datetime, timezone
 from typing import Any, Iterator, Optional
 from urllib.parse import urlsplit
 
+from app.core import legacy_names
 from app.core.exceptions import ServaboError
 from app.core.ssrf_client import ForbiddenAddressError, SSRFSafeHTTPClient, SSRFResponse
 
@@ -355,7 +356,7 @@ def operator_destinations() -> dict[str, list[HostPattern]]:
     for resolver in str(getattr(s, "DNS_RESOLVERS", "") or "").split(","):
         if resolver.strip():
             add(DNS, resolver.strip())
-    backup = _url_host_port(os.environ.get("FLOWPILOT_BACKUP_S3_ENDPOINT"))
+    backup = _url_host_port(legacy_names.env("BACKUP_S3_ENDPOINT"))
     if backup:
         add(BACKUP, backup[0], backup[1])
     for entry in str(getattr(s, "EGRESS_OPERATOR_HOSTS", "") or "").replace(";", ",").split(","):

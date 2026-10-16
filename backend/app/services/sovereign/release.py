@@ -35,7 +35,7 @@ SBOM = "sbom.cdx.json"
 RELEASE = "release.json"
 SIG_FORMAT = "flowpilot-release-sig/1"
 EXCLUDED_PARTS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", ".pytest_cache", ".mypy_cache",
-                  "release", ".flowpilot_backups", "uploads"}
+                  "release", ".servabo_backups", "uploads"}
 EXCLUDED_PREFIXES = ("backend/evidence/", "backend/.arch")
 
 STATUS_VERIFIED = "VERIFIED"

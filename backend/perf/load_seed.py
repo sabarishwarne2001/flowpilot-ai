@@ -1,6 +1,6 @@
 """Tenants and signed-in users for the load test (campaign session 4, §B.2; PERFORMANCE.md).
 
-    python perf/load_seed.py --tenants 5 --users 10 --out /tmp/flowpilot-load-users.json
+    python perf/load_seed.py --tenants 5 --users 10 --out /tmp/servabo-load-users.json
 
 Creates (or refreshes) TENANTS Business organizations with one workspace each and USERS people in
 each (an owner, an admin, the rest contributors), with the browser suite's own seeding code
@@ -49,7 +49,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--tenants", type=int, default=5)
     parser.add_argument("--users", type=int, default=10, help="people per tenant (at least 3)")
-    parser.add_argument("--out", default="/tmp/flowpilot-load-users.json")
+    parser.add_argument("--out", default="/tmp/servabo-load-users.json")
     args = parser.parse_args(argv)
 
     from app.services.session_service import create_session

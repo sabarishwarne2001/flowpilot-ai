@@ -12,10 +12,10 @@ from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-DEFAULT_EMAIL = "admin@flowpilot.ai"
-DEFAULT_PASSWORD = "FlowPilot!Dev123"
-DEFAULT_ORG_NAME = "FlowPilot Development"
-DEFAULT_ORG_SLUG = "flowpilot-dev"
+DEFAULT_EMAIL = "admin@servabo.app"
+DEFAULT_PASSWORD = "Servabo!Dev123"
+DEFAULT_ORG_NAME = "Servabo Development"
+DEFAULT_ORG_SLUG = "servabo-dev"
 DEFAULT_WORKSPACE_NAME = "Default Workspace"
 DEFAULT_WORKSPACE_SLUG = "default"
 
@@ -116,7 +116,7 @@ def main(argv: Optional[list[str]] = None) -> int:
                 is_active=True,
                 is_superuser=True,
                 email_verified_at=_now(),
-                display_name="FlowPilot Admin",
+                display_name="Servabo Admin",
             )
             db.add(user)
             db.flush()

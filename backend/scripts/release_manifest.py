@@ -34,7 +34,7 @@ def _release_module():
     application's configuration (importing the app.services package would)."""
     import importlib.util
 
-    name = "flowpilot_release_offline"
+    name = "servabo_release_offline"
     if name in sys.modules:
         return sys.modules[name]
     spec = importlib.util.spec_from_file_location(name, BACKEND / "app" / "services" / "sovereign" / "release.py")
@@ -61,7 +61,7 @@ def build(version: str, out_dir: Path, key_file: str | None, root: Path = ROOT) 
     sbom_bytes = (json.dumps(sbom, indent=2, sort_keys=True) + "\n").encode("utf-8")
     (out_dir / release.SBOM).write_bytes(sbom_bytes)
     files = release.release_files(root)
-    meta = {"product": "flowpilot-ai", "version": version, "commit": commit,
+    meta = {"product": "servabo", "version": version, "commit": commit,
             "built_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat(),
             "files": len(files), "components": len(sbom["components"]),
             "sbom_sha256": hashlib.sha256(sbom_bytes).hexdigest()}

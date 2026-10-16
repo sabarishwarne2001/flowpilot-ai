@@ -25,9 +25,9 @@ import httpx
 
 BASE = os.environ.get("PROBE_API_ORIGIN", "http://127.0.0.1:8000") + "/api/v1"
 LLM = os.environ.get("PROBE_LLM_ORIGIN", "http://127.0.0.1:11434")
-PW = os.environ.get("E2E_PASSWORD", "E2e-FlowPilot-Pass-2026!")
+PW = os.environ.get("E2E_PASSWORD", "E2e-Servabo-Pass-2026!")
 PSQL = ["psql", "-h", "localhost", "-p", os.environ.get("PROBE_PG_PORT", "5433"), "-U", "postgres",
-        "-d", os.environ.get("PROBE_PG_DB", "flowpilot_e2e"), "-tAc"]
+        "-d", os.environ.get("PROBE_PG_DB", "servabo_e2e"), "-tAc"]
 RESULTS: list[tuple[str, int, int, int, bool]] = []
 
 

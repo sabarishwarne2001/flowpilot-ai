@@ -19,7 +19,7 @@ with an AI assistant, and runs automations on the results.
 You need Docker, Python 3.12, Node.js 22 and about 15 GB of disk.
 
 ```bash
-git clone https://github.com/sabarishwarne2001/flowpilot-ai.git
+git clone https://github.com/sabarishwarne2001/flowpilot-ai.git servabo
 cd flowpilot-ai
 ./start_dev.sh          # Windows: .\start_dev.ps1
 ```
@@ -33,6 +33,23 @@ only; production and staging do not serve it):
 No internet access to the model hosts? Put `ML_STUBS=true` in `backend/.env`
 to use labelled test stubs in place of OCR and embeddings (never in
 production).
+
+### Local data from before the rename
+
+FlowPilot AI was renamed Servabo on 2026-10-16. A laptop set up before that keeps working:
+
+- **Your `backend/.env`** keeps its database name and passwords; only the defaults for new setups
+  changed (`servabo`, `servabo_e2e`, `servabo_test`).
+- **Settings named `FLOWPILOT_*`** still work for this release. The API, the worker and the
+  scripts print one warning listing each one to rename to `SERVABO_*`.
+- **Docker data**: the launchers notice volumes named `flowpilot_*` and keep using them (the
+  containers are recreated under their new names; the data is untouched). To move to the new
+  names once, when you have nothing to lose (this deletes the old local data): `cd backend &&
+  docker compose -p flowpilot down -v`, then start again with `./start_dev.sh`.
+- **Signed in again once**: the sign-in cookie and the browser storage keys were renamed, and API
+  keys now start with `svb_` (re-create any local key). CHANGELOG.md lists every renamed name.
+- **The development administrator** is `admin@servabo.local`; one created before the rename keeps
+  its old address and password.
 
 **Full instructions, manual steps, test commands and troubleshooting:
 [docs/RUNBOOK.md](docs/RUNBOOK.md).**

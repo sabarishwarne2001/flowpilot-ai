@@ -17,7 +17,7 @@ UPLOAD_DIR = settings.UPLOAD_DIR
 
 def main():
     print("=" * 70)
-    print("FLOWPILOT AI -- ARCH-08 LOGO OBJECT REMEDIATION SCRIPT")
+    print("SERVABO AI -- ARCH-08 LOGO OBJECT REMEDIATION SCRIPT")
     print("=" * 70)
 
     db = SessionLocal()

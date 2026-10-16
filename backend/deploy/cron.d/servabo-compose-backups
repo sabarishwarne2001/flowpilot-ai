@@ -1,0 +1,26 @@
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+MAILTO=""
+
+# F-006. Backups for a Docker Compose host. Install THIS file instead of servabo-backups
+# (which drives the host-Python backup floor). Also install servabo-sweepers next to it,
+# and put these in /etc/servabo/sweepers.env (see docs/RUNBOOK.md, "Scheduled jobs"):
+#
+#   SERVABO_RUNNER="docker compose -f /srv/servabo/backend/docker-compose.prod.yml --env-file /srv/servabo/backend/.env.production run --rm --no-deps -T -e SERVICE_ROLE=sweeper worker-light python"
+#   SERVABO_BACKUP_KEY_FILE=/etc/servabo/backup.key        # chmod 600; keep a copy OFF this host
+#   SERVABO_BACKUP_DIR=/srv/servabo/backups
+#   SERVABO_BACKUP_MIRROR_CMD='aws s3 cp "$1" s3://YOUR-BUCKET/servabo/'   # or rclone/mc; optional but strongly advised
+#
+#   SERVABO_LOG_DIR=/srv/servabo/logs                     # must exist and belong to servabo
+#   HEARTBEAT_BASE=https://hc-ping.com                        # a dead-man's switch: a free Healthchecks.io
+#   HEARTBEAT_UUID_COMPOSE_BACKUP=<check uuid>                #   check per job emails you when a run fails
+#   HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL=<check uuid>         #   or does not happen at all
+#
+# The servabo user must be in the docker group. Nightly: an encrypted, verified dump.
+# Weekly: restore the newest one into a scratch database and time it. A backup nobody has
+# restored is a hypothesis. Output goes to the log directory, never to /dev/null (MAILTO is
+# empty, so anything printed and not logged would be lost).
+11 2 * * *  servabo  set -a; . /etc/servabo/sweepers.env; set +a; /srv/servabo/backend/deploy/bin/servabo-compose-backup >> "${SERVABO_LOG_DIR:-/srv/servabo/logs}/compose_backup.log" 2>&1
+37 4 * * 0  servabo  set -a; . /etc/servabo/sweepers.env; set +a; /srv/servabo/backend/deploy/bin/servabo-compose-restore-drill >> "${SERVABO_LOG_DIR:-/srv/servabo/logs}/compose_restore_drill.log" 2>&1
+# N-017: the API answers its public readiness check (alerts through HEARTBEAT_UUID_UPTIME).
+* * * * *  servabo  set -a; . /etc/servabo/sweepers.env; set +a; /srv/servabo/backend/deploy/bin/servabo-uptime-heartbeat >> "${SERVABO_LOG_DIR:-/srv/servabo/logs}/uptime.log" 2>&1

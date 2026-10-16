@@ -18,10 +18,10 @@ For every workspace with open obligations, in UTC, each at its OWN local date
   3. extracted obligations whose ARCH-42 party resolved after extraction are
      linked to it.
 
-Scheduled HOURLY (deploy/cron.d/flowpilot-sweepers) so every zone's midnight is
+Scheduled HOURLY (deploy/cron.d/servabo-sweepers) so every zone's midnight is
 caught within the hour; the per-workspace local date makes each run a nightly
-sweep for that workspace. Dispatched by `flowpilot-sweep obligations`
-(deploy/bin/flowpilot-sweep, RH-4 G14). Organizations without
+sweep for that workspace. Dispatched by `servabo-sweep obligations`
+(deploy/bin/servabo-sweep, RH-4 G14). Organizations without
 capability.obligations are skipped.
 """
 

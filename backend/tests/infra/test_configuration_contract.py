@@ -102,7 +102,7 @@ NOT_SETTINGS: dict[str, tuple[str, str]] = {
     "GATEWAY_PRICE_ID_ENTERPRISE": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_ENTERPRISE"),
     "SEED_ADMIN_EMAIL": ("backend/scripts/seed_admin.py", "SEED_ADMIN_EMAIL"),
     "SEED_ADMIN_PASSWORD": ("backend/scripts/seed_admin.py", "SEED_ADMIN_PASSWORD"),
-    "FLOWPILOT_BACKUP_KEY": ("backend/scripts/backup_floor.py", "FLOWPILOT_BACKUP_KEY"),
+    "SERVABO_BACKUP_KEY": ("backend/scripts/backup_floor.py", "SERVABO_BACKUP_KEY"),
 }
 
 # ---------------------------------------------------------------------------------------
@@ -419,7 +419,7 @@ def good_production_env() -> dict[str, str]:
         "CORS_ORIGINS": "https://app.example.com",
         "FRONTEND_URL": "https://app.example.com",
         "STORAGE_BACKEND": "s3",
-        "S3_BUCKET": "flowpilot-prod",
+        "S3_BUCKET": "servabo-prod",
         "S3_ACCESS_KEY_ID": "AKIA" + secrets.token_hex(8).upper(),
         "S3_SECRET_ACCESS_KEY": secrets.token_urlsafe(30),
         "REDIS_URL": "redis://redis:6379/0",

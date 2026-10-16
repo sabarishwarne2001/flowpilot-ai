@@ -57,7 +57,7 @@ def _session() -> Optional[Any]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Generate the FlowPilot AI SOC 2 Type I evidence pack"
+        description="Generate the Servabo SOC 2 Type I evidence pack"
     )
     parser.add_argument(
         "--static-only",
@@ -102,7 +102,7 @@ def main() -> int:
 
     if not args.quiet:
         print("=" * 78)
-        print("FlowPilot AI — SOC 2 Type I evidence pack")
+        print("Servabo — SOC 2 Type I evidence pack")
         print("=" * 78)
         width = max(len(f["control"]) for f in pack["findings"]) + 2
         for finding in pack["findings"]:

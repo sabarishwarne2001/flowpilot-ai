@@ -26,7 +26,7 @@ from tests.conftest import BASE_URL
 pytestmark = pytest.mark.no_db
 
 BACKEND = Path(__file__).resolve().parents[2]
-SCRATCH = "flowpilot_chain_round_trip"
+SCRATCH = "servabo_chain_round_trip"
 
 
 def _alembic(*args: str) -> subprocess.CompletedProcess[str]:

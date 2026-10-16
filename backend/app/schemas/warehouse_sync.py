@@ -164,7 +164,7 @@ class SnowflakeCredential(_CredentialBase):
     stage_endpoint_url: Optional[str] = Field(default=None, max_length=512)
 
     table_prefix: str = Field(
-        default="FLOWPILOT_",
+        default="SERVABO_",
         max_length=64,
         pattern=_IDENT,
         description="Prepended to the dataset name to form the target table.",

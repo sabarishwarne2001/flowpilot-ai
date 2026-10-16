@@ -11720,7 +11720,7 @@ export interface components {
             /**
              * Table Prefix
              * @description Prepended to the dataset name to form the target table.
-             * @default FLOWPILOT_
+             * @default SERVABO_
              */
             table_prefix: string;
             /**

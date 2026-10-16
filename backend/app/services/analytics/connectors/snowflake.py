@@ -263,7 +263,7 @@ class SnowflakeConnector(WarehouseConnector):
             self.require(config, "stage_region", where="Snowflake config")
         )
         prefix = str(config.get("stage_prefix") or "flowpilot/").strip("/")
-        table_prefix = str(config.get("table_prefix") or "FLOWPILOT_")
+        table_prefix = str(config.get("table_prefix") or "SERVABO_")
 
         delivered: list[str] = []
         failed: list[str] = []

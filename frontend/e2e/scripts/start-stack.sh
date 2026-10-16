@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Start (or restart) what the browser tests need besides the web app:
-# the FlowPilot API, the background worker and the local mail catcher.
+# the Servabo API, the background worker and the local mail catcher.
 #
 #   frontend/e2e/scripts/start-stack.sh          # start / restart all three
 #   frontend/e2e/scripts/start-stack.sh stop     # stop them
@@ -8,13 +8,13 @@
 # Needs: Postgres (with pgvector) and Redis already running, backend/.venv,
 # and backend/.env prepared for e2e (see frontend/e2e/README.md). The script
 # migrates the database, then starts the processes in the background with
-# their logs in $E2E_LOG_DIR (default /tmp/flowpilot-e2e-logs).
+# their logs in $E2E_LOG_DIR (default /tmp/servabo-e2e-logs).
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO="$(cd "$HERE/../../.." && pwd)"
 BACKEND="$REPO/backend"
-LOG_DIR="${E2E_LOG_DIR:-/tmp/flowpilot-e2e-logs}"
+LOG_DIR="${E2E_LOG_DIR:-/tmp/servabo-e2e-logs}"
 RUN_DIR="$LOG_DIR/pids"
 PY="${E2E_PYTHON:-$BACKEND/.venv/bin/python}"
 API_PORT="${E2E_API_PORT:-8000}"
@@ -79,7 +79,7 @@ if [[ "${E2E_LLM:-}" == "1" ]]; then
   fi
   export LOCAL_LLM_MODE=exclusive
   export LOCAL_LLM_BASE_URL="http://127.0.0.1:$LLM_PORT/v1"
-  export LOCAL_LLM_MODEL="${E2E_LLM_MODEL:-flowpilot-e2e-local}"
+  export LOCAL_LLM_MODEL="${E2E_LLM_MODEL:-servabo-e2e-local}"
   export LOCAL_LLM_TIMEOUT_SECONDS=30
 fi
 

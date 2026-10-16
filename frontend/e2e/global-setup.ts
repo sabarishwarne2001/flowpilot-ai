@@ -58,7 +58,7 @@ async function waitForApi(): Promise<void> {
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
   throw new Error(
-    `The FlowPilot API is not answering at ${API_BASE}/health (${last}). ` +
+    `The Servabo API is not answering at ${API_BASE}/health (${last}). ` +
       "Start the backend first: frontend/e2e/scripts/start-stack.sh (see e2e/README.md).",
   );
 }

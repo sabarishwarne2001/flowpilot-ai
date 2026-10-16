@@ -467,7 +467,7 @@ def test_split_credential_handles_the_snowflake_two_credential_shape():
         user="FLOWPILOT",
         warehouse="COMPUTE_WH",
         database="ANALYTICS",
-        stage_name="FLOWPILOT_STAGE",
+        stage_name="SERVABO_STAGE",
         stage_bucket="acme-stage",
         stage_region="eu-west-1",
         private_key="-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----",
@@ -477,7 +477,7 @@ def test_split_credential_handles_the_snowflake_two_credential_shape():
     config, secret = sync_service._split_credential(credential)
 
     assert set(secret) == {"private_key", "stage_secret_access_key"}
-    assert config["stage_name"] == "FLOWPILOT_STAGE"
+    assert config["stage_name"] == "SERVABO_STAGE"
     assert "private_key" not in config
 
 

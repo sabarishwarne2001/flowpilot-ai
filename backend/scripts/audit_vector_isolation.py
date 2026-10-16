@@ -1,5 +1,5 @@
 """
-Automated Vector Isolation validation script for FlowPilot AI.
+Automated Vector Isolation validation script for Servabo.
 
 PHASE 4: rewritten for pgvector. The original walked ChromaDB collections
 ("every collection is ws_<id> and every vector in it is tagged <id>"); the

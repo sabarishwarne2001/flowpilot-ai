@@ -80,12 +80,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -119,14 +119,14 @@ jobs:
       - name: Migrate the test database
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_test
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -140,14 +140,14 @@ jobs:
       - name: pytest
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_test
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -188,12 +188,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_migrate
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_migrate
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -217,14 +217,14 @@ jobs:
       - name: Exactly one head
         working-directory: backend
         env: &migrate_env
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_migrate
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_migrate
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_migrate
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_migrate
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -370,12 +370,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_e2e
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_e2e
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -392,9 +392,9 @@ jobs:
       ENVIRONMENT: development
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: flowpilot
-      POSTGRES_PASSWORD: flowpilot
-      POSTGRES_DB: flowpilot_e2e
+      POSTGRES_USER: servabo
+      POSTGRES_PASSWORD: servabo
+      POSTGRES_DB: servabo_e2e
       REDIS_URL: redis://localhost:6379/0
       ARCH40_CONTRACT: "1"
       JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789

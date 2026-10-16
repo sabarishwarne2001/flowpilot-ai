@@ -22,7 +22,7 @@ export const BACKEND_DIR = path.join(REPO_ROOT, "backend");
 export const STATE_FILE = path.join(E2E_DIR, ".state", "seed.json");
 export const MAIL_DIR = process.env.E2E_MAIL_DIR ?? path.join(E2E_DIR, ".mail");
 
-export const PASSWORD = "E2e-FlowPilot-Pass-2026!";
+export const PASSWORD = "E2e-Servabo-Pass-2026!";
 
 export type UserKey =
   | "A.owner"
@@ -64,7 +64,7 @@ export const TENANTS: Record<TenantKey, { org: string; ws: string; name: string;
   A: { org: "e2e-devco", ws: "main", name: "DevCo Labs", plan: "developer" },
   B: { org: "e2e-bizco", ws: "main", name: "BizCo Holdings", plan: "business" },
   C: { org: "caretakers-global", ws: "operations", name: "Caretakers Global Inc", plan: "enterprise" },
-  P: { org: "e2e-platform-ops", ws: "ops", name: "FlowPilot Platform Ops", plan: "free" },
+  P: { org: "e2e-platform-ops", ws: "ops", name: "Servabo Platform Ops", plan: "free" },
   S: { org: "e2e-trial-ending", ws: "main", name: "Soon Ending Trial Co", plan: "free" },
   T: { org: "e2e-trial-ended", ws: "main", name: "Trial Ended Co", plan: "free" },
 };

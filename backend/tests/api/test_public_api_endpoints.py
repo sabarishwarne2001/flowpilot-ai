@@ -706,8 +706,8 @@ def test_the_explorer_returns_snippets_in_three_languages(
     for operation in operations:
         snippets = operation["snippets"]
         assert set(snippets) == {"curl", "python", "typescript"}
-        assert "$FLOWPILOT_API_KEY" in snippets["curl"]
-        assert "FLOWPILOT_API_KEY" in snippets["python"]
+        assert "$SERVABO_API_KEY" in snippets["curl"]
+        assert "SERVABO_API_KEY" in snippets["python"]
         assert operation["required_scope"] in ALL_PUBLIC_SCOPES
 
 

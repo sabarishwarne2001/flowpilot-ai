@@ -20,8 +20,8 @@ this twice in a slot enqueues nothing new). The job (LIGHT worker profile):
   3. the exception agent retires stale proposals, re-checks and applies the
      scheduled auto-applies whose hold has passed, and plans open exceptions.
 
-Scheduled every 15 minutes (deploy/cron.d/flowpilot-sweepers), dispatched by
-`flowpilot-sweep process` (deploy/bin/flowpilot-sweep, RH-4 G14).
+Scheduled every 15 minutes (deploy/cron.d/servabo-sweepers), dispatched by
+`servabo-sweep process` (deploy/bin/servabo-sweep, RH-4 G14).
 """
 
 from __future__ import annotations
