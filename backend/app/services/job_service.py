@@ -152,9 +152,12 @@ def enqueue(
     if available_at is not None:
         job.available_at = available_at
 
-    db.add(job)
     try:
+        # Added inside the savepoint: `begin_nested()` first flushes whatever is pending, so a job
+        # added before it would be inserted outside the savepoint, and losing the race on the
+        # idempotency key would then roll back the caller's whole transaction (a 500).
         with db.begin_nested():
+            db.add(job)
             db.flush()
     except IntegrityError:
         if job in db:
