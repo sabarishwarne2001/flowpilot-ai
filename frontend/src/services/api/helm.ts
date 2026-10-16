@@ -1,5 +1,6 @@
 /** Helm, the flagship engine. Organization-scoped (backend app/api/v1/helm.py). */
 import { apiClient } from "@/services/api/client";
+import { ApiError, parseErrorEnvelope } from "@/services/api/errors";
 import type {
   ApprovalChainTier,
   ApproveAllResult,
@@ -269,6 +270,33 @@ export const listHelmBacktests = async (organizationId: string, bookId: string):
 
 export const getHelmBacktest = async (organizationId: string, backtestId: string): Promise<HelmBacktest> =>
   (await apiClient.get<HelmBacktest>(`${base(organizationId)}/backtests/${encodeURIComponent(backtestId)}`)).data;
+
+/**
+ * A finished replay as a PDF report. A refusal in words (409: still running or failed; 404: gone)
+ * arrives as a Blob, which the client's error reader cannot see into, so it is read here and thrown
+ * as the server's own sentence. Every other status goes through the client as usual.
+ */
+export const downloadHelmBacktestPdf = async (organizationId: string, backtestId: string): Promise<Blob> => {
+  const response = await apiClient.get<Blob>(
+    `${base(organizationId)}/backtests/${encodeURIComponent(backtestId)}/pdf`,
+    {
+      responseType: "blob",
+      timeout: 120_000,
+      validateStatus: (status) => (status >= 200 && status < 300) || status === 404 || status === 409,
+    },
+  );
+  if (response.status >= 300) {
+    let body: unknown = null;
+    try {
+      body = JSON.parse(await response.data.text()) as unknown;
+    } catch {
+      // not JSON: the fallback sentence below
+    }
+    const parsed = parseErrorEnvelope(body, response.status, "Helm could not make the PDF of this replay.");
+    throw new ApiError(parsed.message, response.status, parsed.code, parsed.message, parsed.details);
+  }
+  return response.data;
+};
 
 // Bank statements (owner addition A). Uploads are FormData: the client sets the multipart boundary.
 const UPLOAD_TIMEOUT_MS = 300_000;
