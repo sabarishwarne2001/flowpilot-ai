@@ -54,10 +54,11 @@ def test_malformed_codes_are_refused():
 
 
 def test_provisioning_uri_is_what_authenticator_apps_read():
-    uri = totp.provisioning_uri("ABCDEFGH", account="ana@example.com", issuer="Servabo")
+    # An issuer with a space: the label escapes it (the rename left the product name one word).
+    uri = totp.provisioning_uri("ABCDEFGH", account="ana@example.com", issuer="Servabo Demo")
     parsed = urlparse(uri)
     assert parsed.scheme == "otpauth" and parsed.netloc == "totp"
-    assert parsed.path == "/Servabo%20AI:ana@example.com"
+    assert parsed.path == "/Servabo%20Demo:ana@example.com"
     query = parse_qs(parsed.query)
-    assert query["secret"] == ["ABCDEFGH"] and query["issuer"] == ["Servabo"]
+    assert query["secret"] == ["ABCDEFGH"] and query["issuer"] == ["Servabo Demo"]
     assert query["digits"] == ["6"] and query["period"] == ["30"]
