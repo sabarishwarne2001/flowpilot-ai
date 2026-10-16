@@ -98,12 +98,12 @@ def delete_as_sweeper(session: Session, where: str, params: dict) -> int:
     """Delete one batch of audit rows matching `where`, as the retention sweeper; returns the count.
 
     The audit trigger refuses every UPDATE, and every DELETE except one made by a session that has
-    named itself the sweeper (`flowpilot.audit_sweeper_role` = its own login) of a row older than
+    named itself the sweeper (`servabo.audit_sweeper_role` = its own login) of a row older than
     400 days. The name is set for this transaction only, so nothing else on the connection, and no
     application code (which never sets it), can delete an audit entry. It guards against mistakes,
     not against someone holding the database password: that user can drop the trigger.
     """
-    session.execute(text("SELECT set_config('flowpilot.audit_sweeper_role', session_user, true)"))
+    session.execute(text("SELECT set_config('servabo.audit_sweeper_role', session_user, true)"))
     return session.execute(
         text(
             f"""
