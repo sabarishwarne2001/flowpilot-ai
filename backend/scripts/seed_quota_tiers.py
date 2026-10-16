@@ -199,6 +199,23 @@ COMMERCIALS: dict[str, dict[str, Any]] = {
     },
 }
 
+# N-051: yearly on Developer and Business at ten times the monthly price per seat (two months
+# free). Enterprise yearly is arranged by agreement, by email (not self-serve). A yearly price is
+# offered in the app only once its gateway product id is configured (`publish_yearly_prices`); the
+# website's price list (`scripts/export_public_pricing.py`) reads this same table.
+YEARLY_COMMERCIALS: dict[str, dict[str, Any]] = {
+    "developer": {
+        "unit_amount_micros": 490_000_000,
+        "currency": "USD",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_DEVELOPER_YEARLY",
+    },
+    "business": {
+        "unit_amount_micros": 2_990_000_000,
+        "currency": "USD",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_BUSINESS_YEARLY",
+    },
+}
+
 # Campaign session 1 — the plan table, decided under delegated founder authority
 # (NEEDS-OWNER.md, "DECIDED (campaign session 1)"). Read with:
 #
@@ -436,6 +453,48 @@ def _specs(rows: list[dict[str, Any]]) -> list[TierEntrySpec]:
             notes=row.get("notes"),
         )
         for row in rows
+    ]
+
+
+def gateway_bills_usage(gateway: Optional[str] = None) -> bool:
+    """Whether the configured payment gateway can bill metered usage (overage).
+
+    Dodo Payments cannot today (`DodoGateway.capabilities.supports_usage_billing`); Stripe can.
+    """
+    from app.core.config import settings
+    from app.services.billing.payment_gateway import get_payment_gateway
+
+    return bool(get_payment_gateway(gateway or settings.BILLING_GATEWAY).capabilities.supports_usage_billing)
+
+
+def published_entries(
+    key: str, *, gateway: Optional[str] = None, rows: Optional[list[dict[str, Any]]] = None
+) -> list[TierEntrySpec]:
+    """The entries plan `key` is published with on this deployment's gateway.
+
+    Where a row says "bill overage" (ALLOW_AND_BILL) and the gateway cannot bill usage, it is
+    published as a hard ceiling (REFUSE): the customer raises it by adding seats (allowances are
+    per seat) or by upgrading, and is never charged for usage nobody can invoice. Every other row,
+    and every row on a gateway that bills usage, is published exactly as written above.
+    """
+    specs = _specs(rows if rows is not None else PLACEHOLDER_TIERS[key]["entries"])
+    if gateway_bills_usage(gateway):
+        return specs
+    hard = OveragePolicy.REFUSE.value
+    return [
+        TierEntrySpec(
+            limit_key=s.limit_key,
+            period=s.period,
+            max_quantity=s.max_quantity,
+            max_cost_micros=s.max_cost_micros,
+            overage_policy=hard,
+            overage_price_tier_key=None,
+            grace_quantity=s.grace_quantity,
+            notes=s.notes,
+        )
+        if s.overage_policy == OveragePolicy.ALLOW_AND_BILL.value
+        else s
+        for s in specs
     ]
 
 
@@ -747,7 +806,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     prepared = {
-        key: (payload["display_name"], _specs(payload["entries"]))
+        key: (payload["display_name"], published_entries(key, rows=payload["entries"]))
         for key, payload in source.items()
     }
 
