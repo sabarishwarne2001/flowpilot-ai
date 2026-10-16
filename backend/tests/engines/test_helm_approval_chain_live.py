@@ -358,3 +358,20 @@ def test_two_people_approving_at_the_same_moment_both_count(client, db_session, 
     action = db_session.get(HelmAction, action_id)
     assert sorted(a["role"] for a in action.approvals) == ["ADMIN", "OWNER"]
     assert action.state == v.ACTION_APPROVED
+
+
+def test_a_chain_saved_after_helms_own_approval_holds_the_payment_back(client, db_session, tenant, book):
+    """Act mode approved a payment on Helm's own say-so; before the worker ran it, the owner saved a chain
+    that covers it. It must not run on Helm's approval: at execution it goes back to wait for its people."""
+    from app.services.helm import executor
+
+    _invoice(db_session, tenant, "BIG-9", 500_000, verified=True)
+    big = _pay(_plan(client, tenant, book, act_cap=10 * LAKH), 500_000)
+    assert big["state"] == v.ACTION_APPROVED and big["approvals"][0]["by_helm"] is True
+    assert _chain(client, tenant, book, [{"above_micros": LAKH, "currency": "INR", "approvals": 2}]).status_code == 200
+    with TestSessionLocal() as db:
+        ran = executor.execute(db, action_id=uuid.UUID(big["id"]))
+        db.commit()
+        assert ran is not None and (ran.state, ran.required_approvals) == (v.ACTION_PROPOSED, 2)
+    db_session.expire_all()
+    assert db_session.get(HelmAction, uuid.UUID(big["id"])).state == v.ACTION_PROPOSED

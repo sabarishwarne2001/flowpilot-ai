@@ -235,7 +235,20 @@ def execute(db: Session, *, action_id: uuid.UUID, actor: Actor = SYSTEM) -> Opti
     if action is None:
         return None
     book = db.get(HelmBook, action.book_id)
-    from app.services.helm import gate, plan_store
+    from app.services.helm import approvals, gate, plan_store
+
+    # An approval chain saved after this action was approved (on Helm's own say-so in Act mode, or by
+    # fewer people than it now asks for) applies now: a payment never runs on fewer approvals than the
+    # chain asks for today (ARCHITECTURE §19). It goes back to wait for its people.
+    need = approvals.requirement(approvals.chain_for(db, book), kind=action.kind,
+                                 amount_micros=action.amount_micros, currency=action.currency)
+    if need.tier is not None and len(need.counted(action.approvals or [])) < need.approvals:
+        action.state, action.updated_at = v.ACTION_PROPOSED, datetime.now(timezone.utc)
+        action.required_approvals = max(action.required_approvals or 1, need.approvals)
+        db.flush()
+        _audit(db, action, "UPDATED", actor_user_id=None,
+               details={"reason": "approval_chain", "required_approvals": action.required_approvals})
+        return action
 
     snapshot = snapshot_store.take(db, book)
     mandates = plan_store.active_mandates(db, book.id)
