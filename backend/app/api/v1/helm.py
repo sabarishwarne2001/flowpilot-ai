@@ -43,6 +43,7 @@
     POST   /organizations/{oid}/helm/backtests                        replay the past (preview: once a week)
     GET    /organizations/{oid}/helm/books/{bid}/backtests
     GET    /organizations/{oid}/helm/backtests/{tid}                  findings, value by honesty class
+    GET    /organizations/{oid}/helm/backtests/{tid}/pdf              the replay as a PDF report (audited export)
 
 Roles: owners and admins decide; the billing role sees everything and approves payment actions;
 members get 403 (their Helm tasks are in the review hub). Writes need `capability.helm` (402
@@ -765,6 +766,19 @@ def helm_backtest(organization_id: uuid.UUID, backtest_id: uuid.UUID, db: Sessio
                   context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
     who = _viewer(db, context)
     return service.backtest_json(db, who, backtest_id)
+
+
+@router.get(f"{P}/backtests/{{backtest_id}}/pdf")
+def helm_backtest_pdf(organization_id: uuid.UUID, backtest_id: uuid.UUID, db: Session = Depends(get_db),
+                      context: OrganizationContext = Depends(RequireAnyOrgRole)) -> Response:
+    """The finished replay as a PDF report: the same access as reading it; 409 in words while it runs or
+    after it failed. The same replay always gives the same bytes."""
+    who = _viewer(db, context)
+    report = service.backtest_pdf(db, who, backtest_id)
+    db.commit()  # the export's audit row
+    return Response(content=report["content"], media_type="application/pdf",
+                    headers={"Content-Disposition": f'attachment; filename="{report["filename"]}"',
+                             "X-Helm-Result-SHA256": report["sha256"]})
 
 
 @router.post(f"{P}/sample", status_code=202)

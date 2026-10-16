@@ -2,14 +2,21 @@ import React, { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FileText, History, Lock } from "lucide-react";
+import { Download, FileText, History, Lock } from "lucide-react";
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money, MoneyByCurrency } from "@/components/helm/HelmBits";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { workItemDetailsPath } from "@/routes/tenantPaths";
+import { downloadBlob } from "@/services/api/audit";
 import { errorMessage } from "@/services/api/errors";
-import { getHelmBacktest, helmKeys, listHelmBacktests, requestHelmBacktest } from "@/services/api/helm";
+import {
+  downloadHelmBacktestPdf,
+  getHelmBacktest,
+  helmKeys,
+  listHelmBacktests,
+  requestHelmBacktest,
+} from "@/services/api/helm";
 import { formatCalendarDate } from "@/utils/displayTime";
 import type { BacktestFinding, BacktestMandateResult, HelmBacktest, Honesty } from "@/types/helm";
 
@@ -83,6 +90,34 @@ const Findings: React.FC<{ readonly result: BacktestMandateResult; readonly work
   );
 };
 
+/**
+ * "Download the PDF": the finished replay as a report the owner can hand to an accountant or board.
+ * Its footer prints the fingerprint shown under the button, so a reader can check it is Helm's.
+ */
+const ReplayPdf: React.FC<{ readonly row: HelmBacktest }> = ({ row }) => {
+  const { organizationId } = useHelm();
+  const pdf = useMutation({
+    mutationFn: () => downloadHelmBacktestPdf(organizationId, row.id),
+    onSuccess: (blob) =>
+      downloadBlob(blob, row.report?.filename ?? `helm-replay-${row.period_start}-to-${row.period_end}.pdf`),
+    onError: (error) => toast.error(errorMessage(error, "Helm could not make the PDF of this replay. Try again.")),
+  });
+  return (
+    <button
+      type="button"
+      className="helm-btn shrink-0"
+      onClick={() => pdf.mutate()}
+      disabled={pdf.isPending}
+      aria-busy={pdf.isPending}
+      aria-describedby={row.report ? "helm-tm-fingerprint" : undefined}
+      data-testid="helm-backtest-pdf"
+    >
+      <Download className="h-3.5 w-3.5" aria-hidden="true" />
+      Download the PDF
+    </button>
+  );
+};
+
 /** A finished backtest: the summary, the three honesty classes, and each mandate's findings. */
 export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly workspaceSlug: string | null }> = ({
   row,
@@ -94,9 +129,12 @@ export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly wor
   return (
     <div className="space-y-4" data-testid="helm-backtest-report">
       <div className="helm-panel p-4">
-        <p className="helm-label">
-          {formatCalendarDate(row.period_start)} to {formatCalendarDate(row.period_end)} · {row.months} months
-        </p>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <p className="helm-label min-w-0">
+            {formatCalendarDate(row.period_start)} to {formatCalendarDate(row.period_end)} · {row.months} months
+          </p>
+          {row.status === "DONE" ? <ReplayPdf row={row} /> : null}
+        </div>
         <p className="mt-1.5 text-base leading-relaxed" data-testid="helm-backtest-summary">
           {row.summary}
         </p>
@@ -112,6 +150,12 @@ export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly wor
           ))}
         </dl>
         <p className="helm-muted mt-3 text-xs">{result.honesty_rule ?? "The three classes are never added together."}</p>
+        {row.report ? (
+          <p id="helm-tm-fingerprint" className="helm-muted mt-2 text-xs">
+            The PDF&apos;s footer carries this replay&apos;s fingerprint (SHA-256 of its stored result):{" "}
+            <code className="helm-figure break-all">{row.report.result_sha256}</code>
+          </p>
+        ) : null}
       </div>
 
       <section aria-labelledby="helm-tm-mandates">

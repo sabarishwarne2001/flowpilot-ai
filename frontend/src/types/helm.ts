@@ -634,6 +634,8 @@ export interface HelmBacktest {
   created_at: string | null;
   finished_at: string | null;
   result: BacktestResult | null;
+  /** A finished replay's PDF: its file name, and the SHA-256 of the stored result its footer prints. */
+  report?: { filename: string; result_sha256: string } | null;
 }
 
 // ---------------------------------------------------------------------------
