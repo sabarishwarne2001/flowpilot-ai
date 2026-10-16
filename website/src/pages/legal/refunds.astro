@@ -1,0 +1,47 @@
+---
+import Legal from "../../layouts/Legal.astro";
+import { SITE } from "../../config/site";
+import { TRIAL_DAYS } from "../../lib/pricing";
+
+const refundMail = `mailto:${SITE.contactEmail}?subject=${encodeURIComponent("Refund request")}`;
+---
+<Legal
+  title="Refund and Cancellation Policy"
+  description={`Servabo's refund and cancellation policy: a ${TRIAL_DAYS}-day trial with no payment details, cancel any time, a 14-day money-back guarantee on the first payment of a new subscription, and full refunds of duplicate or mistaken charges, paid by Dodo Payments.`}
+  contents={[
+    ["trial", "The trial"],
+    ["cancel", "Cancel any time"],
+    ["guarantee", "14-day money-back guarantee"],
+    ["no-other", "No other refunds"],
+    ["errors", "Errors"],
+    ["how", "How refunds are paid"],
+    ["after", "After cancellation"],
+    ["ask", "How to ask"],
+  ]}
+>
+  <p>This policy is part of our <a href="/legal/terms">Terms of Service</a>. It applies to every Servabo subscription, monthly or yearly, on every plan.</p>
+
+  <h2 id="trial">The trial</h2>
+  <p>The trial lasts {TRIAL_DAYS} days and asks for no payment details, so there is nothing to refund.</p>
+
+  <h2 id="cancel">Cancel any time</h2>
+  <p>You can cancel your subscription at any time from Billing in the app (the organization's owner does this). Your plan stays active to the end of the period you have already paid for, and nothing more is charged.</p>
+
+  <h2 id="guarantee">14-day money-back guarantee</h2>
+  <p>The <strong>first payment</strong> of a new paid subscription, monthly or yearly, is covered by a 14-day money-back guarantee: if you ask within 14 days of that payment, we refund it in full. The guarantee applies once per organization, and you ask for it by email.</p>
+
+  <h2 id="no-other">No other refunds</h2>
+  <p>Apart from the guarantee above and the errors below, we do not give refunds or credits for partial periods, unused seats or unused allowances. Changes to your plan or seats are prorated only where the confirmation screen shows you the amount before you confirm.</p>
+
+  <h2 id="errors">Errors</h2>
+  <p>A duplicate or mistaken charge is always refunded in full.</p>
+
+  <h2 id="how">How refunds are paid</h2>
+  <p>{SITE.merchantOfRecord}, our merchant of record, issues refunds to the original payment method. How long the money takes to appear depends on your bank or card issuer.</p>
+
+  <h2 id="after">After cancellation</h2>
+  <p>When a subscription ends, your organization becomes read-only: you can still read, export and delete your data, as the product already allows. Subscribe again at any time to keep working.</p>
+
+  <h2 id="ask">How to ask</h2>
+  <p>Email <a href={refundMail}>{SITE.contactEmail}</a> with your organization's name, the email address on the subscription, and the date and amount of the payment. We reply within {SITE.responseTime}.</p>
+</Legal>

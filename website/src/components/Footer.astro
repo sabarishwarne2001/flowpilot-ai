@@ -1,0 +1,40 @@
+---
+import Logo from "./Logo.astro";
+import { FOOTER, SITE } from "../config/site";
+
+const year = new Date(SITE.legalUpdated).getUTCFullYear();
+const columns = [
+  { title: "Product", links: FOOTER.product },
+  { title: "Solutions", links: FOOTER.solutions },
+  { title: "Company", links: FOOTER.company },
+  { title: "Legal", links: FOOTER.legal },
+];
+---
+<footer class="mt-24 border-t border-border bg-sidebar">
+  <div class="page grid gap-10 py-14 lg:grid-cols-[1.3fr_repeat(4,1fr)]">
+    <div class="max-w-xs">
+      <a href="/" aria-label="Servabo home"><Logo class="h-7 w-auto" /></a>
+      <p class="mt-4 text-sm leading-relaxed text-muted-foreground">{SITE.tagline}</p>
+      <p class="mt-4 text-sm text-muted-foreground">
+        Questions: <a class="link" href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a><br />
+        We reply within {SITE.responseTime}.
+      </p>
+    </div>
+    {columns.map((col) => (
+      <nav aria-label={col.title}>
+        <h2 class="eyebrow">{col.title}</h2>
+        <ul class="mt-4 space-y-2.5">
+          {col.links.map((l) => (
+            <li><a href={l.href} class="text-sm text-foreground/80 hover:text-foreground hover:underline">{l.label}</a></li>
+          ))}
+        </ul>
+      </nav>
+    ))}
+  </div>
+  <div class="border-t border-border">
+    <div class="page flex flex-col gap-2 py-6 text-xs leading-relaxed text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+      <p>© {year} {SITE.operator.name}, trading as Servabo, {SITE.operator.country}. Online software, available immediately after sign-up.</p>
+      <p>Payments are processed by {SITE.merchantOfRecord}, our merchant of record.</p>
+    </div>
+  </div>
+</footer>

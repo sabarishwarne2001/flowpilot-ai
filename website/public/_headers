@@ -1,0 +1,24 @@
+# Cloudflare Pages response headers (docs/website/DEPLOY.md). The Caddy alternative,
+# backend/deploy/Caddyfile.website, sends the same ones.
+#
+# The policy allows only this origin: no inline script or style (the build inlines neither:
+# astro.config.mjs), no framing, no third parties. JSON-LD blocks are data, not script, and are
+# not subject to script-src. To add Cloudflare Web Analytics later, see the comment in
+# src/layouts/Base.astro.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests
+  Strict-Transport-Security: max-age=63072000; includeSubDomains; preload
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()
+  Cross-Origin-Opener-Policy: same-origin
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.png
+  Cache-Control: public, max-age=86400
+
+/favicon.svg
+  Cache-Control: public, max-age=86400

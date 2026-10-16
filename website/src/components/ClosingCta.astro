@@ -1,0 +1,24 @@
+---
+import { APP } from "../config/site";
+import { TRIAL_DAYS } from "../lib/pricing";
+
+interface Props {
+  title?: string;
+}
+const { title = "Read your first documents today." } = Astro.props;
+---
+<section class="page mt-28" aria-labelledby="closing-cta">
+  <div class="sheet-fold relative overflow-hidden px-6 py-14 text-center sm:px-12">
+    <div class="grid-paper pointer-events-none absolute inset-0" aria-hidden="true"></div>
+    <div class="relative">
+      <h2 id="closing-cta" class="h2">{title}</h2>
+      <p class="lede mx-auto mt-4 max-w-2xl">
+        A {TRIAL_DAYS}-day trial with no payment details. Bring a handful of real invoices and see what Servabo reads, matches and flags.
+      </p>
+      <div class="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
+        <a href={APP.register} class="btn-primary">Start free trial</a>
+        <a href="/pricing" class="btn-quiet">See pricing</a>
+      </div>
+    </div>
+  </div>
+</section>

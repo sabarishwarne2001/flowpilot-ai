@@ -1,0 +1,42 @@
+---
+import Legal from "../../layouts/Legal.astro";
+import { SITE } from "../../config/site";
+---
+<Legal title="Acceptable Use Policy" description="What you may not do with Servabo: unlawful content, documents you have no right to process, attacks on the service, abuse of email and AI features, and getting around plan limits." contents={[["content", "Your documents"], ["service", "The service"], ["ai", "AI features"], ["email", "Email and requests"], ["enforcement", "What we do about it"], ["report", "Reporting misuse"]]}>
+  <p>This policy is part of our <a href="/legal/terms">Terms of Service</a>. It applies to everyone who uses Servabo, and to API keys and integrations acting for them.</p>
+
+  <h2 id="content">Your documents</h2>
+  <p>Do not upload or process:</p>
+  <ul>
+    <li>documents or personal data you have no right to process, or that you obtained unlawfully;</li>
+    <li>content that is illegal where you or we are, including material that sexually exploits children, promotes terrorism, or infringes someone else's intellectual property or privacy;</li>
+    <li>malware, or files built to attack the service, its readers or its users;</li>
+    <li>special categories of personal data (such as health records) unless you have a lawful basis and the protections the law requires, and have checked that Servabo's controls suit them.</li>
+  </ul>
+
+  <h2 id="service">The service</h2>
+  <ul>
+    <li>Do not try to reach another organization's data, test the service's security without our written permission (see the <a href="/security#report">security page</a> for how to report what you find), or get around authentication, permissions or plan limits.</li>
+    <li>Do not overload the service, scrape it, or use automated means other than our API and its documented limits.</li>
+    <li>Do not share one seat between several people, resell Servabo, or use it to build a competing product.</li>
+    <li>Do not use Servabo for any business that is unlawful, or that our payment provider, {SITE.merchantOfRecord}, does not accept.</li>
+  </ul>
+
+  <h2 id="ai">AI features</h2>
+  <ul>
+    <li>Do not try to make the AI features reveal other customers' data, our internal instructions or credentials, or produce unlawful content.</li>
+    <li>Do not rely on AI output as the only basis for a decision that has legal or similarly significant effects on a person without a human review.</li>
+  </ul>
+
+  <h2 id="email">Email and requests</h2>
+  <ul>
+    <li>Servabo can send email for you (invitations, reminders, document requests to suppliers). Send them only to people you have a business relationship with, never in bulk to people who did not expect them, and never to mislead.</li>
+    <li>Document request links and calendar feeds are personal to their recipient; do not publish them.</li>
+  </ul>
+
+  <h2 id="enforcement">What we do about it</h2>
+  <p>If we reasonably believe this policy has been broken, we may remove the content, limit or suspend the account or API key involved, and, for serious or repeated breaches, close the account. Where we reasonably can, we warn you first and give you a chance to fix the problem. We report unlawful content to the authorities where the law requires.</p>
+
+  <h2 id="report">Reporting misuse</h2>
+  <p>Email <a href={`mailto:${SITE.contactEmail}?subject=${encodeURIComponent("Misuse report")}`}>{SITE.contactEmail}</a> with what you saw and where.</p>
+</Legal>

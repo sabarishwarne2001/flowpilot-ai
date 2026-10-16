@@ -1,0 +1,96 @@
+---
+import Legal from "../../layouts/Legal.astro";
+import { SITE } from "../../config/site";
+import subprocessors from "../../data/subprocessors.json";
+
+const list = subprocessors.subprocessors;
+const hosting = list.find((s) => s.channel === "HOSTING")!;
+const ai = list.filter((s) => s.channel === "LLM_PROVIDER");
+const abroad = list.filter((s) => s.location.includes("United States"));
+const privacyMail = `mailto:${SITE.contactEmail}?subject=${encodeURIComponent("Privacy request")}`;
+
+const contents: [string, string][] = [
+  ["who", "Who we are"],
+  ["roles", "Your documents and our role"],
+  ["collect", "What we collect and why"],
+  ["ai", "AI providers"],
+  ["share", "Who else processes data"],
+  ["transfers", "International transfers"],
+  ["retention", "How long we keep data"],
+  ["rights", "Your rights and requests"],
+  ["cookies", "Cookies and browser storage"],
+  ["security", "Security"],
+  ["children", "Children"],
+  ["changes", "Changes"],
+  ["grievance", "Grievance and contact officer"],
+];
+---
+<Legal title="Privacy Policy" description="How Servabo collects, uses, shares and keeps personal data: what we collect and why, the AI provider that processes document text, retention, your rights, cookies, international transfers and our grievance officer." contents={contents}>
+  <p>This policy explains what personal data Servabo handles, why, who else processes it, how long we keep it, and how you can use your rights. It applies to the Servabo app and this website. It is written to meet India's Digital Personal Data Protection Act, 2023 and, for people in the European Union and the United Kingdom, the GDPR.</p>
+
+  <h2 id="who">Who we are</h2>
+  <p>Servabo is operated by {SITE.operator.name}, {SITE.operator.kind} in {SITE.operator.country}, trading as Servabo ("we", "us"). For the personal data described under "What we collect" below we decide why and how it is used: we are its data fiduciary (controller). Contact: <a href={privacyMail}>{SITE.contactEmail}</a>.</p>
+
+  <h2 id="roles">Your documents and our role</h2>
+  <p>The documents your organization uploads, and what Servabo extracts from them, belong to your organization. They often contain personal data (a supplier contact's name, an employee on a receipt). For that data your organization decides why it is processed, and we process it on its behalf and on its instructions, to provide Servabo: we act as its data processor. Requests about personal data in your organization's documents are best sent to that organization; we will help it answer them.</p>
+
+  <h2 id="collect">What we collect and why</h2>
+  <table>
+    <thead><tr><th>Data</th><th>Why we use it</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Account details</strong>: name, email address, password (stored only as a hash), two-factor settings, profile picture, time zone and display preferences.</td><td>To create your account, sign you in securely and show the app the way you set it. Needed to provide the service.</td></tr>
+      <tr><td><strong>Organization details</strong>: organization name, members and their roles, invitations, settings, branding.</td><td>To run your organization's workspace and its permissions. Needed to provide the service.</td></tr>
+      <tr><td><strong>Documents and their contents</strong>, conversations with the assistant, and the results Servabo produces.</td><td>To provide the service your organization asked for (see "Your documents and our role").</td></tr>
+      <tr><td><strong>Billing details</strong>: billing name and email, country, plan and seats, invoices and payment status. Card details go to {SITE.merchantOfRecord} directly and never reach us.</td><td>To sell and manage your subscription with our merchant of record, and to keep records the law requires.</td></tr>
+      <tr><td><strong>Security and usage records</strong>: sign-in times, IP addresses, browser and device type, the audit log of actions in your organization, and usage counts (documents, pages, questions).</td><td>To keep accounts and data secure, detect abuse, apply plan limits, show you your usage, and fix faults. Our legitimate interest in a secure, working service, and your organization's audit needs.</td></tr>
+      <tr><td><strong>Messages</strong> you send us by email.</td><td>To answer you and improve Servabo.</td></tr>
+    </tbody>
+  </table>
+  <p>We do not sell personal data, we do not use your documents to train AI models, and we do not show advertising. This website collects nothing about you: it sets no cookies and runs no analytics.</p>
+
+  <h2 id="ai">AI providers</h2>
+  <p>To read documents and answer questions, Servabo sends the text of the relevant document pages, and the question asked, to an AI model provider, which returns the result. Servabo uses:</p>
+  <ul>
+    {ai.map((p) => <li><strong>{p.name}</strong> ({p.service}, {p.location}): {p.purpose}</li>)}
+  </ul>
+  <p>Text recognition (OCR), search indexing and re-ranking run on our own server; no third party sees your documents for them. If your organization connects its own AI provider key (OpenAI, Anthropic, Azure OpenAI, Mistral, Groq or Google Gemini), document text for the tasks it chooses goes to that provider, under your organization's own agreement with it.</p>
+
+  <h2 id="share">Who else processes data</h2>
+  <p>We use these service providers (subprocessors) to run Servabo. Each processes personal data only to provide its service to us, under contract:</p>
+  <ul>
+    {list.map((p) => <li><strong>{p.name}</strong> — {p.service}, {p.location}. {p.data}.</li>)}
+  </ul>
+  <p>The current list, and the date it last changed, is on the <a href="/legal/subprocessors">subprocessors page</a>. We may also disclose data when the law requires it, to protect our rights or the safety of others, or to a successor if our business is transferred (you would be told).</p>
+
+  <h2 id="transfers">International transfers</h2>
+  <p>Servabo's application and database run in {hosting.location}. Some providers above process data in other countries{abroad.length > 0 ? `, including the United States (${abroad.map((p) => p.name).join(", ")})` : ""}. Where data leaves India or the European Economic Area, we rely on the transfer safeguards these providers offer in their contracts, such as the European Commission's standard contractual clauses, and we do not transfer personal data to any country the Indian government restricts.</p>
+
+  <h2 id="retention">How long we keep data</h2>
+  <ul>
+    <li><strong>Account and organization data</strong>: while the account or organization exists. When you delete your account or ask us to, we delete it, except what we must keep by law.</li>
+    <li><strong>Documents and results</strong>: until your organization deletes them, sets a retention period that removes them, or asks us to delete the organization. A trial or subscription that ends does not delete them: the organization stays readable so you can export.</li>
+    <li><strong>Audit log</strong>: for the period your organization chooses (at least 400 days), or indefinitely if it chooses none.</li>
+    <li><strong>Backups</strong>: encrypted database backups are kept for about five weeks and then replaced, so deleted data leaves them within that time.</li>
+    <li><strong>Billing records</strong>: as long as tax and accounting laws require; {SITE.merchantOfRecord} keeps its own records as merchant of record.</li>
+    <li><strong>Security records</strong> such as sign-in history: as long as needed to secure accounts, and no longer than the account.</li>
+  </ul>
+
+  <h2 id="rights">Your rights and requests</h2>
+  <p>You can ask us to tell you what personal data we hold about you and how we use it; to correct, complete or update it; to delete it; to give you a copy in a common format; to object to or restrict a use; and to withdraw any consent you gave. In India you may also nominate someone to exercise your rights if you die or cannot. Much of this you can do yourself in the app (profile, export, deletion).</p>
+  <p>Email <a href={privacyMail}>{SITE.contactEmail}</a> with "Privacy request" in the subject. We may ask you to confirm who you are. We answer within 30 days, and sooner where we can. If you are not satisfied, you may complain to the Data Protection Board of India, or to your local data protection authority in the EU or UK.</p>
+
+  <h2 id="cookies">Cookies and browser storage</h2>
+  <p>The app uses one cookie, which keeps you signed in, and stores a few settings in your browser; none are for advertising or tracking. This website sets no cookies. The details are on the <a href="/legal/cookies">cookies page</a>.</p>
+
+  <h2 id="security">Security</h2>
+  <p>We protect data with tenant isolation, role-based access, encryption in transit and of stored secrets, encrypted backups and an append-only audit log; the <a href="/security">security page</a> describes each. If a breach affects your personal data, we will tell you and the authorities as the law requires.</p>
+
+  <h2 id="children">Children</h2>
+  <p>Servabo is for businesses and is not meant for anyone under 18. We do not knowingly collect personal data from children.</p>
+
+  <h2 id="changes">Changes</h2>
+  <p>We will update this policy when what we do changes; the date at the top shows the latest version. For a material change we will email the owners of active organizations before it takes effect.</p>
+
+  <h2 id="grievance">Grievance and contact officer</h2>
+  <p>Our grievance officer, and the contact for any question about this policy or your data, is <strong>{SITE.operator.name}</strong>, reachable at <a href={privacyMail}>{SITE.contactEmail}</a>. We acknowledge a grievance within {SITE.responseTime} and resolve it as quickly as we can, within the time the law sets.</p>
+</Legal>

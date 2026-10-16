@@ -1,0 +1,37 @@
+---
+import Base from "../layouts/Base.astro";
+import ClosingCta from "../components/ClosingCta.astro";
+import { SITE } from "../config/site";
+---
+<Base title="About" description={`Servabo is built and run by ${SITE.operator.name}, an independent founder in ${SITE.operator.country}. Our mission: the promises in a company's documents should be kept by software, not memory.`}>
+  <section class="page pt-16 sm:pt-20" aria-labelledby="about">
+    <p class="eyebrow">About</p>
+    <h1 id="about" class="display mt-4 max-w-4xl">Agreements must be kept.</h1>
+    <p class="lede mt-6 max-w-3xl"><em>Pacta sunt servanda</em> is the oldest rule of commerce. Servabo, Latin for “I will keep”, is named after it.</p>
+  </section>
+
+  <section class="page mt-14 grid gap-12 lg:grid-cols-[1fr_1.3fr]" aria-labelledby="mission">
+    <div>
+      <h2 id="mission" class="h2">Our mission</h2>
+    </div>
+    <div class="prose text-muted-foreground">
+      <p>Every business runs on promises written in documents: the price on a purchase order, the quantity on a delivery note, the date on an invoice, the notice period in a contract. Most of them are kept by memory and spreadsheets, and the ones that slip cost money quietly, a few percent at a time.</p>
+      <p>Servabo reads those documents, checks them against each other, and keeps the promises in them in one place, so a small finance or operations team can work like a large one. AI reads and drafts; the rules, the checks and the decisions are plain code and people, and every step leaves evidence.</p>
+    </div>
+  </section>
+
+  <section class="page mt-16 grid gap-12 lg:grid-cols-[1fr_1.3fr]" aria-labelledby="founder">
+    <div>
+      <h2 id="founder" class="h2">Who is behind it</h2>
+    </div>
+    <div class="sheet-fold p-7">
+      <div class="prose text-muted-foreground">
+        <p><strong>{SITE.operator.name}</strong> builds and runs Servabo as an independent founder in {SITE.operator.country}, as {SITE.operator.kind}. Servabo is a small company, and we say so: you will be talking to the person who builds the product, and you will get a straight answer.</p>
+        <p>Payments are handled by {SITE.merchantOfRecord}, our merchant of record, so your invoice, your tax and any refund come from an established payment company.</p>
+        <p>Write to <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>. We reply within {SITE.responseTime}.</p>
+      </div>
+    </div>
+  </section>
+
+  <ClosingCta />
+</Base>

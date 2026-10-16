@@ -1,0 +1,86 @@
+---
+import Base from "../../layouts/Base.astro";
+import PlanBadge from "../../components/PlanBadge.astro";
+import ClosingCta from "../../components/ClosingCta.astro";
+import engines from "../../data/engines.json";
+import { SOLUTIONS, type Solution } from "../../data/solutions";
+import { dollars, lowestPlanWith, PLANS } from "../../lib/pricing";
+
+export function getStaticPaths() {
+  return SOLUTIONS.map((solution) => ({ params: { slug: solution.slug }, props: { solution } }));
+}
+
+interface Props {
+  solution: Solution;
+}
+const { solution } = Astro.props;
+const all = engines.groups.flatMap((g) => g.engines.map((e) => ({ ...e, group: g.id })));
+const used = solution.engines.map((id) => {
+  const found = all.find((e) => e.id === id);
+  if (!found) throw new Error(`solutions.ts names an unknown engine "${id}"`);
+  return found;
+});
+// The plan that includes every engine on the page: the highest of their lowest plans.
+const recommended = used
+  .map((e) => lowestPlanWith(e.capability) ?? PLANS[0]!)
+  .reduce((a, b) => (b.rank > a.rank ? b : a));
+---
+<Base title={solution.nav} description={solution.description}>
+  <section class="page pt-16 sm:pt-20" aria-labelledby="solution">
+    <nav aria-label="Solutions by team" class="flex flex-wrap gap-2">
+      {SOLUTIONS.map((s) => (
+        <a href={`/solutions/${s.slug}`} aria-current={s.slug === solution.slug ? "page" : undefined} class="chip hover:text-foreground aria-[current=page]:border-primary aria-[current=page]:text-foreground">{s.nav}</a>
+      ))}
+    </nav>
+    <p class="eyebrow mt-10">Solutions · {solution.nav}</p>
+    <h1 id="solution" class="display mt-4 max-w-4xl">{solution.title}</h1>
+    <p class="lede mt-6 max-w-3xl">{solution.who}</p>
+  </section>
+
+  <section class="page mt-14 grid gap-10 lg:grid-cols-[1.2fr_1fr]" aria-labelledby="problem">
+    <div>
+      <h2 id="problem" class="h3">The problem</h2>
+      {solution.problem.map((p) => <p class="mt-4 text-lg leading-relaxed text-muted-foreground">{p}</p>)}
+    </div>
+    <aside class="sheet-fold p-6" aria-labelledby="not-this">
+      <h2 id="not-this" class="eyebrow">What Servabo does not do</h2>
+      <ul class="mt-4 space-y-3 text-[0.95rem] leading-relaxed">
+        {solution.notThis.map((n) => <li class="border-l-2 border-border-strong pl-3">{n}</li>)}
+      </ul>
+    </aside>
+  </section>
+
+  <section class="page mt-20" aria-labelledby="how">
+    <h2 id="how" class="h2">How Servabo does the job</h2>
+    <ol class="mt-8 grid gap-6 md:grid-cols-2">
+      {solution.steps.map((s, i) => (
+        <li class="sheet p-6">
+          <span class="figure text-sm text-primary dark:text-[hsl(var(--primary-on-dark))]">{String(i + 1).padStart(2, "0")}</span>
+          <h3 class="h3 mt-3">{s.title}</h3>
+          <p class="mt-2 leading-relaxed text-muted-foreground">{s.body}</p>
+        </li>
+      ))}
+    </ol>
+  </section>
+
+  <section class="page mt-20" aria-labelledby="engines">
+    <h2 id="engines" class="h2">The engines it uses</h2>
+    <ul class="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+      {used.map((e) => (
+        <li class="sheet p-5">
+          <div class="flex items-start justify-between gap-3">
+            <a href={`/product#${e.id}`} class="font-semibold hover:underline">{e.name}</a>
+            <PlanBadge feature={e.capability} />
+          </div>
+          <p class="mt-2 text-sm leading-relaxed text-muted-foreground">{e.result}</p>
+        </li>
+      ))}
+    </ul>
+    <p class="mt-6 text-muted-foreground">
+      Everything on this page is included in <strong class="text-foreground">{recommended.name}</strong>, {dollars(recommended.monthly)} per seat per month.
+      <a href="/pricing" class="link">Compare plans</a>
+    </p>
+  </section>
+
+  <ClosingCta />
+</Base>

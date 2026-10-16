@@ -1,0 +1,27 @@
+---
+/** The Servabo logo: the mark (a document, kept) and the wordmark, from brand/mark.ts. */
+import { FOLD, S_STROKE, S_WIDTH, TILE, WORDMARK } from "../../../brand/mark";
+
+interface Props {
+  class?: string;
+  /** Mark only (16 px and up). */
+  markOnly?: boolean;
+}
+const { class: className = "", markOnly = false } = Astro.props;
+const scale = 15.6 / WORDMARK.capHeight;
+const width = markOnly ? 32 : 32 + 9 + WORDMARK.width * scale;
+---
+<svg
+  viewBox={`0 0 ${width.toFixed(2)} 32`}
+  class={className}
+  role="img"
+  aria-label="Servabo"
+  focusable="false"
+>
+  <path d={TILE} class="fill-primary" />
+  <path d={FOLD} class="fill-primary-foreground" fill-opacity="0.35" />
+  <path d={S_STROKE} fill="none" class="stroke-primary-foreground" stroke-width={S_WIDTH} stroke-linecap="round" stroke-linejoin="round" />
+  {!markOnly && (
+    <path transform={`translate(41 25) scale(${scale.toFixed(6)})`} class="fill-foreground" d={WORDMARK.d} />
+  )}
+</svg>

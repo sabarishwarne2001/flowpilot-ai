@@ -1,0 +1,122 @@
+---
+import Base from "../layouts/Base.astro";
+import PlanBadge from "../components/PlanBadge.astro";
+import { SITE } from "../config/site";
+import subprocessors from "../data/subprocessors.json";
+
+const hosting = subprocessors.subprocessors.find((s) => s.channel === "HOSTING")!;
+
+const sections = [
+  {
+    id: "isolation",
+    title: "Tenant isolation",
+    feature: null,
+    points: [
+      "Every organization's documents, fields, conversations and settings are separated by organization and workspace on every query; the server resolves who you are, which organization you are in and what your role allows on every request.",
+      "Tests that replay the API's operations with another organization's identifiers, as a person and as an API key, run on every change to the code.",
+      "A workspace you have no grant in answers \"not found\": its existence is not revealed.",
+    ],
+  },
+  {
+    id: "roles",
+    title: "Roles and permissions",
+    feature: null,
+    points: [
+      "Organization roles: owner, admin, billing and member. Workspace roles: admin, contributor and viewer. Nobody can give a role above their own, and the last owner cannot leave.",
+      "Plan changes and payment methods are the owner's; seats can be bought by owners, admins and billing managers after the price is shown.",
+      "API keys carry only the scopes you give them and work only in the organization that issued them.",
+    ],
+  },
+  {
+    id: "audit",
+    title: "Audit log",
+    feature: null,
+    points: [
+      "Sign-in policy changes, role changes, exports, deletions, key creation and other sensitive actions are recorded with who, what and when.",
+      "The database itself refuses to change or delete an audit entry. You choose how long the log is kept (at least 400 days) and can export it.",
+    ],
+  },
+  {
+    id: "encryption",
+    title: "Encryption",
+    feature: null,
+    points: [
+      "Traffic to the app is HTTPS only, with HSTS. The app is served under a strict Content-Security-Policy that allows no inline script and no framing.",
+      "Secrets you give Servabo (mail server passwords, ERP and warehouse credentials, your own AI keys, single sign-on certificates) are encrypted at rest with keys that can be rotated; a rotation re-encrypts every secret column.",
+      "API keys and directory tokens are stored only as keyed hashes. Passwords are hashed with Argon2.",
+      "Database backups are encrypted before they leave the server.",
+    ],
+  },
+  {
+    id: "sign-in",
+    title: "Sign-in policies",
+    feature: null,
+    points: [
+      "Time-based two-factor authentication with recovery codes, and an organization switch that requires it for everyone.",
+      "Session lifetimes, sign-in lockout and backoff after repeated failures; sign-in and password reset answer the same way whether or not an address exists.",
+      "Every emailed link (verification, reset, invitation) is single-use, expires, and carries its token where it is never sent to a server log.",
+    ],
+  },
+  {
+    id: "sso",
+    title: "Single sign-on and SCIM",
+    feature: "capability.enterprise_identity",
+    points: [
+      "SAML 2.0 and OpenID Connect with any standard identity provider, on a domain you verify with a DNS record.",
+      "Require single sign-on for your organization; SCIM provisioning adds and removes people from your directory, within your seats.",
+    ],
+  },
+  {
+    id: "egress",
+    title: "Where your data may go",
+    feature: "capability.egress_lockdown",
+    points: [
+      "Egress lockdown confines every connection made for your organization (webhooks, warehouses, ERP, mail, AI providers) to destinations you allow, and records every refusal.",
+      "Every destination a customer can configure is refused if it points at a private, loopback or cloud-metadata address.",
+    ],
+  },
+];
+---
+<Base title="Security" description="How Servabo protects your documents: tenant isolation, roles, an append-only audit log, encryption of stored secrets, sign-in policies, single sign-on and SCIM, and where data is stored. No certifications claimed.">
+  <section class="page pt-16 sm:pt-20" aria-labelledby="security">
+    <p class="eyebrow">Security</p>
+    <h1 id="security" class="display mt-4 max-w-4xl">What protects your documents, as it is built today.</h1>
+    <p class="lede mt-6 max-w-3xl">This page describes controls the product has and that tests check. Servabo holds no security certification yet (no SOC 2 or ISO 27001 report), and an independent penetration test is planned before the first enterprise contract. We will add either only when there is a report to show you.</p>
+  </section>
+
+  <div class="page mt-14 grid gap-12 lg:grid-cols-[14rem_1fr]">
+    <nav aria-label="On this page" class="hidden lg:block">
+      <ul class="sticky top-24 space-y-2 text-sm">
+        {sections.map((s) => <li><a href={`#${s.id}`} class="text-muted-foreground hover:text-foreground">{s.title}</a></li>)}
+        <li><a href="#residency" class="text-muted-foreground hover:text-foreground">Where data is stored</a></li>
+        <li><a href="#report" class="text-muted-foreground hover:text-foreground">Report a vulnerability</a></li>
+      </ul>
+    </nav>
+    <div class="space-y-12">
+      {sections.map((s) => (
+        <section id={s.id} class="scroll-mt-24 border-t border-border pt-8" aria-labelledby={`${s.id}-t`}>
+          <div class="flex flex-wrap items-center gap-3">
+            <h2 id={`${s.id}-t`} class="text-2xl font-semibold tracking-tight">{s.title}</h2>
+            <PlanBadge feature={s.feature} />
+          </div>
+          <ul class="mt-5 space-y-3 leading-relaxed text-muted-foreground">
+            {s.points.map((p) => <li class="border-l-2 border-border pl-4">{p}</li>)}
+          </ul>
+        </section>
+      ))}
+
+      <section id="residency" class="scroll-mt-24 border-t border-border pt-8" aria-labelledby="residency-t">
+        <h2 id="residency-t" class="text-2xl font-semibold tracking-tight">Where data is stored</h2>
+        <div class="prose mt-5 text-muted-foreground">
+          <p>Servabo runs on {hosting.service} in {hosting.location}. Your documents and their pages, redacted copies and profile pictures, and the database with extracted text, fields, the search index, members, settings and the audit log are stored there, with uploaded files and encrypted backups in object storage (<a href="/legal/subprocessors">subprocessors</a>).</p>
+          <p>The organization setting called <strong>data residency</strong> decides where two things are written: compliance export archives and your organization's branding files (logo and favicon). It does not move your documents. Real residency for documents means a separate regional deployment of the whole service, database included; there is none yet, and the setting's screen says exactly what it covers.</p>
+        </div>
+      </section>
+
+      <section id="report" class="scroll-mt-24 border-t border-border pt-8" aria-labelledby="report-t">
+        <h2 id="report-t" class="text-2xl font-semibold tracking-tight">Report a vulnerability</h2>
+        <p class="mt-5 leading-relaxed text-muted-foreground">Write to <a class="link" href={`mailto:${SITE.contactEmail}?subject=${encodeURIComponent("Security report")}`}>{SITE.contactEmail}</a> with "Security report" in the subject, what you found and how to reproduce it. We reply within {SITE.responseTime}, fix confirmed issues as a priority, and will not take action against good-faith research that avoids other customers' data and does not disrupt the service.</p>
+      </section>
+    </div>
+  </div>
+</Base>

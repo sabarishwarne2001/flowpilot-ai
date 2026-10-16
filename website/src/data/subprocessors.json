@@ -1,0 +1,59 @@
+{
+  "updated": "2026-10-16",
+  "note": "Derived from what the code calls: every operator connection in backend/app/core/egress.py that carries customer data is listed with the provider this deployment is configured to use (backend/.env.production.template, the platform's AI keys in backend/app/core/platform_models.py, the billing gateway). backend/tests/infra/test_subprocessors_match_the_code.py fails when a channel or a provider is missing.",
+  "subprocessors": [
+    {
+      "name": "Hetzner Online GmbH",
+      "service": "Hetzner Cloud",
+      "purpose": "Hosts the Servabo application and its database: every document, extracted field, account and audit record is stored and processed on this server.",
+      "data": "All customer data",
+      "location": "Germany (EU)",
+      "channel": "HOSTING",
+      "url": "https://www.hetzner.com/legal/privacy-policy"
+    },
+    {
+      "name": "Cloudflare, Inc.",
+      "service": "Cloudflare R2 object storage",
+      "purpose": "Stores uploaded files (documents and their page images, redacted copies, logos) and an encrypted, off-server copy of the database backups.",
+      "data": "Uploaded documents; encrypted backups",
+      "location": "European Union (R2 jurisdiction: EU)",
+      "channel": "STORAGE",
+      "also_channels": ["BACKUP"],
+      "url": "https://www.cloudflare.com/privacypolicy/"
+    },
+    {
+      "name": "Groq, Inc.",
+      "service": "GroqCloud",
+      "purpose": "Runs the AI model that reads document text into fields and answers questions about your documents, on Servabo's own account. Text is sent to read it for you; the result comes back to your workspace.",
+      "data": "Document text and questions you ask",
+      "location": "United States",
+      "channel": "LLM_PROVIDER",
+      "provider_key": "groq",
+      "url": "https://groq.com/privacy-policy/"
+    },
+    {
+      "name": "Postmark (ActiveCampaign, LLC)",
+      "service": "Postmark transactional email",
+      "purpose": "Delivers the emails Servabo sends: sign-up and password links, invitations, billing and security notices, reminders.",
+      "data": "Recipient email addresses and email content",
+      "location": "United States",
+      "channel": "SMTP_PLATFORM",
+      "url": "https://postmarkapp.com/privacy-policy"
+    },
+    {
+      "name": "Dodo Payments",
+      "service": "Payments, as merchant of record",
+      "purpose": "Sells the subscription as merchant of record: takes the payment, calculates and collects tax, issues the invoice and handles refunds and disputes.",
+      "data": "Billing name, email address, country and payment details (card details go to Dodo Payments directly and never reach Servabo)",
+      "location": "See Dodo Payments' buyer terms",
+      "channel": "BILLING",
+      "gateway": "DODO",
+      "url": "https://dodopayments.com/legal/buyer-terms"
+    }
+  ],
+  "not_subprocessors": [
+    "Optical character recognition (PaddleOCR), search indexing (SentenceTransformers) and result re-ranking run on Servabo's own server: no third party sees your documents for them.",
+    "If you connect your own AI provider key, your own ERP, warehouse, webhook endpoint, identity provider or mail server, Servabo sends data there on your instruction; those providers work for you, under your contract with them.",
+    "The website (servabo.app) is static pages served by Cloudflare Pages; it sets no cookies and runs no analytics."
+  ]
+}

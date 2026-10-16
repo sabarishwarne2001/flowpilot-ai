@@ -1,0 +1,62 @@
+---
+import Base from "../layouts/Base.astro";
+import Shot from "../components/Shot.astro";
+import PlanBadge from "../components/PlanBadge.astro";
+import ClosingCta from "../components/ClosingCta.astro";
+import engines from "../data/engines.json";
+
+const total = engines.groups.reduce((n, g) => n + g.engines.length, 0);
+---
+<Base title="Product tour" description="Every Servabo engine, grouped by the job it does: capture and understand, verify and match, track promises, automate and post, govern and audit. Real screenshots, and the plan each one needs.">
+  <section class="page pb-6 pt-16 sm:pt-20" aria-labelledby="tour">
+    <p class="eyebrow">Product tour</p>
+    <h1 id="tour" class="display mt-4 max-w-4xl">{total} engines, five jobs, one back office.</h1>
+    <p class="lede mt-6 max-w-3xl">Each engine is described by the job it does and the result it gives you. The badge says the lowest plan that includes it. Every picture is a screenshot of the product with demonstration data from an invented company.</p>
+    <nav aria-label="Jobs" class="mt-8 flex flex-wrap gap-2">
+      {engines.groups.map((g) => (
+        <a href={`#${g.id}`} class="chip hover:border-border-strong hover:text-foreground">{g.title}</a>
+      ))}
+    </nav>
+  </section>
+
+  {engines.groups.map((g, gi) => (
+    <section id={g.id} class="page mt-16 scroll-mt-24" aria-labelledby={`${g.id}-title`}>
+      <div class="flex items-baseline gap-4 border-b border-border pb-4">
+        <span class="figure text-sm text-muted-foreground">{String(gi + 1).padStart(2, "0")}</span>
+        <div>
+          <h2 id={`${g.id}-title`} class="h2">{g.title}</h2>
+          <p class="mt-2 max-w-3xl text-muted-foreground">{g.lede}</p>
+        </div>
+      </div>
+      <div class="mt-10 space-y-16">
+        {g.engines.filter((e) => "shot" in e).map((e, i) => (
+          <article id={e.id} class="grid scroll-mt-24 items-center gap-8 lg:grid-cols-[1fr_1.35fr]" aria-labelledby={`${e.id}-name`}>
+            <div class={i % 2 === 1 ? "lg:order-2" : ""}>
+              <PlanBadge feature={e.capability} />
+              <h3 id={`${e.id}-name`} class="mt-3 text-2xl font-semibold tracking-tight">{e.name}</h3>
+              <p class="mt-3 text-lg leading-relaxed text-foreground">{e.result}</p>
+              <p class="mt-3 leading-relaxed text-muted-foreground">{e.detail}</p>
+              {"link" in e && e.link && <a href={String(e.link)} class="link mt-4 inline-block">More about {e.name}</a>}
+            </div>
+            <Shot name={e.shot as string} alt={`${e.name} in Servabo: ${e.result}`} class={i % 2 === 1 ? "lg:order-1" : ""} />
+          </article>
+        ))}
+      </div>
+      {/* Engines whose demonstration screen would be an empty list are described, not pictured. */}
+      {g.engines.some((e) => !("shot" in e)) && (
+        <div class="mt-12 grid gap-4 md:grid-cols-2">
+          {g.engines.filter((e) => !("shot" in e)).map((e) => (
+            <article id={e.id} class="scroll-mt-24 rounded-xl border border-border bg-card p-6" aria-labelledby={`${e.id}-name`}>
+              <PlanBadge feature={e.capability} />
+              <h3 id={`${e.id}-name`} class="mt-3 text-xl font-semibold tracking-tight">{e.name}</h3>
+              <p class="mt-2 leading-relaxed text-foreground">{e.result}</p>
+              <p class="mt-2 text-[0.95rem] leading-relaxed text-muted-foreground">{e.detail}</p>
+            </article>
+          ))}
+        </div>
+      )}
+    </section>
+  ))}
+
+  <ClosingCta title="See every engine on your own documents." />
+</Base>

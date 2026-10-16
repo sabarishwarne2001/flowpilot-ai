@@ -1,0 +1,31 @@
+---
+import Legal from "../../layouts/Legal.astro";
+import { SITE } from "../../config/site";
+import data from "../../data/subprocessors.json";
+---
+<Legal title="Subprocessors" description="The service providers that process customer data for Servabo, what each does, which data it sees and where: hosting, object storage, the AI model provider, email delivery and payments." contents={[["list", "The list"], ["not", "Not subprocessors"], ["changes", "Changes"]]}>
+  <p>These are the companies that process customer data so that Servabo can run. The list is derived from the connections Servabo's code makes and the providers this service is configured to use; a test fails if the code reaches a provider that is not listed here.</p>
+
+  <h2 id="list">The list</h2>
+  <table>
+    <thead><tr><th>Provider</th><th>What it does for Servabo</th><th>Data</th><th>Where</th></tr></thead>
+    <tbody>
+      {data.subprocessors.map((s) => (
+        <tr>
+          <td><strong>{s.name}</strong><br /><span class="text-sm text-muted-foreground">{s.service}</span><br /><a class="text-sm" href={s.url} rel="noopener">Their terms</a></td>
+          <td>{s.purpose}</td>
+          <td>{s.data}</td>
+          <td>{s.location}</td>
+        </tr>
+      ))}
+    </tbody>
+  </table>
+
+  <h2 id="not">Not subprocessors</h2>
+  <ul>
+    {data.not_subprocessors.map((n) => <li>{n}</li>)}
+  </ul>
+
+  <h2 id="changes">Changes</h2>
+  <p>This list last changed on <time datetime={data.updated}>{data.updated}</time>. Before we add or replace a subprocessor we update this page and email the owners of paying organizations at least 14 days ahead, so you can raise an objection with us at <a href={`mailto:${SITE.contactEmail}`}>{SITE.contactEmail}</a>.</p>
+</Legal>
