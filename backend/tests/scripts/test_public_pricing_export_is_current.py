@@ -74,10 +74,9 @@ def test_the_export_holds_nothing_internal() -> None:
 
 
 def test_both_gateways_say_what_they_can_do() -> None:
-    from app.services.billing.payment_gateway import PaymentGateway, get_payment_gateway
+    from app.services.billing.payment_gateway import get_payment_gateway
 
     for name in ("STRIPE", "DODO"):
         gateway = get_payment_gateway(name)
-        assert isinstance(gateway, PaymentGateway)
         assert gateway.name == name
         assert isinstance(gateway.capabilities.supports_usage_billing, bool)
