@@ -70,6 +70,12 @@ class NulByteGuardMiddleware:
         while more:
             message = await receive()
             if message["type"] == "http.disconnect":
+                # The client hung up before its body arrived. Nobody is waiting for an answer,
+                # but the request must still end with one: returning without a response made
+                # the tracing middleware above raise "No response returned." and log a server
+                # error for a browser that had simply navigated away. 499 ("client closed
+                # request") is the conventional status; ClientGoneMiddleware drops the send.
+                await self._closed(send)
                 return
             chunks.append(message.get("body", b""))
             more = message.get("more_body", False)
@@ -91,6 +97,11 @@ class NulByteGuardMiddleware:
             return await receive()
 
         await self.app(scope, replay, send)
+
+    @staticmethod
+    async def _closed(send: Send) -> None:
+        await send({"type": "http.response.start", "status": 499, "headers": [(b"content-length", b"0")]})
+        await send({"type": "http.response.body", "body": b""})
 
     @staticmethod
     async def _refuse(send: Send) -> None:
