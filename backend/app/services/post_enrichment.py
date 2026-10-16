@@ -269,6 +269,13 @@ def dispatch_in_session(
         )
         enqueued.append(truthmesh_vocab.JOB_INDEX_DOCUMENT)
 
+    # Flagship session: Helm's Promise ledger reads the role row just written (debounced; only for a
+    # workspace some Helm book reads).
+    from app.services.helm import hooks as helm_hooks
+
+    helm_hooks.document_changed(db, workspace_id=workspace_id, organization_id=organization_id,
+                                reason="document processed")
+
     return {"dispatched": True, "role": role.as_details(), "enqueued": enqueued, "stale_comparisons": stale}
 
 

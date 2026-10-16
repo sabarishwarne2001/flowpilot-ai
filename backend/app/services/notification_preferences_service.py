@@ -29,6 +29,10 @@ SECURITY = "security"
 BILLING = "billing"
 USAGE = "usage"
 WORKFLOW = "workflow"
+#: Flagship session: Helm's notices (a breached mandate, a conflict in the plan, an action that
+#: needs approval) and its Monday briefing, each with its own switch.
+HELM = "helm"
+HELM_BRIEFING = "helm_briefing"
 
 
 @dataclass(frozen=True)
@@ -37,6 +41,13 @@ class Category:
     label: str
     description: str
     essential: bool
+    #: Who is offered the switch: everyone, or only people Helm notifies (organization owners, admins
+    #: and the billing role); a member never gets a Helm notice, so is never shown its switch.
+    audience: str = "everyone"
+
+
+#: Organization roles Helm notifies (brief §5.4).
+HELM_AUDIENCE_ROLES: tuple[str, ...] = ("OWNER", "ADMIN", "BILLING")
 
 
 CATEGORIES: tuple[Category, ...] = (
@@ -52,6 +63,12 @@ CATEGORIES: tuple[Category, ...] = (
     Category(WORKFLOW, "Documents and automations",
              "A document that could not be processed, an automation that failed or needs attention.",
              essential=False),
+    Category(HELM, "Helm",
+             "A mandate breached or drifting, a conflict in the plan, a payment action waiting for approval.",
+             essential=False, audience="helm"),
+    Category(HELM_BRIEFING, "Helm Monday briefing",
+             "Every Monday at 09:00: this week's plan, the risks Helm sees and the value it held.",
+             essential=False, audience="helm"),
 )
 _BY_KEY = {category.key: category for category in CATEGORIES}
 ESSENTIAL: frozenset[str] = frozenset(c.key for c in CATEGORIES if c.essential)
@@ -89,7 +106,17 @@ def should_email(db: Session, *, user_id: uuid.UUID, category_key: str, priority
     return email_enabled(db, user_id=user_id, category_key=category_key)
 
 
+def _sees_helm(db: Session, user_id: uuid.UUID) -> bool:
+    from app.models.organization import MembershipStatus, OrganizationMember
+
+    roles = [getattr(r, "value", r) for (r,) in db.execute(
+        select(OrganizationMember.role).where(OrganizationMember.user_id == user_id,
+                                              OrganizationMember.status == MembershipStatus.ACTIVE)).all()]
+    return any(str(role).upper() in HELM_AUDIENCE_ROLES for role in roles)
+
+
 def list_for_user(db: Session, *, user_id: uuid.UUID) -> list[dict[str, Any]]:
+    helm = _sees_helm(db, user_id)
     rows = {
         row.category: row.email_enabled
         for row in db.execute(
@@ -105,6 +132,7 @@ def list_for_user(db: Session, *, user_id: uuid.UUID) -> list[dict[str, Any]]:
             "locked": c.essential,
         }
         for c in CATEGORIES
+        if c.audience == "everyone" or (c.audience == "helm" and helm)
     ]
 
 

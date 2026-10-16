@@ -205,6 +205,7 @@ def _payload(body: Optional[ReviewResolveRequest]) -> resolution.ResolvePayload:
         obligation_verdict=body.obligation_verdict,  # ARCH46-S1:obligation-verdict
         posting_verdict=body.posting_verdict,  # ARCH47-S1:posting-verdict
         posting_reference=body.posting_reference,
+        helm_verdict=body.helm_verdict,  # flagship session: Helm's tasks
     )
 
 

@@ -12,6 +12,8 @@ import {
   buildWorkspaceNavigationGroups,
 } from "./navigation";
 import { commandPaletteShortcutLabel, openCommandPalette } from "./commandPaletteEvents";
+import { ModeSwitch } from "@/components/helm/ModeSwitch";
+import { seesHelm } from "@/components/helm/modeMemory";
 
 interface HeaderProps {
   readonly className?: string;
@@ -58,7 +60,7 @@ const SUBPAGE_LABELS: Readonly<Record<string, string>> = {
 export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState<boolean>(false);
   const { toggleMobileSidebar, resolvedTheme, toggleTheme, notificationBadgeCount } = useUIStore();
-  const { organization, workspace } = useResolvedTenant();
+  const { organization, workspace, organizationRole } = useResolvedTenant();
   const pageLabel = usePageLabel();
   useDocumentTitle(pageLabel === "Overview" ? null : pageLabel, workspace.workspace_name);
   const shortcut = commandPaletteShortcutLabel();
@@ -142,6 +144,16 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
           <span className="hidden flex-1 truncate text-left sm:block">Search or jump to…</span>
           <kbd className="fp-kbd hidden sm:inline-flex">{shortcut}</kbd>
         </button>
+
+        {/* Helm (the flagship session): Documents | Helm, for owners, admins and the billing role. */}
+        {seesHelm(String(organizationRole ?? "")) ? (
+          <ModeSwitch
+            mode="documents"
+            organizationId={organization.organization_id}
+            orgSlug={organization.organization_slug}
+            documentsPath={dashboard}
+          />
+        ) : null}
 
         <div className="mx-0.5 hidden h-5 w-px bg-border sm:block" aria-hidden="true" />
 

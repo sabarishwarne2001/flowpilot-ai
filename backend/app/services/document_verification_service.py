@@ -394,7 +394,10 @@ def emit_outcome(
     caused_by: Any = None,
 ) -> Any:
     from app.services import outbox_service
+    from app.services.helm import hooks as helm_hooks
 
+    helm_hooks.document_changed(db, workspace_id=verification.workspace_id,
+                                organization_id=verification.organization_id, reason="document verified")
     releasing = verification.status in (
         VerificationStatus.AGREED,
         VerificationStatus.AUTO_APPROVED,
@@ -547,6 +550,12 @@ def resolve(
     from app.services.extraction_memory import harvest as memory_harvest
 
     memory_harvest.on_review_resolved(db, verification=verification, work_item=work_item)
+
+    # Flagship session: a person's values make the document VERIFIED in Helm's ledger.
+    from app.services.helm import hooks as helm_hooks
+
+    helm_hooks.document_changed(db, workspace_id=verification.workspace_id,
+                                organization_id=verification.organization_id, reason="review resolved")
 
     logger.info(
         "verification.resolved",

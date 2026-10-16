@@ -354,6 +354,53 @@ batch and pack items (FINDINGS.md, "Session 4 (continued) — … unverified"); 
 32 features whose browser coverage is partial (the coverage-gap table in the prompt file); Tailwind 4
 and least-privilege database roles (N-074).
 
+## Flagship session → website and payments session
+
+The flagship session built **Helm** (docs/helm/ARCHITECTURE.md is the design, kept current;
+docs/helm/MANDATES.md lists the mandates in plain words; docs/product/FLAGSHIP.md is the product
+story for the website). Its decisions are N-082 to N-102 in NEEDS-OWNER.md (`DECIDED (owner and
+planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in FINDINGS.md under
+"Flagship session". Migrations `h1a1_helm`, `h1a2_helm_bank`, `h1a3_helm_reconcile`, `h1a4_helm_api_vocabulary` (one head).
+
+**For the website and payments session:**
+- **Plans and copy.** The plan cards already list Helm (`frontend/src/constants/planEntitlements.ts`:
+  `capability.helm`, `limit.helm_mandates`, `limit.helm_backtest_months` and the Enterprise
+  capabilities). Prices did not change (N-082). Use FLAGSHIP.md for the website's Helm page and its
+  "what we never claim" list; screenshots come from the sample company (Meridian Wholesale), which
+  any account can build from Helm → Start and delete afterwards.
+- **The rename to Servabo.** No new "FlowPilot" strings were added; Helm's own strings say "Helm".
+  The sample company's documents name only invented companies.
+- **Payments stay out of Helm.** Helm never moves money (N-088): the payment run is a list a person
+  pays from their bank, and bank statement imports bring the evidence back. Nothing in the payment
+  gateway work should change that.
+- **Mail.** Helm sends through the organization's transactional sender ladder: the Monday briefing,
+  receivables reminders, compliance-document requests, disputes and supplier reconciliations (the
+  last two only in Act mode with a known contact). A new branded email layout must keep
+  `test_emails_render_in_mail_clients.py` green; Helm's notices now carry an "Open Helm" button
+  (`organization_notification_service.APP_ACTIONS`).
+- **Performance.** ARCHITECTURE §13 has the budget measured at 1,000 and 10,000 documents
+  (`tests/performance/test_helm_budgets.py`; `HELM_PERF_DOCUMENTS=10000` reruns the large one).
+  One item is over budget: the ledger update after one document change takes 2.9 s at 10,000
+  documents in a workspace (budget 1 s; within it up to about 2,000). Nobody waits on it (it runs in
+  the worker, debounced), but the next step is a truly incremental ledger: today
+  `ledger_store.rebuild_workspace` re-projects the whole workspace; instead re-project only the
+  promises of the changed document, its counterparty and the bank lines that can match it
+  (`lines_by_amount` already narrows them), and keep the full rebuild as the nightly check that the
+  two agree.
+
+- **API keys and webhooks.** Enterprise keys reach Helm with `helm:read` / `helm:write`; approving and
+  Helm's rules stay with people (N-102). A key now works only in the organization that issued it
+  (F-435): if the developer portal shows keys across organizations, it must keep to that.
+
+**Build on these:**
+- Every Helm decision is deterministic code in `backend/app/services/helm/`; the only model call
+  drafts a mandate from a sentence (`drafting.py`, metered under `llm:helm:`).
+- A bank statement is evidence only when a bank issued it: `ledger.statement_kind` keeps a
+  supplier's statement of account out of payments and cash.
+- Matching a payment to an invoice (bank imports and statement documents alike) uses one rule set,
+  `bank_match.mentions_document` and `mentions_payee`: a whole invoice number, or every distinctive
+  word of the payee; never one shared word.
+
 ## Owner launch checklist
 
 Only you can do these. They are in the order to do them; each says where the detailed steps are.

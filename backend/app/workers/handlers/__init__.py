@@ -94,6 +94,10 @@ TRIAL_JOB_TYPES: frozenset[str] = frozenset({"trial.reminders"})
 USAGE_ALERT_JOB_TYPES: frozenset[str] = frozenset({"usage.limit_alerts"})
 #: Campaign session 4 (§C.4): the deployment's owner is emailed about dead jobs and error bursts.
 OPS_ALERT_JOB_TYPES: frozenset[str] = frozenset({"ops.alerts"})
+#: Flagship session: Helm (docs/helm/ARCHITECTURE.md §10). On the LIGHT profile.
+HELM_JOB_TYPES: frozenset[str] = frozenset(
+    {"helm.ledger_build", "helm.plan", "helm.backtest", "helm.execute", "helm.briefing", "helm.sample"}
+)
 
 #: Every job type this package claims to register, by phase.
 #:
@@ -136,6 +140,7 @@ ALL_PHASE_JOB_TYPES: frozenset[str] = (
     | TRIAL_JOB_TYPES
     | USAGE_ALERT_JOB_TYPES
     | OPS_ALERT_JOB_TYPES
+    | HELM_JOB_TYPES
 )
 
 
@@ -437,6 +442,16 @@ def _usage_limit_alerts(payload: dict[str, Any]) -> dict[str, Any]:
     return handle_limit_alerts(payload)
 
 
+def _helm(job: str):
+    def run(payload: dict[str, Any]) -> dict[str, Any]:
+        from app.workers.handlers import helm
+
+        return getattr(helm, job)(payload)
+
+    run.__name__ = f"_helm_{job}"
+    return run
+
+
 def _operator_alerts(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.operator_alerts import handle_operator_alerts
     return handle_operator_alerts(payload)
@@ -555,6 +570,13 @@ _HANDLERS = {
     "usage.limit_alerts": _usage_limit_alerts,
     # Campaign session 4 (§C.4). On the LIGHT profile; every five minutes in DEFAULT_SCHEDULE.
     "ops.alerts": _operator_alerts,
+    # Flagship session: Helm. On the LIGHT profile (app/workers/profiles.py).
+    "helm.ledger_build": _helm("handle_ledger_build"),
+    "helm.plan": _helm("handle_plan"),
+    "helm.backtest": _helm("handle_backtest"),
+    "helm.execute": _helm("handle_execute"),
+    "helm.briefing": _helm("handle_briefing"),
+    "helm.sample": _helm("handle_sample"),
 }
 
 

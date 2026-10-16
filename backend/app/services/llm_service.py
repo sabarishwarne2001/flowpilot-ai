@@ -1199,6 +1199,55 @@ class LLMService:
         )
         return response.strip(), token_usage
 
+    def structured_answer(
+        self,
+        *,
+        db: Session,
+        organization_id: uuid.UUID,
+        workspace_id: uuid.UUID | None,
+        scope: str,
+        prompt: str,
+        ai_settings: AISettings,
+        details: dict[str, Any] | None = None,
+        temperature: float = 0.0,
+    ) -> tuple[str, TokenUsage]:
+        """One metered generation whose answer the caller parses and checks (Helm's mandate drafting).
+
+        Routed like the assistant (the tenant's own key where it has one), reserved before the call
+        and settled after it, so a spend ceiling raises `SpendLimitExceededError` before any provider
+        is called. `scope` names the call for metering (`llm:helm:…`)."""
+        from app.core.request_context import stage
+        from app.services import llm_metering
+
+        effective, byok_client, credential_use = self.resolve_routing(
+            db=db,
+            organization_id=organization_id,
+            task_type=byok_providers.TASK_ASSISTANT,
+            ai_settings=ai_settings,
+        )
+        reservation = llm_metering.reserve_for_node(
+            db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            work_item_id=None,
+            scope=scope,
+            prompt=prompt,
+            ai_settings=effective,
+            details_extra=details,
+        )
+        with stage("llm", provider=effective.provider.value):
+            response, token_usage = self._execute_query(
+                prompt=prompt,
+                temperature=temperature,
+                ai_settings=effective,
+                byok_client=byok_client,
+                organization_id=organization_id,
+            )
+        if credential_use is not None:
+            reservation.attach_credential_use(credential_use)
+        llm_metering.settle(db, reservation=reservation, token_usage=token_usage)
+        return response.strip(), token_usage
+
     def execute_prompt(
         self, *, prompt: str, temperature: float, ai_settings: AISettings
     ) -> tuple[str, TokenUsage]:

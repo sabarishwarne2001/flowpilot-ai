@@ -304,7 +304,8 @@ def reserve_for_summary(
     )
 
 
-_CALLER_SCOPE_PREFIXES: tuple[str, ...] = ("llm:automation:",)
+#: Flagship session: `llm:helm:` is Helm's mandate drafting (helm/drafting.py), one scope per sentence.
+_CALLER_SCOPE_PREFIXES: tuple[str, ...] = ("llm:automation:", "llm:helm:")
 _VERIFY_SCOPE_MARKER: str = ":verify:"
 
 

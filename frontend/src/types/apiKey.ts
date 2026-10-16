@@ -13,9 +13,14 @@ export const API_KEY_SCOPES = [
   "webhooks:write",
   "webhooks:admin",
   "billing:read",
+  "helm:read",
+  "helm:write",
 ] as const;
 
 export type ApiKeyScope = (typeof API_KEY_SCOPES)[number];
+
+/** Helm's scopes: a key with them reaches Helm only on a plan with capability.helm_api (Enterprise). */
+export const HELM_API_KEY_SCOPES: ReadonlySet<ApiKeyScope> = new Set<ApiKeyScope>(["helm:read", "helm:write"]);
 
 export interface ApiKeyRead {
   readonly id: string;

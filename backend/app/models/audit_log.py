@@ -116,6 +116,15 @@ class AuditResourceType(str, PyEnum):
     SCIM_GROUP = "SCIM_GROUP"
     VERIFIED_DOMAIN = "VERIFIED_DOMAIN"
     DIRECTORY_IDENTITY = "DIRECTORY_IDENTITY"
+    # Flagship session: Helm. Added to the PostgreSQL type by h1a1_helm.
+    HELM_BOOK = "HELM_BOOK"
+    HELM_SETTINGS = "HELM_SETTINGS"
+    HELM_MANDATE = "HELM_MANDATE"
+    HELM_PLAN = "HELM_PLAN"
+    HELM_ACTION = "HELM_ACTION"
+    HELM_BACKTEST = "HELM_BACKTEST"
+    HELM_TASK = "HELM_TASK"
+    HELM_BANK = "HELM_BANK"
 
 
 class AuditAction(str, PyEnum):
@@ -209,6 +218,12 @@ class AuditAction(str, PyEnum):
     MATCH_DISPUTED = "MATCH_DISPUTED"
     MATCH_RESCORED = "MATCH_RESCORED"
     TOLERANCE_PUBLISHED = "TOLERANCE_PUBLISHED"
+    # Flagship session: Helm's decisions on its actions. Added to the PostgreSQL type by h1a1_helm.
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    EXECUTED = "EXECUTED"
+    UNDONE = "UNDONE"
+    BLOCKED = "BLOCKED"
 
 
 _resource_type_pg = PgEnum(

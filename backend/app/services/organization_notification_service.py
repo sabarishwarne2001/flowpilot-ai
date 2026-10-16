@@ -67,6 +67,10 @@ ACTIONS: dict[str, tuple[str, str]] = {
     "identity": ("identity", "Review sign-in settings"),
     "settings": ("settings", "Open organization settings"),
 }
+#: Buttons to pages outside the organization console: Helm's cockpit lives at `/{slug}/helm`.
+APP_ACTIONS: dict[str, tuple[str, str]] = {
+    "helm": ("helm", "Open Helm"),
+}
 
 
 def _action_path(db: Session, organization_id: uuid.UUID, action: Optional[str]) -> tuple[Optional[str], Optional[str]]:
@@ -74,10 +78,12 @@ def _action_path(db: Session, organization_id: uuid.UUID, action: Optional[str])
         return None, None
     from app.models.organization import Organization
 
-    segment, label = ACTIONS[action]
+    segment, label = ACTIONS[action] if action in ACTIONS else APP_ACTIONS[action]
     organization = db.get(Organization, organization_id)
     if organization is None:
         return None, None
+    if action in APP_ACTIONS:
+        return f"/{organization.slug}/{segment}", label
     return f"/organizations/{organization.slug}/{segment}", label
 
 

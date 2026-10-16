@@ -31,6 +31,7 @@ dnspython==2.8.0
 docstring_parser==0.18.0
 durationpy==0.10
 email-validator==2.3.0
+et_xmlfile==2.0.0
 eval_type_backport==0.4.0
 fastapi==0.136.3
 filelock==3.29.5
@@ -90,6 +91,7 @@ oauthlib==4.0.0
 onnxruntime==1.27.0
 openai==2.6.1
 opencv-contrib-python==4.10.0.84
+openpyxl==3.1.5
 opentelemetry-api==1.43.0
 opentelemetry-exporter-otlp-proto-common==1.43.0
 opentelemetry-exporter-otlp-proto-grpc==1.43.0
@@ -190,6 +192,7 @@ websocket-client==1.9.0
 websockets==15.0
 Werkzeug==3.1.9
 wrapt==2.4.1
+xlrd==2.0.2
 xmltodict==1.0.4
 yarl==1.24.2
 zxcvbn==4.5.0

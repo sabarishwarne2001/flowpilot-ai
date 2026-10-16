@@ -32,7 +32,8 @@ import { Loader2 } from "lucide-react";
 
 import { ROUTES } from "@/constants/routes";
 import { useTenant } from "@/hooks/useTenant";
-import { toTenantPath, workspaceSettingsPath } from "@/routes/tenantPaths";
+import { helmPath, toTenantPath, workspaceSettingsPath } from "@/routes/tenantPaths";
+import { readLastPath, readMode, seesHelm } from "@/components/helm/modeMemory";
 import { useLoginRedirect } from "@/routes/useLoginRedirect";
 
 /** Flat addresses of the personal profile, before it became Settings → Profile. */
@@ -93,6 +94,14 @@ export const LegacyRouteRedirect: React.FC = () => {
             replace
           />
         );
+      }
+
+      // Helm (the flagship session): the mode switch remembers the last mode per browser, so the
+      // bare root returns an owner, admin or billing member to Helm when that is where they were.
+      if (location.pathname === "/" && readMode() === "helm" && seesHelm(String(state.organizationRole ?? ""))) {
+        const remembered = readLastPath(state.organization.organization_id, "helm");
+        const root = helmPath(state.organization.organization_slug);
+        return <Navigate to={remembered && remembered.startsWith(root) ? remembered : root} replace />;
       }
 
       const target = toTenantPath(

@@ -326,6 +326,11 @@ def delete_work_item(db: Session, *, db_obj: WorkItem) -> None:
     """
     from app.models.uploaded_file import UploadedFile
     from app.services import storage_cleanup
+    from app.services.helm import hooks as helm_hooks
+
+    # Flagship session: the deleted document's promises go with it (foreign keys); the rest of the
+    # workspace's ledger (statement matches, credits) is rebuilt.
+    helm_hooks.document_changed(db, workspace_id=db_obj.workspace_id, reason="document deleted")
 
     keys: list[str] = []
     uploaded = (

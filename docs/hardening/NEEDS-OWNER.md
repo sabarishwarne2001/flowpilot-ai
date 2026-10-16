@@ -1332,3 +1332,254 @@ All **DECIDED (campaign session 4)**; each is listed in `NEXT-SESSION-PROMPT.md`
   and suspended organizations more accurately (only support can lift a suspension).
 - **The PAN card pack** gets a second recognising phrase ("income tax department") so a real PAN card
   is matched.
+
+## Helm, the flagship engine (flagship session, 2026-10-14 onwards)
+
+The brief for the flagship session took eight decisions with the owner before it started; they are
+recorded here as given and are not reopened. Decisions taken during the build follow them, each
+marked `DECIDED (flagship session)`.
+
+## N-078 — What Helm is (DECIDED (owner and planning chat, 2026-10-15))
+
+Workflows say "when X happens, do Y". Helm replaces that with **outcome control**: the company
+states outcomes and hard limits, called **mandates** ("never pay above the agreed price", "keep
+cash above ₹10 lakh", "pay micro and small suppliers within the legal limit"), and Helm keeps the
+business inside them all the time, like a thermostat or a fund manager under a written mandate
+with pre-trade compliance. Its five parts are always named the **Promise ledger**, **Mandates**,
+the **Planner**, the **Guard** and the **Time machine**.
+
+## N-079 — The deterministic core decides; AI only assists (DECIDED (owner and planning chat, 2026-10-15))
+
+Every decision, check, plan and number comes from deterministic code (ledger rules, the optimiser,
+the simulation, the Guard). AI, through the platform's existing models and metered as today, only
+turns a sentence into a mandate draft, which deterministic code then validates. Explanations are
+deterministic templates. Helm works fully with AI switched off or the model stand-in.
+
+## N-080 — Zero external cost (DECIDED (owner and planning chat, 2026-10-15))
+
+Only existing dependencies: `scipy.optimize.milp` (HiGHS, inside SciPy) for the optimiser, NumPy
+for the simulation, reportlab for PDFs. No new paid service and no external data feeds. No
+currency conversion: each currency is planned on its own.
+
+## N-081 — Money never moves inside Helm (DECIDED (owner and planning chat, 2026-10-15))
+
+Helm decides, prepares, holds, schedules, reminds, requests and proves. Paying happens in the
+customer's bank or accounting system, through a payment run list a person executes (or the
+existing ERP posting where the customer uses it). No bank payment files in this version: they would
+carry full account numbers and are a fraud target.
+
+## N-082 — Which plans get Helm (DECIDED (owner and planning chat, 2026-10-15))
+
+- **Business:** Helm with the library mandates, Propose and Act modes, a 6-month backtest, a
+  90-day forecast and up to 15 active mandates.
+- **Enterprise:** adds unlimited mandates, custom condition mandates, approval chains, planning
+  across all workspaces, a 24-month backtest, API access and webhooks.
+- **Trial and Developer:** **Helm preview**: the sample company, one backtest a week on their own
+  documents of up to 3 months, and an upgrade path. Read-only apart from that backtest and opening
+  the sample company.
+- Prices do not change. New capability `capability.helm` and `limit.*` rows through the existing
+  seeds, plan cards and `TENANCY-AND-PLANS.md`.
+
+## N-083 — Who Helm is for first (DECIDED (owner and planning chat, 2026-10-15))
+
+Mid-sized companies that buy from many suppliers (distributors and wholesalers, manufacturers,
+logistics and transport, construction and contracting, multi-branch retail, restaurants and
+clinics; typically 50–1,000 people with a small finance team), and accounting and bookkeeping firms
+that run payables for such clients, with one workspace per client. India first (INR, GST invoices,
+the MSMED Act payment limits, income-tax section 43B(h)); global-ready (any currency and locale;
+India-specific rules sit in an "India" mandate pack). Not the first target: tiny shops with no
+purchase orders or contracts, and large enterprises with long security reviews.
+
+## N-084 — Safety defaults (DECIDED (owner and planning chat, 2026-10-15))
+
+New mandates start in Propose mode. Act mode runs actions only up to an amount cap an organization
+owner or admin sets per mandate; the default cap is 0, so payments always ask. The Guard re-checks
+every action at execution time. Every action and decision is in the audit log. Helm shows how much
+of the business it can see (a visibility meter) and never presents a guess as a fact.
+
+## N-085 — Truthful claims (DECIDED (owner and planning chat, 2026-10-15))
+
+"Value held" counts only outcomes backed by evidence; projections are labelled "potential". Helm
+gives recommendations, not financial or tax advice; the MSMED / 43B(h) mandate links to the law and
+says so.
+
+## N-086 — Books: whose business Helm runs (DECIDED (flagship session))
+
+Helm keeps one "book" per workspace on Business; Enterprise may also keep one book for all its
+workspaces together. The sample company has its own book in its own labelled workspace, which never
+counts towards the plan's workspace limit and can be deleted (it is archived). A Helm-preview
+backtest on a lower plan creates a read-only book that never plans or acts.
+
+## N-087 — Who sees and does what in Helm (DECIDED (flagship session))
+
+Owners and admins see Helm and decide (mandates, act caps, approvals). The billing role sees
+everything, approves payment actions, records payments and imports bank statements (it is the
+finance contact). Members never see Helm mode; they receive the tasks Helm assigns them in the
+review hub. The Documents | Helm switch remembers the last mode per browser.
+
+## N-088 — How a payment leaves Helm (DECIDED (flagship session))
+
+Helm never moves money. It hands over a **payment run list** (date, payee, masked account, amount,
+invoice, certificate; downloadable as CSV) for the bank or the accounting system. The platform's
+ERP model has no payment-date or hold field on a supplier bill, so the list is the hand-over; Helm
+writes no bank payment files.
+
+## N-089 — How holds end (DECIDED (flagship session))
+
+A hold Helm placed ends when its reason is gone (for example the duplicate finding was dismissed):
+Helm proposes releasing it, and the release is guarded, certified and undoable like any action. A
+person who settles a "missing purchase order" task as done waives that reason for that invoice for
+good.
+
+## N-090 — First run and examples (DECIDED (flagship session))
+
+Setup is four steps: who we are, the cash, the kind of business (distributor, manufacturer,
+logistics, construction, multi-branch retail/restaurants/clinics, accounting firm, other) with the
+mandates recommended for it, and an automatic replay. A gallery value with no default (a cash floor,
+a PO threshold) is an **example**: Helm never saves or replays it as the owner's own number; the
+owner must set it.
+
+## N-091 — The Monday briefing (DECIDED (flagship session))
+
+09:00 on Monday in the book's workspace time zone (an all-workspaces book uses its organization's
+oldest workspace), to the organization's owners and admins who have not turned it off; once a week;
+never for the sample company. It links to the cockpit and to the person's own notification
+preferences.
+
+## N-092 — Writing a mandate from a sentence (DECIDED (flagship session))
+
+On Business a sentence maps only to library mandates (Enterprise adds custom conditions). The AI's
+answer is checked strictly; it never sets how a mandate acts (every new mandate starts in Propose
+mode); suppliers it names are matched to the book's own, and an unknown one is named, not guessed.
+When the AI is unavailable or unsure, the gallery's closest mandates are offered. The call is
+metered like an assistant message and refused cleanly (402) when the AI usage limit is reached.
+
+## N-093 — Replays and their honesty classes (DECIDED (flagship session))
+
+A replay counts value in three classes that are never added together: confirmed (evidence shows it
+happened), likely, and potential (facts are missing). Business replays 6 months, Enterprise 24,
+Helm preview 3 months once a week; the sample company may be replayed whole (9 months) on any plan.
+
+## N-094 — The sample company (DECIDED (flagship session))
+
+Meridian Wholesale Pvt Ltd, an invented Pune distributor, built on request in each organization
+from nine months of generated documents that the platform's own engines read. Its planted problems
+(overcharges, a duplicate paid twice, a bank-account change, late MSME payments, missed discounts, a
+missed renewal, an expired certificate, late customers, a cash dip) are exactly what its replay
+finds. Invented names only; it is also the data for the website's screenshots.
+
+## N-095 — Bank statement import (DECIDED (flagship session); owner addition A)
+
+- Files: CSV and Excel (.xlsx with openpyxl, MIT licence; old .xls with xlrd, BSD licence); both are
+  free, local libraries, no service is called. Up to 5 MB and 20,000 lines a file.
+- Accounts: a name, the currency and only the **last four digits** of the number. The column
+  mapping is confirmed once by a person and saved for the account.
+- Duplicates: the same file twice adds nothing; an overlapping period adds only lines not seen
+  before (two identical payments on one day stay two).
+- Cash: an import's closing balance becomes that account's cash. Two accounts in one currency are
+  **added together**; the total is only as current as its oldest part; a figure a person typed on
+  the same day wins.
+- Matching by itself only when the evidence leaves one answer: the exact amount (or the amount less
+  its early-payment discount); the invoice number, or the payee's name within the date window of a
+  payment Helm scheduled or a person approved; one invoice only, claimed by one line only. Money in
+  settles invoices owed to us the same way. Everything else is suggested to a person, with the
+  reasons; a suggestion to an invoice Helm held warns that the hold may not have stopped the
+  payment. Part payments are not matched (recorded with "Record paid").
+- A match is an ordinary "Record paid" action with the bank line as its evidence: guarded,
+  certified, audited and undoable; reopening a line undoes it.
+
+## N-096 — Supplier statement reconciliation (DECIDED (flagship session); owner addition B)
+
+- A statement of account from a supplier is **never** read as a bank statement: it does not mark
+  invoices paid and its balance is not cash. When nothing on a statement says whose it is, it is
+  treated as a bank's, as before.
+- Each month (statements dated in the last 45 days), every supplier statement is compared with the
+  ledger of its workspace. Differences up to ₹1 (or 1 unit of the currency) are rounding; the owner
+  can change both in the mandate.
+- Helm drafts one reconciliation email per statement that differs, written to the supplier ("your
+  statement lists…"), never mentioning Helm. It is sent only in Act mode to a known contact, and only
+  after a person approves when the statement's facts were not checked. A rejected or sent draft is
+  not proposed again for the same statement.
+- The mandate claims no "value held": reconciling prevents paying twice or paying what is not owed,
+  but no amount is counted until it is proven.
+
+## N-097 — The guided tour (DECIDED (flagship session); owner addition C)
+
+- On the sample company only, six steps, started from Start or the sample's cockpit; it never runs
+  on a customer's own book. The step lives in the page address, nothing is stored.
+
+## N-098 — Approval chains (DECIDED (flagship session); Enterprise, box 7)
+
+- A chain is a list of tiers per book: above an amount in one currency, a payment needs 2 or 3
+  approvals from different people, optionally only from chosen roles (owner, admin, billing). The
+  highest tier that applies decides. Holds, releases, recording a payment and anything that moves no
+  money keep one approval. Helm's own approval (Act mode) never counts towards a chain, whatever the
+  act cap.
+- A chain the organization's active members could never meet is refused when it is typed. A saved
+  chain the organization later cannot meet (someone left or changed role) is kept and the settings
+  page warns; those payments wait.
+- An approval counts with the role the person had when they gave it; an approval from someone who
+  later leaves still counts (it was valid when given and is in the audit log).
+- A partial approval does not carry over when a re-plan replaces the action with a different one (a
+  changed amount or date is a new decision).
+- Raising a chain applies at once; lowering it applies after the re-plan the change triggers.
+- Below Enterprise a saved chain stays stored and stops applying; it applies again after an upgrade.
+- The same person approving twice gets a clear "ask someone else" (409), not a silent no-op.
+
+## N-099 — Custom condition mandates (DECIDED (flagship session); Enterprise, box 7)
+
+- A rule is one to eight rows of fact, comparison and value over a closed list of an invoice's facts,
+  with one outcome: hold, ask a person before paying, or notify. Several may be active at once.
+- After a move to Business a rule already in force keeps working (holding what it matches) until a
+  person pauses or archives it; it cannot be edited or switched back on, and new ones are refused.
+  Turning a working safety rule off silently on a downgrade would be worse than keeping it.
+- The MSME fact means micro or small (the MSMED Act's 45-day rule), not medium.
+
+## N-100 — What if… (DECIDED (flagship session); box 7)
+
+- On every plan that has Helm (Business and above, and the sample company), for owners, admins and
+  billing: a what-if saves nothing and moves nothing, so it needs no Enterprise gate.
+- Three levers only for now: a one-off cash change, customers paying later (0 to 90 days), invoices
+  held out of the plan. More levers (a lost customer, a price rise) can follow once owners ask.
+
+## N-101 — The replay as a PDF (DECIDED (flagship session); box 7)
+
+- the replay PDF is available wherever the replay can be read, on every plan:
+  Helm preview downloads its own preview replay, and every plan can download the sample company's replay.
+  The plan's replay rules (3 / 6 / 24 months, preview once a week) apply when the replay is run, not when it
+  is downloaded, because the PDF holds nothing the page does not already show.
+- a replay run on a bigger plan stays downloadable after a downgrade, as the
+  replay itself stays readable. It was within the plan when it ran, and it is the customer's own data.
+- a replay that failed gets a 409 (`BACKTEST_FAILED`, "could not finish …, so
+  there is no report to download. Replay the period again."), not a 404. The replay exists; its state is
+  what blocks the report. A running replay also gets a 409 (`BACKTEST_NOT_FINISHED`).
+- a Billing member who cannot read the book's workspace gets the PDF with the
+  totals, the mandates and what Helm could not see, but no findings, plus a sentence saying why. This
+  matches what the page shows them.
+- money in the PDF uses the screen's symbol when Helvetica can draw it ($, €, £)
+  and the currency code otherwise ("INR 1,23,456.00"; "₹2.4 lakh" in a summary becomes "INR 2.4 lakh").
+  Embedding a font with the rupee glyph would mean shipping a font file in the image. The code is also
+  unambiguous for an accountant.
+- the file name is `helm-replay-<book name, ASCII>-<start>-to-<end>.pdf`.
+  Accents are dropped and other scripts fall back to "book", so no browser or mail client mangles it. The
+  page uses the same name, taken from the replay's JSON, because the browser cannot read
+  `Content-Disposition` cross-origin (it is not in `CORS_EXPOSED_HEADERS`).
+- each download is audited as an export (`HELM_BACKTEST` / `EXPORTED`) with the
+  fingerprint, `findings_listed` and the size. This follows the other data exports (corroboration, tables,
+  obligations, audit log). The certificate JSON download is not audited today; that was left as it is.
+
+## N-102 — Helm through API keys and webhooks (DECIDED (flagship session); Enterprise, box 7)
+
+- A key may feed Helm facts and ask it to work (cash positions, an invoice marked paid, bank accounts
+  and statements, a re-plan, a mandate preview, a what-if, the Time machine and its PDF). It may not
+  decide or set Helm's rules: approving, rejecting or undoing an action, books, settings,
+  counterparties, mandates and the sample company stay with people, refused in words whatever the
+  key holds. Approving a payment is a person's act.
+- `helm:read` for every read, `helm:write` for the writes a key may make, previews and what-if
+  included (they are POSTs that save nothing).
+- A member's key never carries Helm's scopes; a billing member's key only `helm:read`.
+- Three events: a new plan, an action that ran, a mandate newly breached. Never for the sample
+  company. Payloads carry ids, kinds, states, counts, dates and money in micros with its currency;
+  never document text, a person's or supplier's name, an explanation or a mandate's sentence.
+- Every refusal of a key is audited (rate-limited summary rows past 50 an hour).
+

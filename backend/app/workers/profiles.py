@@ -195,6 +195,15 @@ LIGHT = WorkerProfile(
             # bookkeeping (see above).
             "truthmesh.index_document",
             "truthmesh.rebuild_workspace",
+            # Flagship session: Helm. The ledger is SQL and deterministic rules; the plan is
+            # scipy.optimize.milp (HiGHS, inside SciPy) and NumPy; execution writes rows and sends mail
+            # through the existing services; the backtest replays stored facts; the briefing is SMTP.
+            # No model, OCR or PDF engine. Not optional bookkeeping (see above).
+            "helm.ledger_build",
+            "helm.plan",
+            "helm.backtest",
+            "helm.execute",
+            "helm.briefing",
         }
     ),
     allow_heavy=frozenset(),
@@ -252,6 +261,8 @@ ENRICH = WorkerProfile(
     job_types=frozenset({
         "document.enrich",
         "knowledge.reindex",
+        # Flagship session: building Helm's sample company embeds its documents for the radar.
+        "helm.sample",
         # ARCH45-S1:corroboration-enrich-profile. Clause alignment encodes
         # clauses with the platform's SentenceTransformer, which only this
         # profile (and ALL) may import; LIGHT forbids it and OCR does not

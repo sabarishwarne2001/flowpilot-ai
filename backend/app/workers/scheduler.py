@@ -247,6 +247,28 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
             "score_case writes nothing when the digest is unchanged."
         ),
     ),
+    # Flagship session: Helm (docs/helm/ARCHITECTURE.md §10).
+    ScheduledJob(
+        job_type="helm.ledger_build",
+        interval_seconds=86_400,
+        at_hour=2,
+        at_minute=40,
+        payload={"full": True},
+        description=(
+            "Rebuild every Helm Promise ledger from its documents (the nightly full rebuild; it writes "
+            "the same rows the incremental updates did, and refreshes promises that time has changed)."
+        ),
+    ),
+    ScheduledJob(
+        job_type="helm.plan",
+        interval_seconds=3_600,
+        description="Re-plan every Helm book hourly (kept as is when nothing changed).",
+    ),
+    ScheduledJob(
+        job_type="helm.briefing",
+        interval_seconds=3_600,
+        description="Send Helm's Monday briefing at 09:00 in each organization's time zone.",
+    ),
 )
 
 

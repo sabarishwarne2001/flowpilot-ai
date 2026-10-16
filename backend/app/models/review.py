@@ -83,6 +83,9 @@ REVIEW_KIND_OBLIGATION: str = "OBLIGATION"
 #: acknowledged with different figures, or whose outcome is unknown
 #: (erp_postings.state); arch47_step1_erp_posting widens the CHECK and the view.
 REVIEW_KIND_POSTING: str = "POSTING"
+#: Flagship session: tasks Helm opened for a person (helm_tasks); h1a1_helm widens the CHECK and
+#: the view.
+REVIEW_KIND_HELM: str = "HELM"
 
 REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_EXTRACTION,
@@ -94,6 +97,7 @@ REVIEW_KINDS: tuple[str, ...] = (
     REVIEW_KIND_CORROBORATION,
     REVIEW_KIND_OBLIGATION,
     REVIEW_KIND_POSTING,
+    REVIEW_KIND_HELM,
 )
 
 _KIND_SQL_IN = ", ".join(f"'{kind}'" for kind in REVIEW_KINDS)
@@ -158,5 +162,6 @@ __all__ = [
     "REVIEW_KIND_ANOMALY",
     "REVIEW_KIND_ASSERTION",
     "REVIEW_KIND_EXTRACTION",
+    "REVIEW_KIND_HELM",
     "ReviewAssignment",
 ]

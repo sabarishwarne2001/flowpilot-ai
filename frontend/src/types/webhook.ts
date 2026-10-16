@@ -1,5 +1,7 @@
 /**
- * Mirrors app/core/webhook_events.py::WEBHOOK_EVENT_TYPES.
+ * Mirrors app/core/webhook_events.py::WEBHOOK_EVENT_TYPES, less `workflow.triggered` (a workflow
+ * rule names the endpoint it posts to; nothing subscribes to it). The backend test
+ * tests/core/test_webhook_event_list_mirrors_backend.py keeps the two lists equal.
  */
 export const WEBHOOK_EVENT_TYPES = [
   "organization.updated",
@@ -24,9 +26,24 @@ export const WEBHOOK_EVENT_TYPES = [
   "document.processing",
   "document.completed",
   "document.failed",
+  "procurement.completed",
+  "procurement.approved",
+  "procurement.disputed",
+  "anomaly.detected",
+  // Helm (Enterprise): ids and figures only.
+  "helm.plan.ready",
+  "helm.action.executed",
+  "helm.mandate.breached",
 ] as const;
 
 export type WebhookEventType = (typeof WEBHOOK_EVENT_TYPES)[number];
+
+/** Helm's events: sent only on a plan with capability.helm_api (Enterprise). */
+export const HELM_WEBHOOK_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "helm.plan.ready",
+  "helm.action.executed",
+  "helm.mandate.breached",
+]);
 
 export interface WebhookEndpoint {
   readonly id: string;

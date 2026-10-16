@@ -1,8 +1,90 @@
 # Hardening campaign — STATE
 
-_Last updated: 2026-10-14 (pre-launch campaign, session 4 of 4 complete; what is left is in `docs/hardening/NEXT-SESSION-PROMPT.md`)_
+_Last updated: 2026-10-16 (flagship session: Helm, finished; PR #24 ready for review)_
 
-## Current phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
+## Current phase — Flagship session: Helm, the flagship engine
+Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
+(PR #23, campaign session 4, is merged). Draft PR titled `Helm: the flagship engine`. The owner gave
+full founder authority: decisions are built and recorded in NEEDS-OWNER.md as
+`DECIDED (flagship session)`; the brief's own decisions as `DECIDED (owner and planning chat,
+2026-10-15)`. The design is `docs/helm/ARCHITECTURE.md`. **If this session is cut off, paste the same
+prompt again: continue on this branch and its open pull request, from the first unticked box
+below. Never restart.**
+
+**Build checklist (the brief's §12 order; each defect proven by a failing test first):**
+- [x] 0. Start-up: docs read, engines studied, live stack up (Postgres 16 + pgvector 0.8.0 on
+  :5433 for e2e and :5434 for backend tests, Redis, API, worker `--loop all --profile all`, model
+  stand-in), `docs/helm/ARCHITECTURE.md` written, draft PR opened.
+- [x] 1. Skeleton: migration `h1a1_helm`; payables ledger, settlement and cash; mandates 1, 2, 5, 7;
+  the MILP and the Guard with certificates; `helm.plan`; mode switch, minimal cockpit, approving one
+  action; one browser test (`78-helm-skeleton`). Push, checkpoint here, whole backend suite (run:
+  4,576 passed, 5 failed: all five were Helm breaking platform contracts, fixed and re-run green).
+- [x] 2. Widen the ledger: receivables, POs and deliveries, discounts, notices, compliance
+  documents, MSME detection, counterparty behaviour (built with the skeleton; consistent snapshot
+  reads proven live).
+- [x] 3. The rest of the library (3, 4, 6, 8–12) and the simulation; hold releases and waivers.
+- [x] 4. Time machine (backtest, forecast, value held) and the sample company
+  (`backend/scripts/helm_demo_company.py`): its backtest finds exactly what was planted, to the paisa.
+- [x] 5. Sentence drafting, readback, the validator, the gallery, autonomy and caps, approvals
+  (`POST …/mandates/draft`, the Mandates composer and editor, spec 79; the Time machine page too).
+- [x] 6. Experience: full cockpit and visual identity, first run, Monday briefing email, preview and
+  upsell, the Overview card (instrument trends, the flight path scrubbing into a replay's past,
+  `/helm/setup`, the sample company button, the Overview card, plan-card limits; specs 78–80).
+- Owner additions (2026-10-15, after box 6), built before box 7:
+  - [x] A. Bank statement import: CSV or Excel with a column mapping saved per bank account; cash
+    positions; automatic matching of payments to scheduled or approved invoices (amount, date
+    window, reference or payee) so "paid" and "value held" rest on evidence; unmatched lines listed.
+    (`h1a2_helm_bank`, ARCHITECTURE §16, spec 81. An adversarial review found 34 issues: memory
+    and zip-bomb limits, workspace read rules, rejected matches re-made, loose payee matching,
+    newest-first balances, discount windows, value events surviving an undo, …; each was proven by
+    a failing test and fixed before the first commit.)
+  - [x] B. Supplier statement reconciliation mandate: monthly, every supplier statement against the
+    Promise ledger, differences with evidence, a drafted reconciliation email. (Found and fixed
+    first, proven by a failing test: a supplier's statement of account was read as a bank's, so it
+    marked their invoices PAID and counted what we owe them as our cash. `h1a3_helm_reconcile`,
+    library mandate 13, ARCHITECTURE §17, live test on the sample company's planted statement.)
+  - [x] C. A guided Helm tour on the sample company (instruments, plan, Guard certificate, Time
+    machine) for demos and first-time users. (ARCHITECTURE §18, spec 82.)
+  - [x] D. If time remains: more hardening tests and a performance run at 10,000 documents.
+    (`tests/performance/test_helm_budgets.py`, ARCHITECTURE §13: the plan, the simulation and the
+    reconciliation are within budget at 10,000 documents; the ledger update after one change is
+    not, 2.9 s against 1 s, above about 2,000 documents a workspace: next step in HANDOFF. The run
+    found F-423, F-424 and F-425. Spec 83 checks every Helm page for accessibility and widths.)
+- [x] 7. Should-ship: custom condition mandates, approval chains, backtest PDF, what-if, webhooks and
+  API scopes. (ARCHITECTURE §11, §14.6, §19–§21; N-098 to N-102; spec 84 walks what-if, a custom
+  condition and the approval chain, spec 80 downloads the replay PDF. Found and fixed, each proven
+  by a failing test first: F-429 to F-437, among them an API key that opened every organization its
+  issuer belonged to (F-435, High) and a payment Helm approved in Act mode that still ran after an
+  approval chain was saved (F-438).)
+- [x] 8. Hardening: isolation sweep (user and API key), role matrix, double clicks and concurrency,
+  worker gates, performance budget, accessibility and widths, logs clean.
+  (`test_helm_role_matrix_live.py`, `test_helm_api_scopes_live.py`, `test_helm_concurrency_live.py`
+  (every Helm write sent 3 to 8 times at once), `test_helm_worker_gates_live.py`, the 10,000-document
+  budget (§13), spec 83. The concurrency and gate tests failed 23 times before their fixes: F-439
+  to F-441. COVERAGE.csv has a row for every Helm route, page, job and migration.)
+- [x] 9. Finish (§13): full backend and browser suites, frontend checks, one Alembic head with
+  up/down/up, live proof on the sample company, `docs/product/FLAGSHIP.md`, HANDOFF sections,
+  `docs/helm/MANDATES.md`, NEEDS-OWNER, FINDINGS, COVERAGE, PR ready, final message.
+
+**Progress (2026-10-15, after box 6):** boxes 1–6 done and pushed; CI green on c2b87d3. Fixed, each proven by a
+failing test first: a plan could read half of a ledger rebuild; a failing hand left its action
+stuck EXECUTING; undo lost a settlement's evidence; Helm's notice switches were shown to members and
+the briefing could not be turned off; `helm_plans.conflict` stored JSON null; the dispute email
+crashed the escape contract; the ledger paged on a non-unique key; the ledger keyed counterparties
+by name only (two suppliers with one name merged); the sample workspace counted against
+`limit.workspaces`. CI run 260's browser failure was spec 78 assuming which of two invoices the
+radar marks (it depends on which the worker reads last): the spec now checks both orders.
+Box 5 also fixed, each proven by a failing test first: a gallery mandate with no default (cash
+floor, PO threshold) was saved and backtested with the gallery's example as if the owner had chosen
+it; editing an active mandate was called a duplicate of itself. Box 6 fixed the Monday briefing's
+links (no such page /helm/cockpit; "turn it off" went to the organization's page; the HTML had no
+opt-out link). **Next:** owner addition A (bank statement import), then B, C, then box 7.
+The full backend suite takes ~45 min on this sandbox; never edit backend code while it runs
+(lazily imported modules load mid-run). Restart the e2e stack (`E2E_LLM=1
+frontend/e2e/scripts/start-stack.sh`) after backend changes, and run browser specs with
+`npx playwright test -c e2e/playwright.config.ts <spec>` from `frontend/`.
+
+## Previous phase — Pre-launch campaign, session 4 of 4: experience, performance, operations, certification
 Branch `claude/kind-hamilton-5lpp19` (the session's assigned branch), based on `main` at `6802a2b`
 (PR #22, session 3, is merged; HANDOFF.md has "Session 3 → later sessions"). Draft PR titled
 `Campaign session 4: experience, operations and launch certification`. Owner delegated founder
@@ -542,3 +624,10 @@ The exact spend is not visible from inside the session; check your usage page.
   https://console.groq.com/docs/deprecations before adding a model to `app/core/ai_models.py`.
 - Sessions live in the `sessions` table; a refresh that fails revokes the family, so a script that
   ages a session and refreshes loses its access token too.
+- **The sandbox's databases live in memory** (`/dev/shm/pgdata` :5433 for e2e, `/dev/shm/pgdata2`
+  :5434 for backend tests): a container restart wipes them. Recreate both clusters with
+  `initdb --encoding=UTF8 --locale=C.UTF-8` (the container's POSIX locale otherwise gives
+  SQL_ASCII and the tests fail on the first non-ASCII character), the `vector` extension, the
+  `flowpilot` role and the `flowpilot_test` / `flowpilot_e2e` databases, and start Redis; then
+  `start-stack.sh` migrates. On a fresh e2e database the very first browser run can fail with
+  `UnmappableTierError` (the seed publishes the plans at that instant); the next run passes.

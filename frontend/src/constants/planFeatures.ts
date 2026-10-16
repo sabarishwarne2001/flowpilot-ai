@@ -52,6 +52,12 @@ export const PLAN_FEATURE_LABELS: Record<PlanFeatureKey, string> = {
   [CAPABILITY.semanticAssertions]: "Semantic clause assertions",
   [CAPABILITY.enterpriseIdentity]: "Enterprise SAML SSO & SCIM directory sync",
   [CAPABILITY.prioritySlo]: "Priority 99.9% SLO",
+  // HELM:plan-feature-labels
+  [CAPABILITY.helm]: "Helm outcome control (a ledger of every promise in your documents, mandates that must stay true, a payment plan that respects them, every action checked and certified; never moves money)",
+  [CAPABILITY.helmCustom]: "Helm custom condition mandates",
+  [CAPABILITY.helmApprovalChains]: "Helm approval chains (a second approver above an amount you set)",
+  [CAPABILITY.helmAllWorkspaces]: "Helm planning across every workspace",
+  [CAPABILITY.helmApi]: "Helm API and webhooks",
   // N-021:plan-feature-label
   [CAPABILITY.byok]: "Bring your own AI key (your OpenAI, Anthropic, Groq, Azure OpenAI, Mistral or Gemini account, routed per task)",
 };
@@ -77,6 +83,8 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.tableIntelligence,
   // PHASE1:plan-feature-order — Business and Enterprise (owner decision N-032).
   CAPABILITY.batchDispatch,
+  // HELM:plan-feature-order — Helm leads the Business card (owner decision N-078).
+  CAPABILITY.helm,
   // PHASE2:plan-feature-order — Business and Enterprise (owner decision N-033).
   CAPABILITY.truthmesh,
   // ARCH46-S2:plan-feature-order — Business and Enterprise.
@@ -96,6 +104,11 @@ export const PLAN_FEATURE_ORDER: readonly PlanFeatureKey[] = [
   CAPABILITY.processIntelligence,
   // ARCH50-S2:plan-feature-order — Enterprise only.
   CAPABILITY.egressLockdown,
+  // HELM:plan-feature-order — Enterprise only.
+  CAPABILITY.helmCustom,
+  CAPABILITY.helmApprovalChains,
+  CAPABILITY.helmAllWorkspaces,
+  CAPABILITY.helmApi,
   CAPABILITY.prioritySlo,
 ];
 

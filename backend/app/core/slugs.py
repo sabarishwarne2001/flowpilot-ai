@@ -109,6 +109,10 @@ RESERVED_SLUGS: frozenset[str] = frozenset(
         "documents",
         "graphql",
         "health",
+        # Flagship session: Helm lives at `/:orgSlug/helm/…`, the workspace position. A workspace
+        # slugged "helm" would be shadowed by it, so the slug is reserved (the h1a1 migration renames
+        # any existing one) and the frontend's parseTenantPath reads the segment as Helm's.
+        "helm",
         "integrations",
         "invitation",
         "invitations",

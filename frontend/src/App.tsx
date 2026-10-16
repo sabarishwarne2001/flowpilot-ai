@@ -89,6 +89,19 @@ const PlatformLayout = lazy(() => import("@/layouts/PlatformLayout"));
 // Their guards start the download while the tenant resolves.
 const DashboardLayout = lazy(() => import("@/layouts/DashboardLayout"));
 const OrganizationLayout = lazy(() => import("@/layouts/OrganizationLayout"));
+// HELM:routes. Helm, the flagship engine: a mode with its own layout (brief §10.1).
+const HelmLayout = lazy(() => import("@/layouts/HelmLayout"));
+const HelmCockpit = lazy(() => import("@/pages/helm/HelmCockpit"));
+const HelmPlan = lazy(() => import("@/pages/helm/HelmPlan"));
+const HelmMandates = lazy(() => import("@/pages/helm/HelmMandates"));
+const HelmLedger = lazy(() => import("@/pages/helm/HelmLedger"));
+const HelmTimeMachine = lazy(() => import("@/pages/helm/HelmTimeMachine"));
+const HelmBank = lazy(() => import("@/pages/helm/HelmBank"));
+const HelmCertificates = lazy(() => import("@/pages/helm/HelmCertificates"));
+const HelmCertificate = lazy(() => import("@/pages/helm/HelmCertificates").then((m) => ({ default: m.HelmCertificate })));
+const HelmSettings = lazy(() => import("@/pages/helm/HelmSettings"));
+const HelmStart = lazy(() => import("@/pages/helm/HelmStart"));
+const HelmFirstRun = lazy(() => import("@/pages/helm/HelmFirstRun"));
 const ExecutionTimeline = lazy(
   () => import("@/pages/Automation/ExecutionTimeline"),
 );
@@ -180,6 +193,7 @@ import { PrivateRoute } from "@/routes/PrivateRoute";
 import { PublicRoute } from "@/routes/PublicRoute";
 import { SessionBootstrap } from "@/routes/SessionBootstrap";
 import OrganizationGuard from "@/routes/OrganizationGuard";
+import HelmGuard from "@/routes/HelmGuard";
 // F-008 / F-053 / F-054: role screens instead of 403 error pages.
 import { BILLING_READERS, OWNERS_AND_ADMINS, RequireOrganizationRole } from "@/routes/RequireOrganizationRole";
 import { RequireWorkspaceRole } from "@/routes/RequireWorkspaceRole";
@@ -454,6 +468,30 @@ function AppRoutes() {
               <Route key={`${prefix}/*`} path={`/${prefix}/*`} element={<LegacyRouteRedirect />} />,
               <Route key={`${prefix}/:legacySub`} path={`/${prefix}/:legacySub`} element={<LegacyRouteRedirect />} />,
             ])}
+
+            {/* HELM:route-shell. `/:orgSlug/helm/…` (brief §10.1). After the legacy redirects, so
+                `/work-items/helm` stays a legacy address (equal rank: the earlier route wins); it
+                outranks the workspace shell below because "helm" is a static segment.
+                OrganizationGuard resolves the organization from the address; HelmGuard admits
+                owners, admins and the billing role. */}
+            <Route path={ROUTE_PATTERNS.helmShell} element={<OrganizationGuard />}>
+              <Route element={<HelmGuard />}>
+                <Route element={<HelmLayout />}>
+                  <Route index element={<HelmCockpit />} />
+                  <Route path={ROUTE_PATTERNS.helmPlan} element={<HelmPlan />} />
+                  <Route path={ROUTE_PATTERNS.helmMandates} element={<HelmMandates />} />
+                  <Route path={ROUTE_PATTERNS.helmLedger} element={<HelmLedger />} />
+                  <Route path={ROUTE_PATTERNS.helmTimeMachine} element={<HelmTimeMachine />} />
+                  <Route path={ROUTE_PATTERNS.helmBank} element={<HelmBank />} />
+                  <Route path={ROUTE_PATTERNS.helmCertificates} element={<HelmCertificates />} />
+                  <Route path={ROUTE_PATTERNS.helmCertificate} element={<HelmCertificate />} />
+                  <Route path={ROUTE_PATTERNS.helmSettings} element={<HelmSettings />} />
+                  <Route path={ROUTE_PATTERNS.helmStart} element={<HelmStart />} />
+                  <Route path={ROUTE_PATTERNS.helmSetup} element={<HelmFirstRun />} />
+                  <Route path="*" element={<NotFound />} />
+                </Route>
+              </Route>
+            </Route>
 
             {/* Workspace-scoped shell */}
             <Route

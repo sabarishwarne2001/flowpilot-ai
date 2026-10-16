@@ -10,11 +10,12 @@ import logging
 import math
 import time
 import uuid
-from typing import Optional
+from typing import Any, Mapping, Optional
 from fastapi import Request
 from sqlalchemy.orm import Session
 
 from app.core.client_ip import client_ip
+from app.core.principal import Principal
 from app.core.redis_client import get_redis_client
 from app.models.audit_log import AuditAction, AuditOutcome, AuditResourceType
 from app.services import audit_service
@@ -35,8 +36,14 @@ def record_threshold_denial(
     resource_type: AuditResourceType,
     action: AuditAction,
     request: Optional[Request] = None,
+    principal: Optional[Principal] = None,
+    details: Optional[Mapping[str, Any]] = None,
 ) -> bool:
-    """Record a denial event and emit an aggregated audit row if an exponential threshold is crossed."""
+    """Record a denial event and emit an aggregated audit row if an exponential threshold is crossed.
+
+    `principal` and `details` go on the individual rows (an API key's refusal names the key and why);
+    an aggregate row carries counts only.
+    """
     client = get_redis_client()
     ip_addr = client_ip(request) if request else "unknown"
 
@@ -47,9 +54,11 @@ def record_threshold_denial(
             organization_id=organization_id,
             workspace_id=workspace_id,
             actor_id=actor_id,
+            principal=principal,
             resource_type=resource_type,
             action=action,
             outcome=AuditOutcome.DENIED,
+            details=details,
             **audit_service.context_from_request(request),
         )
         return True
@@ -79,9 +88,11 @@ def record_threshold_denial(
                 organization_id=organization_id,
                 workspace_id=workspace_id,
                 actor_id=actor_id,
+                principal=principal,
                 resource_type=resource_type,
                 action=action,
                 outcome=AuditOutcome.DENIED,
+                details=details,
                 **audit_service.context_from_request(request),
             )
             return True
@@ -125,9 +136,11 @@ def record_threshold_denial(
             organization_id=organization_id,
             workspace_id=workspace_id,
             actor_id=actor_id,
+            principal=principal,
             resource_type=resource_type,
             action=action,
             outcome=AuditOutcome.DENIED,
+            details=details,
             **audit_service.context_from_request(request),
         )
 
