@@ -316,6 +316,11 @@ function helmDraft(prompt) {
   const s = sentence.toLowerCase();
   const answer = (template, params = {}, alternatives = []) =>
     JSON.stringify({ template, params, counterparties: [], alternatives });
+  if (/hold/.test(s) && /supplier in /.test(s)) {
+    // A slip a real model makes: a custom condition on a fact Helm cannot test (the supplier's country).
+    return answer("custom_condition", { name: "Suppliers abroad", match: "all", outcome: "hold",
+      conditions: [{ field: "supplier_country", op: "=", value: "China" }] });
+  }
   if (/duplicate|twice|same (bill|invoice)/.test(s)) return answer("never_pay_duplicate");
   if (/agreed price|overcharg|more than the (agreed|po) price/.test(s)) return answer("never_pay_above_agreed_price");
   if (/bank (account|details)/.test(s)) return answer("never_pay_changed_bank_account");

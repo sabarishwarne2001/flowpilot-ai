@@ -144,6 +144,32 @@ export const MandateComposer: React.FC<{
             </p>
           ) : null}
 
+          {!editing && result.source === "model" && result.template && result.draft && !result.draft.spec ? (
+            // The model's draft did not pass the validator (a value or a fact Helm cannot use): say
+            // why, and let the person build it in the editor instead of leaving them with nothing.
+            <div className="helm-panel space-y-2 p-3" data-testid="helm-draft-problems">
+              <ul role="alert" className="list-disc space-y-1 pl-5 text-sm">
+                {(result.draft.problems.length > 0
+                  ? result.draft.problems
+                  : ["Helm could not turn that sentence into a mandate it can check."]
+                ).map((problem) => (
+                  <li key={problem}>{problem}</li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className="helm-btn"
+                disabled={pick.isPending}
+                onClick={() =>
+                  result.template &&
+                  pick.mutate({ template: result.template.template, title: result.template.title, summary: "", group: "" })
+                }
+              >
+                Build {result.template.title.toLowerCase()} in the editor
+              </button>
+            </div>
+          ) : null}
+
           {editing ? (
             <MandateEditor
               key={`${editing.template}:${result.sentence}`}

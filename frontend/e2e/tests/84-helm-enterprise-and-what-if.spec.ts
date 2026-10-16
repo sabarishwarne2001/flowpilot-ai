@@ -67,6 +67,15 @@ test.describe("Helm's Enterprise controls and what-if on the sample company", ()
     await editor.getByRole("button", { name: "Add in Propose mode" }).click();
     await expect(page.getByTestId("helm-mandate").filter({ hasText: "Large invoices" })).toBeVisible();
 
+    // A sentence the model drafts on a fact Helm cannot test: the problem is said, and the editor offered.
+    await page.getByRole("textbox", { name: "What should always be true in your business?" })
+      .fill("Hold any invoice from a supplier in China");
+    await page.getByRole("button", { name: "Draft it" }).click();
+    const drafted = page.getByTestId("helm-draft-problems");
+    await expect(drafted.getByRole("alert")).toContainText("cannot test");
+    await drafted.getByRole("button", { name: "Build custom condition in the editor" }).click();
+    await expect(page.getByTestId("helm-draft").getByTestId("helm-conditions-editor")).toBeVisible();
+
     // The approval chain: one person cannot be two approvals.
     await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Settings" }).click();
     const chain = page.getByTestId("helm-approval-chain");
