@@ -7,6 +7,8 @@
  * explore whole) and reads what Helm would have held, in its three honesty classes. The sample
  * workspace is labelled and deletable; deleting it takes its book away.
  */
+import { readFileSync } from "node:fs";
+
 import { test, expect, settle } from "../support/fixtures";
 import { newCustomer, signInAs, type Customer } from "../support/journey";
 
@@ -52,6 +54,12 @@ test.describe("Helm sample company — every plan can explore it", () => {
     await expect(report.getByTestId("helm-backtest-summary")).toContainText("Over the last 9 months");
     await expect(report.getByRole("button", { name: /Never pay above the agreed price/ })).toContainText("finding");
     await expect(report.getByRole("button", { name: /Never pay a duplicate/ })).toContainText("1 finding");
+    // The replay as a PDF: an ASCII file name, and a real PDF.
+    const download = page.waitForEvent("download");
+    await report.getByRole("button", { name: "Download the PDF" }).click();
+    const pdf = await download;
+    expect(pdf.suggestedFilename()).toMatch(/^helm-replay-[A-Za-z0-9-]+\.pdf$/);
+    expect(readFileSync(await pdf.path()).subarray(0, 5).toString("latin1")).toBe("%PDF-");
 
     // The cockpit's flight path scrubs left into the replayed past.
     await page.getByRole("navigation", { name: "Helm" }).getByRole("link", { name: "Cockpit" }).click();
