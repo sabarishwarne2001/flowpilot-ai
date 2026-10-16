@@ -31,7 +31,7 @@ import uuid
 from locust import HttpUser, between, events, task
 
 API = "/api/v1"
-REFRESH_COOKIE = "flowpilot_refresh"
+REFRESH_COOKIE = "servabo_refresh"
 
 
 def _pdf(label: str) -> bytes:

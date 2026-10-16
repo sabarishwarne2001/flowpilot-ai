@@ -1,7 +1,7 @@
 """API Key secret format and HMAC-SHA256 hashing (ARCH-08 §B.4, §9.2).
 
 Token Format:
-fp_live_<key_id_b32>_<secret_b64url>
+svb_live_<key_id_b32>_<secret_b64url>
    │        │             └── 32 random bytes, urlsafe-b64, unpadded (43 chars)
    │        └── the key's UUID, base32 lowercase, unpadded (26 chars)
    └── environment tag: live | test
@@ -18,8 +18,8 @@ from typing import NamedTuple, Optional
 
 from app.core.config import settings
 
-ENV_PREFIX_LIVE = "fp_live_"
-ENV_PREFIX_TEST = "fp_test_"
+ENV_PREFIX_LIVE = "svb_live_"
+ENV_PREFIX_TEST = "svb_test_"
 
 
 class ParsedApiKeyToken(NamedTuple):

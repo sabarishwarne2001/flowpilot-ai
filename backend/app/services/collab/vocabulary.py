@@ -69,7 +69,7 @@ MAX_THREADS_PER_ITEM: Final[int] = 200
 #: log, and the subprotocol list is the one header the browser lets a page set.
 #: The server never echoes the token entry back; Caddy's access log deletes the
 #: header (deploy/Caddyfile, ARCH48-S1:ws-log-redaction).
-SUBPROTOCOL: Final[str] = "flowpilot.review.v1"
+SUBPROTOCOL: Final[str] = "servabo.review.v1"
 TOKEN_PREFIX: Final[str] = "bearer."
 #: Mounted under /api/v1/workspaces/{workspace_id}/review.
 WS_SUFFIX: Final[str] = "/collab/live"

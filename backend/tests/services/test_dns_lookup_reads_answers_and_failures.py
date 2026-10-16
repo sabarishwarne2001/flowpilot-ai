@@ -51,11 +51,11 @@ def answer(monkeypatch: pytest.MonkeyPatch):
 
 def test_a_record_split_into_strings_is_read_whole(answer) -> None:
     asked = answer([_txt("v=spf1 -all"), _txt(TOKEN[:20], TOKEN[20:])])
-    result = dns_service.lookup_txt("acme.example.com", subdomain="_flowpilot")
+    result = dns_service.lookup_txt("acme.example.com", subdomain="_servabo")
     assert result.resolved and result.error is None
     assert result.records == ["v=spf1 -all", TOKEN]
     assert result.contains(TOKEN)
-    assert asked[0][0] == "_flowpilot.acme.example.com"
+    assert asked[0][0] == "_servabo.acme.example.com"
 
 
 @pytest.mark.parametrize("missing", [dns.resolver.NXDOMAIN(), dns.resolver.NoAnswer()])

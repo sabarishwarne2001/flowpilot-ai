@@ -289,7 +289,7 @@ def test_system_prompt_echo_is_stripped():
         ("call me on +91 98765 43210", "phone"),
         ("SSN 123-45-6789 on file", "ssn_us"),
         ("PAN ABCDE1234F", "pan_in"),
-        ("key fp_live_ABC123def456ghi", "api_key"),
+        ("key svb_live_ABC123def456ghi", "api_key"),
         ("IBAN GB82 WEST 1234 5698 7654 32", "iban"),
     ],
 )

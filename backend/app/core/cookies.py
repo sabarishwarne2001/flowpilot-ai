@@ -11,7 +11,7 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.core.cookies")
 
-REFRESH_COOKIE_NAME = "flowpilot_refresh"
+REFRESH_COOKIE_NAME = "servabo_refresh"
 
 
 def refresh_cookie_path() -> str:

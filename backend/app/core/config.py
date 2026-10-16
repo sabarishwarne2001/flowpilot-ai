@@ -485,7 +485,7 @@ class Settings(BaseSettings):
     # local caching resolver).
     DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
     DNS_TIMEOUT_S: float = 5.0
-    DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"
+    DOMAIN_VERIFICATION_TXT_PREFIX: str = "servabo-site-verification"
     DOMAIN_VERIFICATION_TOKEN_TTL_DAYS: int = 30
 
     # ---- Custom domains ------------------------------------------------

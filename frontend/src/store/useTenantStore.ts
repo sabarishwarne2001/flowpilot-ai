@@ -19,7 +19,7 @@ import { createJSONStorage, devtools, persist } from "zustand/middleware";
 import { EMPTY_SELECTION } from "@/hooks/tenantResolution";
 import type { TenantSelection } from "@/hooks/tenantResolution";
 
-const TENANT_STORAGE_KEY = "flowpilot_tenant_selection";
+const TENANT_STORAGE_KEY = "servabo_tenant_selection";
 
 interface TenantStoreState extends TenantSelection {
   /**

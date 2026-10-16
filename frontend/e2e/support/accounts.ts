@@ -37,7 +37,7 @@ export async function openAs(browser: Browser, session: ApiSession): Promise<{ c
   const context = await browser.newContext();
   await context.addCookies([
     {
-      name: "flowpilot_refresh",
+      name: "servabo_refresh",
       value: session.refreshToken,
       domain: new URL(BROWSER_API_ORIGIN).hostname,
       path: "/api/v1/auth",
@@ -50,7 +50,7 @@ export async function openAs(browser: Browser, session: ApiSession): Promise<{ c
   await context.addInitScript(
     ({ value }) => {
       if (!window.sessionStorage.getItem("__e2e_auth_seeded")) {
-        window.localStorage.setItem("flowpilot_auth_session", value);
+        window.localStorage.setItem("servabo_auth_session", value);
         window.sessionStorage.setItem("__e2e_auth_seeded", "1");
       }
     },

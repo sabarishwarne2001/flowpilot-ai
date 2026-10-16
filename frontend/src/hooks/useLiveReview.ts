@@ -4,7 +4,7 @@
  * One WebSocket per open review hub, authenticated with the SAME access token
  * the REST client sends (the browser cannot set an Authorization header on a
  * WebSocket, so the token rides in the subprotocol list next to
- * "flowpilot.review.v1"; the server never echoes it and the ingress log drops
+ * "servabo.review.v1"; the server never echoes it and the ingress log drops
  * the header). No new auth scheme, nothing stored.
  *
  * WHAT IT KEEPS

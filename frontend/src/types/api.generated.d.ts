@@ -21085,7 +21085,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                flowpilot_refresh?: string | null;
+                servabo_refresh?: string | null;
             };
         };
         requestBody?: never;
@@ -21116,7 +21116,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                flowpilot_refresh?: string | null;
+                servabo_refresh?: string | null;
             };
         };
         requestBody?: never;

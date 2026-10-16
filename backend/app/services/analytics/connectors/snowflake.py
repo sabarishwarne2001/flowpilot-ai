@@ -163,7 +163,7 @@ class SnowflakeConnector(WarehouseConnector):
             "X-Snowflake-Authorization-Token-Type": "KEYPAIR_JWT",
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "FlowPilot-ARCH26/1.0",
+            "User-Agent": "Servabo-ARCH26/1.0",
         }
 
     def _execute(

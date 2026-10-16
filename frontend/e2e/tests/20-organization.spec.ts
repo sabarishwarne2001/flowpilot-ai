@@ -439,7 +439,7 @@ test.describe("API keys", () => {
     await page.getByRole("textbox", { name: "Name" }).fill(name);
     await page.getByRole("checkbox", { name: "work_items:read" }).check();
     await page.getByRole("button", { name: "Create key" }).click();
-    await expect(page.getByText(/fp_test_|only time|won.t be shown/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/svb_test_|only time|won.t be shown/i).first()).toBeVisible({ timeout: 15_000 });
     const done = page.getByRole("button", { name: /done|close|i.ve copied/i }).first();
     if (await done.isVisible()) await done.click();
     await page.reload();

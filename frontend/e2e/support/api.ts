@@ -24,7 +24,7 @@ export interface ApiResult<T = unknown> {
   readonly text: string;
 }
 
-const REFRESH_COOKIE = "flowpilot_refresh";
+const REFRESH_COOKIE = "servabo_refresh";
 
 function parseRefreshCookie(response: Response): string {
   const cookies = response.headers.getSetCookie?.() ?? [];

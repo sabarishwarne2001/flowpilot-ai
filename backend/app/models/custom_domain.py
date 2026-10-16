@@ -114,7 +114,7 @@ RESOLVABLE_DOMAIN_STATUSES: tuple[str, ...] = (DOMAIN_STATUS_VERIFIED,)
 MAX_HOSTNAME_LENGTH: int = 253
 
 #: The DNS label the ownership challenge is published under:
-#: `_flowpilot-challenge.ai.acme.com IN TXT "<token>"`.
+#: `_servabo-challenge.ai.acme.com IN TXT "<token>"`.
 #:
 #: It lives here, with the rest of the phase's vocabulary, so that the schema
 #: that renders setup instructions, the service that resolves the record, the
@@ -127,7 +127,7 @@ MAX_HOSTNAME_LENGTH: int = 253
 #: does not apply to it. RFC 8552 reserves underscore-prefixed labels for
 #: exactly this — protocol metadata that can never collide with a real host —
 #: while the `hostname` column holds names that must be reachable.
-CHALLENGE_LABEL: str = "_flowpilot-challenge"
+CHALLENGE_LABEL: str = "_servabo-challenge"
 
 #: Mirrors HOSTNAME_SQL_REGEX in arch25_step2_custom_domains. Two or more
 #: lowercase DNS labels; no port, no wildcard, no trailing dot, no underscore.

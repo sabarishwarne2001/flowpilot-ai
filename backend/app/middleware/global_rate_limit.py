@@ -88,7 +88,7 @@ def _signed_in_subject(request: Request) -> str | None:
     if not header.startswith("Bearer "):
         return None
     token = header[7:].strip()
-    if not token or token.startswith(("fp_live_", "fp_test_")):
+    if not token or token.startswith(("svb_live_", "svb_test_")):
         return None
     from app.core.security import decode_access_token_claims
 

@@ -6,7 +6,7 @@ WHAT ARCH-21 ALREADY BUILT, AND WHY THAT WAS NOT ENOUGH
 =======================================================
 
 `app/api/v1/public/gateway.py` has `_apply_version_headers`, which stamps
-`X-FlowPilot-API-Version`, `Deprecation`, `Sunset` and `Link` on every public
+`X-Servabo-API-Version`, `Deprecation`, `Sunset` and `Link` on every public
 gateway response. That machinery is correct and stays. Two things it cannot do:
 
 1.  IT ONLY COVERS THE PUBLIC GATEWAY. `GET /api/v1/audit-logs` carries a
@@ -68,7 +68,7 @@ logger = logging.getLogger("app.middleware.deprecation")
 HEADER_DEPRECATION = "Deprecation"
 HEADER_SUNSET = "Sunset"
 HEADER_LINK = "Link"
-HEADER_API_VERSION = "X-FlowPilot-API-Version"
+HEADER_API_VERSION = "X-Servabo-API-Version"
 
 #: Where the published policy lives. One URL, referenced by every entry that
 #: does not override it, so moving the documentation is one edit.

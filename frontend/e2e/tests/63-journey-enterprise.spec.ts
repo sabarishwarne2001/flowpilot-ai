@@ -91,7 +91,7 @@ test.describe("Journey: an Enterprise customer", () => {
       const claimed = page.getByRole("listitem").filter({ hasText: domain }).first();  // the domain row, not the registrar tips in it
       await expect(claimed).toContainText("Awaiting DNS", { timeout: 15_000 });
       const record = (await claimed.locator("dd .font-mono").last().innerText()).trim();
-      expect(record).toMatch(/^flowpilot-site-verification=/);
+      expect(record).toMatch(/^servabo-site-verification=/);
       await claimed.getByRole("button", { name: "Check DNS" }).click();
       await expect(page.getByText(/not found|could not|TXT record/i).first()).toBeVisible({ timeout: 15_000 });
       standIn("dns-publish", null, "--name", domain, "--value", record);  // at the customer's DNS provider

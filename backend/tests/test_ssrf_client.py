@@ -109,7 +109,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             json.dumps(
                 {
                     "received_bytes": len(body),
-                    "signature_header": self.headers.get("X-FlowPilot-Signature", ""),
+                    "signature_header": self.headers.get("X-Servabo-Signature", ""),
                 }
             ).encode()
         )
@@ -204,7 +204,7 @@ def test_happy_path_signed_delivery(mock_server: tuple[str, ssl.SSLContext]) -> 
         body=body,
         headers={
             "Content-Type": "application/json",
-            "X-FlowPilot-Signature": "t=1700000000,v1=deadbeef",
+            "X-Servabo-Signature": "t=1700000000,v1=deadbeef",
         },
     )
 

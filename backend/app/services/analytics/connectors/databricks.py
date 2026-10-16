@@ -112,7 +112,7 @@ class DatabricksConnector(WarehouseConnector):
             "Authorization": f"Bearer {token}",
             "Content-Type": content_type,
             "Accept": "application/json",
-            "User-Agent": "FlowPilot-ARCH26/1.0",
+            "User-Agent": "Servabo-ARCH26/1.0",
         }
 
     def _statement(

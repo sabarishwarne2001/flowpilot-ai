@@ -5,7 +5,7 @@ ARCH50-S1:licence
 A LICENCE IS A JSON DOCUMENT
 ============================
 
-    {"format": "flowpilot-licence/1",
+    {"format": "servabo-licence/1",
      "key_id": "ed25519:<16 hex>",
      "payload": {"licence_id": "...", "licensee": "...", "edition": "sovereign",
                  "issued_at": "2026-09-29T00:00:00Z", "not_before": "...", "expires_at": "...",
@@ -41,7 +41,7 @@ from app.core.exceptions import ServaboError
 
 logger = logging.getLogger("app.services.sovereign.licence")
 
-FORMAT = "flowpilot-licence/1"
+FORMAT = "servabo-licence/1"
 EDITION_SAAS = "saas"
 EDITION_SOVEREIGN = "sovereign"
 EDITIONS: tuple[str, ...] = (EDITION_SAAS, EDITION_SOVEREIGN)

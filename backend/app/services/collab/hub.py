@@ -10,7 +10,7 @@ A CONNECTION
 
     handshake     gate.authenticate (in a worker thread: it reads the database)
                   -> refused: close 1008 BEFORE accepting (endpoint)
-    accept        the subprotocol "flowpilot.review.v1" when offered (never
+    accept        the subprotocol "servabo.review.v1" when offered (never
                   the token entry)
     hello         who you are, the heartbeat and lock intervals, presence and
                   the workspace's live locks

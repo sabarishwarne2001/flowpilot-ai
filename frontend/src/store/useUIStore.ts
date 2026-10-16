@@ -3,7 +3,7 @@ import { createJSONStorage, devtools, persist } from "zustand/middleware";
 
 export type ThemeMode = "light" | "dark" | "system";
 
-const UI_STORE_KEY = "flowpilot_ui_preferences";
+const UI_STORE_KEY = "servabo_ui_preferences";
 
 const getSystemTheme = (): Exclude<ThemeMode, "system"> => {
   if (typeof window === "undefined") {

@@ -34,7 +34,10 @@ from app.services.webhook_service import build_signature_header
 
 logger = logging.getLogger(__name__)
 
-USER_AGENT = "FlowPilot-Webhooks/1.0"
+USER_AGENT = "Servabo-Webhooks/1.0"
+#: The header that carries the HMAC. One constant, so the redaction list below can never miss it
+#: (it once named the header in lower case, and a rename left the new name unredacted).
+SIGNATURE_HEADER = "X-Servabo-Signature"
 RESPONSE_EXCERPT_BYTES: int = 1024
 RETRY_AFTER_CEILING = timedelta(hours=6)
 
@@ -42,7 +45,7 @@ TRANSIENT_4XX: frozenset[int] = frozenset({408, 425, 429})
 PERMANENT_4XX_KNOWN: frozenset[int] = frozenset({400, 401, 403, 404, 410})
 
 _REDACTED_REQUEST_HEADERS: frozenset[str] = frozenset(
-    {"x-flowpilot-signature", "authorization", "cookie", "proxy-authorization"}
+    {SIGNATURE_HEADER.lower(), "authorization", "cookie", "proxy-authorization"}
 )
 _REDACTED_RESPONSE_HEADERS: frozenset[str] = frozenset(
     {"set-cookie", "authorization", "www-authenticate", "proxy-authenticate"}
@@ -212,10 +215,10 @@ def attempt_delivery(
     headers = {
         "Content-Type": "application/json",
         "User-Agent": USER_AGENT,
-        "X-FlowPilot-Delivery-Id": del_id_str,
-        "X-FlowPilot-Event-Type": evt_type_str,
-        "X-FlowPilot-Attempt": str(attempt_number),
-        "X-FlowPilot-Signature": signature,
+        "X-Servabo-Delivery-Id": del_id_str,
+        "X-Servabo-Event-Type": evt_type_str,
+        "X-Servabo-Attempt": str(attempt_number),
+        SIGNATURE_HEADER: signature,
         "Content-Length": str(len(body)),
     }
     stored_headers = redact_headers(headers, forbidden=_REDACTED_REQUEST_HEADERS)

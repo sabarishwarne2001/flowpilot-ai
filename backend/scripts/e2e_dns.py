@@ -7,7 +7,7 @@ answers from a file the test writes, over the real DNS protocol: FlowPilot's loo
 socket up, is the code under test.
 
     python -m scripts.e2e_dns serve --port 5354 --records /tmp/flowpilot-e2e-logs/dns-records.json
-    python -m scripts.e2e_dns publish --records FILE --name acme.example --value "flowpilot-site-verification=..."
+    python -m scripts.e2e_dns publish --records FILE --name acme.example --value "servabo-site-verification=..."
 
 The records file is `{"name": ["value", ...]}`, names lower-case without the trailing dot. A name
 that is not in the file is answered NXDOMAIN.

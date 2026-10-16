@@ -51,7 +51,7 @@ CORS_EXPOSED_HEADERS = [
     "WWW-Authenticate",
     "Retry-After",
     REQUEST_ID_HEADER,
-    "X-FlowPilot-API-Version",
+    "X-Servabo-API-Version",
     "Deprecation",
     "Sunset",
     "Link",

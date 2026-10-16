@@ -167,7 +167,7 @@ def export_audit_logs(
         "Content-Disposition": f'attachment; filename="{filename}"',
         "X-Content-Type-Options": "nosniff",
         "Cache-Control": "no-store",
-        "X-FlowPilot-Export-Truncated": "true" if truncated else "false",
+        "X-Servabo-Export-Truncated": "true" if truncated else "false",
     }
 
     if truncated and truncation is not None:

@@ -85,7 +85,7 @@ def _luhn_ok(digits: str) -> bool:
 RULES: tuple[RedactionRule, ...] = (
     RedactionRule(
         "api_key",
-        re.compile(r"\b(?:fp_live_|fp_test_|sk-|ghp_|xox[baprs]-)[A-Za-z0-9_\-]{8,}"),
+        re.compile(r"\b(?:svb_live_|svb_test_|sk-|ghp_|xox[baprs]-)[A-Za-z0-9_\-]{8,}"),
     ),
     RedactionRule(
         "card_number",

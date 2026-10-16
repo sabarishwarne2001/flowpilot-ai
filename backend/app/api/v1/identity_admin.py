@@ -148,7 +148,7 @@ def claim_domain(organization_id: str, payload: dict = Body(...),
         "status": getattr(row.status, "value", row.status),
         "expected_txt_record": domain_service.expected_record(row.challenge_token),
         "instructions": (
-            f"Publish a TXT record at {row.domain} (or _flowpilot.{row.domain}) "
+            f"Publish a TXT record at {row.domain} (or _servabo.{row.domain}) "
             f"with the value above, then call verify. DNS changes can take up "
             f"to 48 hours to propagate."
         ),

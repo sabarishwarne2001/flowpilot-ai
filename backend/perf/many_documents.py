@@ -86,7 +86,7 @@ def main(argv: list[str] | None = None) -> int:
             "ORDER BY created_at DESC, id DESC LIMIT 50"), {"w": workspace.id}).scalars().all()
 
     client = httpx.Client(timeout=60)
-    access = client.post(f"{args.api}/auth/refresh", headers={"Cookie": f"flowpilot_refresh={refresh}"}).json()["access_token"]
+    access = client.post(f"{args.api}/auth/refresh", headers={"Cookie": f"servabo_refresh={refresh}"}).json()["access_token"]
     headers = {"Authorization": f"Bearer {access}"}
     url = f"{args.api}/workspaces/{workspace.id}/work-items"
     print(f"workspace {workspace.slug}: {total} documents ({added} added now)")

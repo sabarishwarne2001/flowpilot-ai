@@ -170,7 +170,7 @@ def test_a_token_issued_before_the_users_revocation_cutoff_is_refused(
 
 
 def test_an_access_token_cannot_be_used_where_a_refresh_cookie_is_expected(client: TestClient, tenant: Fixture) -> None:
-    client.cookies.set("flowpilot_refresh", tenant.owner.token, path="/api/v1/auth/refresh")
+    client.cookies.set("servabo_refresh", tenant.owner.token, path="/api/v1/auth/refresh")
     assert client.post("/api/v1/auth/refresh").status_code == 401
 
 

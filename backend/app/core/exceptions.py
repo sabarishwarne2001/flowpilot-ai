@@ -147,11 +147,11 @@ class SpendLimitExceededError(SpendControlError):
     @property
     def response_headers(self) -> dict[str, str]:
         headers = {
-            "X-FlowPilot-Spend-Limit": self.limit_key,
-            "X-FlowPilot-Spend-Period": self.period,
+            "X-Servabo-Spend-Limit": self.limit_key,
+            "X-Servabo-Spend-Period": self.period,
         }
         if self.resets_at is not None:
-            headers["X-FlowPilot-Spend-Resets-At"] = self.resets_at.isoformat()
+            headers["X-Servabo-Spend-Resets-At"] = self.resets_at.isoformat()
         return headers
 
 

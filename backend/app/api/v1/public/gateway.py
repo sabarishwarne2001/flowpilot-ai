@@ -84,7 +84,7 @@ SUNSET_AT: Optional[datetime] = None
 SUCCESSOR_URL: Optional[str] = None
 DOCUMENTATION_URL: str = "https://docs.flowpilot.ai/public-api"
 
-HEADER_API_VERSION = "X-FlowPilot-API-Version"
+HEADER_API_VERSION = "X-Servabo-API-Version"
 
 
 def _apply_version_headers(response: Response) -> None:

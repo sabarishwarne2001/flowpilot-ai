@@ -7,7 +7,7 @@
 
 import type { ReviewKind } from "@/types/review";
 
-export const LIVE_SUBPROTOCOL = "flowpilot.review.v1";
+export const LIVE_SUBPROTOCOL = "servabo.review.v1";
 export const LIVE_TOKEN_PREFIX = "bearer.";
 export const LIVE_SUFFIX = "/collab/live";
 

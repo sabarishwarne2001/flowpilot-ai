@@ -157,7 +157,7 @@ guard), and the comment written above it in the code.
 | `SAML_XSW_DEFENCE_ENABLED` | `bool` | `True` | guard | The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if settings cannot be read at all, hardening_policy_from_settings() returns the hardened policy. A GA platform needs a switch for the night a real IdP turns o… |
 | `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | The DNS servers asked when a customer verifies a domain: comma-separated, each `address` (port 53) or `address:port` / `[ipv6]:port` (for a resolver on another port, such as a local caching resolver). |
 | `DNS_TIMEOUT_S` | `float` | `5.0` | — |  |
-| `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'flowpilot-site-verification'` | example |  |
+| `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'servabo-site-verification'` | example |  |
 | `DOMAIN_VERIFICATION_TOKEN_TTL_DAYS` | `int` | `30` | example |  |
 | `CUSTOM_DOMAINS_ENABLED` | `bool` | `False` | example, production | OFF by default. A deployment that has not configured an ACME agent and a wildcard-capable ingress cannot serve a vanity host, and letting a tenant claim one on such a deployment produces a VERIFIED domain that 404s fore… |
 | `PLATFORM_RESERVED_HOSTS` | `list[str]` | `[]` | example, production | Hostnames a tenant may never claim, JSON list, matched case-insensitively against the hostname AND against every parent suffix of it. This is what stops a tenant claiming the platform's own origin and having every sessi… |

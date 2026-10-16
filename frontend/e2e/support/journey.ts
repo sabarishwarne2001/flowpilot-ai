@@ -90,7 +90,7 @@ export async function signInAs(page: Page, email: string): Promise<ApiSession> {
   await page.context().clearCookies();
   await page.context().addCookies([
     {
-      name: "flowpilot_refresh",
+      name: "servabo_refresh",
       value: session.refreshToken,
       domain: new URL(BROWSER_API_ORIGIN).hostname,
       path: "/api/v1/auth",
@@ -103,7 +103,7 @@ export async function signInAs(page: Page, email: string): Promise<ApiSession> {
   await page.context().addInitScript(
     ({ value, marker }) => {
       if (window.sessionStorage.getItem("__e2e_auth_seeded") !== marker) {
-        window.localStorage.setItem("flowpilot_auth_session", value);
+        window.localStorage.setItem("servabo_auth_session", value);
         window.sessionStorage.setItem("__e2e_auth_seeded", marker);
       }
     },

@@ -26,7 +26,7 @@ ID = "/identity"
 
 @pytest.fixture
 def published(monkeypatch) -> dict[str, list[str]]:
-    """TXT records the 'DNS' answers with, by domain (apex and _flowpilot.<domain>)."""
+    """TXT records the 'DNS' answers with, by domain (apex and _servabo.<domain>)."""
     records: dict[str, list[str]] = {}
 
     def lookup_txt(domain: str, *, subdomain: str | None = None):
