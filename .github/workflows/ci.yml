@@ -478,6 +478,56 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+  # The public website (website/, Astro, static). Website and payments session: it must build,
+  # type-check, link, validate and pass axe in both themes and Lighthouse >= 95 on home, pricing
+  # and Helm before it can ship. Required through the aggregate job below.
+  # ---------------------------------------------------------------------
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    needs: encoding
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Chromium for the checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: No broken internal links
+        run: npm run check:links
+
+      - name: HTML validates
+        run: npm run check:html
+
+      - name: Accessibility in both themes, no sideways scroll, no console errors under the CSP
+        run: npm run check:a11y
+
+      - name: Lighthouse at least 95 on home, pricing and Helm
+        run: npm run check:lighthouse
+
+      - name: npm audit (shipped dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a
   # job above does not require editing the protection rule.
   # ---------------------------------------------------------------------
@@ -485,7 +535,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [encoding, backend-tests, migrations, frontend, e2e]
+    needs: [encoding, backend-tests, migrations, frontend, e2e, website]
     steps:
       - name: Fail if any upstream job failed
         # Expressions accept only single-quoted strings. A double-quoted ","
