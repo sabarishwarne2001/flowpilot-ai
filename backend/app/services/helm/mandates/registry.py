@@ -72,12 +72,16 @@ _FIELD_WORDS = {
     "grace_days": "the grace period", "min_probability_pct": "the confidence", "min_annual_rate_pct": "the yearly rate",
     "threshold": "the amount", "days_before": "the number of days", "days": "the reminder days",
     "max_age_days": "the backlog age", "currency": "the currency", "reminder_every_days": "the reminder interval",
+    "name": "the name", "conditions": "the list of conditions", "match": "all or any", "outcome": "the outcome",
 }
 
 
 def _words(error: ValidationError) -> list[str]:
     problems = []
     for item in error.errors():
+        if isinstance((item.get("ctx") or {}).get("error"), base.Problems):
+            problems.extend(item["ctx"]["error"].problems)  # already in plain words
+            continue
         where = next((_FIELD_WORDS[str(p)] for p in reversed(item.get("loc", ())) if str(p) in _FIELD_WORDS),
                      " / ".join(str(p) for p in item.get("loc", ())) or "a value")
         kind = item.get("type", "")
@@ -196,7 +200,8 @@ def library(*, enterprise: bool = True) -> list[dict[str, Any]]:
                     "kind": found.kind, "summary": found.summary, "plan": found.plan,
                     "available": enterprise or found.plan != "enterprise", "defaults": defaults, "readback": rb,
                     "is_limit": found.is_limit, "law_links": list(found.law_links), "disclaimer": found.disclaimer,
-                    "recommended_for": list(found.recommended_for), "required": required_params(found.key)})
+                    "recommended_for": list(found.recommended_for), "required": required_params(found.key),
+                    "repeatable": found.repeatable, **({"editor": found.editor} if found.editor else {})})
     return out
 
 
@@ -213,6 +218,11 @@ def _defaults(found: base.Template) -> dict[str, Any]:
     samples: dict[str, dict[str, Any]] = {
         "keep_cash_above": {"floor": {"amount_micros": 1_000_000 * 1_000_000, "currency": DEFAULT_FLOOR_CURRENCY}},
         "po_required_above": {"threshold": {"amount_micros": 50_000 * 1_000_000, "currency": DEFAULT_FLOOR_CURRENCY}},
+        "custom_condition": {
+            "name": "Large invoices from new suppliers", "match": "all", "outcome": "hold",
+            "conditions": [{"field": "amount", "op": ">",
+                            "value": {"amount_micros": 500_000 * 1_000_000, "currency": DEFAULT_FLOOR_CURRENCY}},
+                           {"field": "new_supplier", "op": "=", "value": True}]},
     }
     raw = samples.get(found.key, {})
     try:

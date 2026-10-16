@@ -45,6 +45,7 @@ CATEGORY_WORDS = {
     base.CATEGORY_RENEWAL: "renewal deadlines missed",
     base.CATEGORY_DOCUMENT: "supplier documents that expired",
     base.CATEGORY_RECEIVABLE: "customers who paid late",
+    base.CATEGORY_CUSTOM: "invoices that matched a custom condition",
 }
 
 
@@ -65,14 +66,22 @@ def period(months: int, *, today: Optional[date] = None) -> tuple[date, date]:
 
 
 def _mandate_specs(db: Session, book: HelmBook, specs: Sequence[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Validated spec JSON for each requested mandate (a library key with its defaults, or a full spec)."""
+    """Validated spec JSON for each requested mandate (a library key with its defaults, or a full spec).
+    An Enterprise template (a custom condition) is replayed only on a plan that carries it, or when it
+    is a mandate already in force (`mandate_id`, which only the book's active mandates carry): after
+    a move to Business it keeps running, so the Time machine keeps replaying it."""
     out: list[dict[str, Any]] = []
+    enterprise: Optional[bool] = None
     for raw in specs:
         raw = {"template": raw} if isinstance(raw, str) else dict(raw)
         key = str(raw.get("template") or "")
         if key not in registry.TEMPLATES:
             raise BacktestError(f"There is no mandate called {key!r} to backtest.")
         template = registry.TEMPLATES[key]
+        if template.plan == "enterprise" and not raw.get("mandate_id"):
+            enterprise = gate.custom_held(db, book.organization_id) if enterprise is None else enterprise
+            if not enterprise:
+                raise BacktestError(f"\"{template.title}\" is part of the Enterprise plan.", reason="BACKTEST_PLAN")
         unstated = [n for n in registry.required_params(key) if n not in (raw.get("params") or {})]
         if unstated and book.kind != v.BOOK_SAMPLE:
             raise BacktestError(f"Set the {unstated[0].replace('_', ' ')} of \"{template.title}\" before "
