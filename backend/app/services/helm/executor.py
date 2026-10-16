@@ -163,6 +163,9 @@ def reject(db: Session, *, action: HelmAction, actor: Actor, reason: str) -> Hel
         .returning(HelmAction.id)
     ).first()
     db.refresh(action)
+    if result is None and action.state != v.ACTION_REJECTED:
+        # Someone approved it (or Helm ran it) a moment ago, between this person's look and their click.
+        raise ActionError("HELM_ACTION_NOT_PENDING", f"This action is {action.state.lower()}; it cannot be rejected.")
     if result is not None:
         _audit(db, action, "REJECTED", actor_user_id=uuid.UUID(actor.user_id) if actor.user_id else None,
                details={"reason": reason[:500]})

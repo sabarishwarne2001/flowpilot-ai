@@ -360,6 +360,9 @@ def import_statement(db: Session, who: Any, book: HelmBook, *, account_id: uuid.
 
     _require(who, book)
     account = _account(db, book, account_id)
+    # One import per account at a time: the second of two at once (a double-click, or two files of
+    # overlapping periods) waits here, then sees the first one's file and lines.
+    db.refresh(account, with_for_update=True)
     digest = hashlib.sha256(data or b"").hexdigest()
     seen = db.execute(select(HelmBankImport).where(HelmBankImport.bank_account_id == account.id,
                                                    HelmBankImport.sha256 == digest)).scalar_one_or_none()
@@ -524,6 +527,12 @@ def _line(db: Session, who: Any, line_id: uuid.UUID) -> tuple[HelmBankLine, Helm
     return line, book
 
 
+def _decided_one_at_a_time(db: Session, line: HelmBankLine) -> None:
+    """Lock the line and read it again: of two decisions at once (two tabs, a double-click, one person
+    confirming while another ignores), the second waits here and then sees the first."""
+    db.refresh(line, with_for_update=True)
+
+
 def confirm(db: Session, who: Any, line_id: uuid.UUID, work_item_id: uuid.UUID) -> dict[str, Any]:
     """A person says which invoice a line paid (or was paid by). Its amount must be the invoice's, or its
     early-payment price when the line cleared inside the discount window (plus a few days for the bank):
@@ -531,11 +540,17 @@ def confirm(db: Session, who: Any, line_id: uuid.UUID, work_item_id: uuid.UUID) 
     from app.services.helm import service, snapshot_store
 
     line, book = _line(db, who, line_id)
+    _decided_one_at_a_time(db, line)
     if line.workspace_id is not None and not who.can_read(line.workspace_id):
         raise HelmForbidden("This line is matched to an invoice in a workspace you cannot read.",
                             reason="HELM_NO_ACCESS")
     if line.status == v.BANK_LINE_MATCHED:
         raise HelmError("This line is already matched; undo the match first.", reason="BANK_LINE_MATCHED")
+    if line.status == v.BANK_LINE_IGNORED:
+        # Someone set it aside as not an invoice payment (perhaps a moment ago, in another tab): their
+        # decision stands until a person reopens the line.
+        raise HelmError("This line was set aside as not an invoice payment; reopen it first to match it.",
+                        reason="BANK_LINE_IGNORED")
     snapshot = snapshot_store.take(db, book)
     kind = bank_match.PAYABLE if line.amount_micros < 0 else bank_match.RECEIVABLE
     claimed = _claimed(db, book)
@@ -585,9 +600,12 @@ def ignore(db: Session, who: Any, line_id: uuid.UUID, note: Optional[str]) -> di
     from app.services.helm import service
 
     line, book = _line(db, who, line_id)
+    _decided_one_at_a_time(db, line)
     _require_line(who, line)
     if line.status == v.BANK_LINE_MATCHED:
         raise HelmError("This line is matched; undo the match first.", reason="BANK_LINE_MATCHED")
+    if line.status == v.BANK_LINE_IGNORED:  # set aside a moment ago (a double-click, another tab): one decision
+        return _one(db, who, line)
     previous = line.status
     line.status, line.note = v.BANK_LINE_IGNORED, (note or "").strip()[:300] or None
     line.decided_by_user_id, line.decided_at = who.user_id, datetime.now(timezone.utc)
@@ -630,7 +648,10 @@ def reopen(db: Session, who: Any, line_id: uuid.UUID) -> dict[str, Any]:
     from app.services.helm import service
 
     line, book = _line(db, who, line_id)
+    _decided_one_at_a_time(db, line)
     _require_line(who, line)
+    if line.status not in (v.BANK_LINE_MATCHED, v.BANK_LINE_IGNORED):  # already reopened a moment ago
+        return _one(db, who, line)
     previous, work_item_id, workspace_id, action_id = line.status, line.work_item_id, line.workspace_id, line.action_id
     action = db.get(HelmAction, action_id) if line.status == v.BANK_LINE_MATCHED and action_id else None
     if action is not None:

@@ -349,9 +349,20 @@ def add_cash_position(db: Session, who: Viewer, book: HelmBook, *, currency: str
         raise HelmInvalid("A currency is three letters, such as INR.", reason="CURRENCY")
     if as_of > datetime.now(timezone.utc).date():
         raise HelmInvalid("A cash position cannot be dated in the future.", reason="CASH_DATE")
+    note = (note or None) and note[:300]
+    # One book's cash figures one at a time: of identical saves at once (a double-click), the first is
+    # the entry and the others are answered with it. Only a figure identical to the latest is the same.
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"helm-cash:{book.id}", 0))))
+    latest = db.execute(select(HelmCashPosition).where(
+        HelmCashPosition.book_id == book.id, HelmCashPosition.currency == currency,
+        HelmCashPosition.source == v.CASH_SOURCE_MANUAL)
+        .order_by(HelmCashPosition.created_at.desc(), HelmCashPosition.id.desc()).limit(1)).scalar_one_or_none()
+    if latest is not None and (latest.amount_micros, latest.as_of, latest.note) == (int(amount_micros), as_of, note):
+        return {"id": str(latest.id), "currency": currency, "amount_micros": latest.amount_micros,
+                "as_of": as_of.isoformat()}
     row = HelmCashPosition(organization_id=book.organization_id, book_id=book.id, currency=currency,
                            amount_micros=int(amount_micros), as_of=as_of, source=v.CASH_SOURCE_MANUAL,
-                           note=(note or None) and note[:300], entered_by_user_id=who.user_id)
+                           note=note, entered_by_user_id=who.user_id)
     db.add(row)
     db.flush()
     _audit(db, who, book, "HELM_SETTINGS", row.id, "CREATED", {"cash_currency": currency, "as_of": as_of.isoformat()})
@@ -600,6 +611,9 @@ def set_status(db: Session, who: Viewer, book: HelmBook, mandate_id: uuid.UUID, 
     if mandate.status == status:
         return mandate_json(db, mandate)
     if status == v.MANDATE_ACTIVE:
+        # The sample company has no limit to check, but its activations are serialised all the same, so
+        # a double-click on Save cannot make two identical active mandates.
+        gate.lock_mandates(db, book.organization_id)
         if book.kind != v.BOOK_SAMPLE:
             gate.assert_mandate_room(db, book.organization_id)
         version = db.get(HelmMandateVersion, (mandate.id, mandate.current_version))
@@ -815,12 +829,14 @@ def approve(db: Session, who: Viewer, action_id: uuid.UUID) -> dict[str, Any]:
 
 def approve_all(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
     """Approve every action that passed the Guard. On an approval chain this person's approval may be
-    one of several: such an action is counted as waiting (for someone else), never as approved."""
+    one of several: such an action is counted as waiting (for someone else), never as approved. An action
+    another click or person decided after this one listed it is counted as already decided, so what two
+    clicks at once say adds up to what happened."""
     from app.services.helm import executor
 
     require_helm(who, book)
     chain = approvals.chain_for(db, book)
-    approved, waiting, skipped = 0, 0, 0
+    approved, waiting, skipped, already = 0, 0, 0, 0
     for action in db.execute(select(HelmAction).where(HelmAction.book_id == book.id,
                                                       HelmAction.state == v.ACTION_PROPOSED,
                                                       HelmAction.guard_passed.is_(True))
@@ -829,6 +845,10 @@ def approve_all(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
             skipped += 1
             continue
         need = _requirement(chain, action)
+        db.refresh(action, with_for_update=True)  # the row as it is now, held until this request ends
+        if action.state != v.ACTION_PROPOSED:
+            already += 1
+            continue
         try:
             executor.approve(db, action=action, actor=_actor(who, action), required_approvals=need.approvals,
                              approver_roles=need.roles)
@@ -842,7 +862,8 @@ def approve_all(db: Session, who: Viewer, book: HelmBook) -> dict[str, Any]:
             waiting += 1
         else:
             approved += 1
-    return {"approved": approved, "waiting": waiting, "skipped": skipped}
+    return {"approved": approved, "waiting": waiting, "skipped": skipped,
+            **({"already_decided": already} if already else {})}
 
 
 def reject(db: Session, who: Viewer, action_id: uuid.UUID, reason: str) -> dict[str, Any]:
@@ -1119,8 +1140,8 @@ def delete_sample(db: Session, who: Viewer) -> dict[str, Any]:
     if ws is None:
         raise HelmNotFound("There is no sample company to delete.")
     book = db.execute(select(HelmBook).where(HelmBook.workspace_id == ws.id)).scalars().first()
-    sample_company.delete(db, organization_id=who.organization_id)
-    if book is not None:
+    # Of deletes at once, only the one that archived it records the deletion; the others see it gone.
+    if sample_company.delete(db, organization_id=who.organization_id) and book is not None:
         _audit(db, who, book, "HELM_BOOK", book.id, "ARCHIVED", {"sample": True})
     return sample_state(db, who)
 

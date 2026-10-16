@@ -340,6 +340,9 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
       if (result.skipped) {
         parts.push(`${formatNumber(result.skipped)} need someone else or were refused.`);
       }
+      if (result.already_decided) {
+        parts.push(`${formatNumber(result.already_decided)} had just been decided in another tab or by another person.`);
+      }
       toast.success(parts.join(" "));
       setConfirming(false);
       if (book) {

@@ -122,9 +122,15 @@ def active_mandate_count(db: Session, organization_id: uuid.UUID) -> int:
     ).scalar_one())
 
 
+def lock_mandates(db: Session, organization_id: uuid.UUID) -> None:
+    """Activations in one organization one at a time, until this transaction ends: the second of two at
+    once then sees the first, both against the plan's limit and against an identical active mandate."""
+    db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"helm-mandates:{organization_id}", 0))))
+
+
 def assert_mandate_room(db: Session, organization_id: uuid.UUID) -> None:
     """Refuse one more active mandate past `limit.helm_mandates` (serialised per organization)."""
-    db.execute(select(func.pg_advisory_xact_lock(func.hashtextextended(f"helm-mandates:{organization_id}", 0))))
+    lock_mandates(db, organization_id)
     limit = mandates_limit(db, organization_id)
     if limit is None:
         return
@@ -137,6 +143,7 @@ def assert_mandate_room(db: Session, organization_id: uuid.UUID) -> None:
             "Enterprise for unlimited mandates.",
             reason="HELM_MANDATE_LIMIT_REACHED", limit_key=HELM_MANDATES_LIMIT, limit=int(limit),
             requested=active + 1, plan=None)
+
 
 
 def preview_backtest_allowed(db: Session, organization_id: uuid.UUID, *, now: Optional[datetime] = None) -> \
@@ -196,6 +203,6 @@ def readable_workspaces(db: Session, *, organization_id: uuid.UUID, user_id: uui
 
 __all__ = ["HELM_DECIDER_ROLES", "HELM_VIEWER_ROLES", "PREVIEW_BACKTEST_MONTHS", "active_mandate_count",
            "all_workspaces_held", "api_held", "approval_chains_held", "assert_api_access", "assert_mandate_room",
-           "backtest_months_limit", "can_approve", "can_decide", "can_view", "custom_held", "helm_held",
-           "mandates_limit", "preview_backtest_allowed", "preview_error", "readable_workspaces", "require",
-           "through_api_key"]
+           "backtest_months_limit", "can_approve", "can_decide", "can_view", "custom_held",
+           "helm_held", "lock_mandates", "mandates_limit", "preview_backtest_allowed", "preview_error",
+           "readable_workspaces", "require", "through_api_key"]

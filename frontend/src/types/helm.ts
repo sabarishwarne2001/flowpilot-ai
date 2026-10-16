@@ -487,6 +487,8 @@ export interface ApproveAllResult {
   /** Approved by you, and now waiting for another person on an approval chain. */
   waiting: number;
   skipped: number;
+  /** Approved or rejected a moment before, from another tab or by another person (only when there were any). */
+  already_decided?: number;
 }
 
 export interface HelmCounterparty {

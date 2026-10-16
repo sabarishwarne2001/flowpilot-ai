@@ -877,6 +877,9 @@ def delete(db: Session, *, organization_id: uuid.UUID) -> bool:
     ws = sample_workspace(db, organization_id)
     if ws is None:
         return False
+    db.refresh(ws, with_for_update=True)  # of deletes at once, the second waits here and finds it gone
+    if ws.status != WorkspaceStatus.ACTIVE:
+        return False
     for book in db.execute(select(HelmBook).where(HelmBook.workspace_id == ws.id)).scalars():
         book.status = v.BOOK_ARCHIVED
     ws.status = WorkspaceStatus.ARCHIVED
