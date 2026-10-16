@@ -358,9 +358,9 @@ and least-privilege database roles (N-074).
 
 The flagship session built **Helm** (docs/helm/ARCHITECTURE.md is the design, kept current;
 docs/helm/MANDATES.md lists the mandates in plain words; docs/product/FLAGSHIP.md is the product
-story for the website). Its decisions are N-082 to N-100 in NEEDS-OWNER.md (`DECIDED (owner and
+story for the website). Its decisions are N-082 to N-102 in NEEDS-OWNER.md (`DECIDED (owner and
 planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in FINDINGS.md under
-"Flagship session". Migrations `h1a1_helm`, `h1a2_helm_bank`, `h1a3_helm_reconcile` (one head).
+"Flagship session". Migrations `h1a1_helm`, `h1a2_helm_bank`, `h1a3_helm_reconcile`, `h1a4_helm_api_vocabulary` (one head).
 
 **For the website and payments session:**
 - **Plans and copy.** The plan cards already list Helm (`frontend/src/constants/planEntitlements.ts`:
@@ -387,6 +387,10 @@ planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in
   promises of the changed document, its counterparty and the bank lines that can match it
   (`lines_by_amount` already narrows them), and keep the full rebuild as the nightly check that the
   two agree.
+
+- **API keys and webhooks.** Enterprise keys reach Helm with `helm:read` / `helm:write`; approving and
+  Helm's rules stay with people (N-102). A key now works only in the organization that issued it
+  (F-435): if the developer portal shows keys across organizations, it must keep to that.
 
 **Build on these:**
 - Every Helm decision is deterministic code in `backend/app/services/helm/`; the only model call
