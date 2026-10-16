@@ -48,16 +48,23 @@ INR, GST invoices, the MSMED Act and income-tax section 43B(h); any currency wor
 8. **The Time machine.** Replay the last 6 months (24 on Enterprise) of your own documents as if Helm
    had been on: what it would have held, each amount marked confirmed, likely or potential, never
    added up as if certain.
-9. **The guided tour** (owner addition C) walks a first-time visitor through the sample company in
+9. **What if…** Beside the flight path: "what if customers pay 30 days later", "what if we hold
+   these invoices", "what if ₹20 lakh comes in". Helm plans both and shows the difference, on the same
+   1,000 futures, and saves nothing.
+10. **The guided tour** (owner addition C) walks a first-time visitor through the sample company in
    six steps.
+11. **Enterprise controls.** Approval chains: above an amount you choose, a payment needs two or three
+   different people (and Helm's own approval never counts). Custom conditions: your own rule from
+   up to eight facts of an invoice ("amount above ₹5 lakh and a new supplier"), to hold, to ask a
+   person first, or to notify.
 
 ## Plans (N-082, unchanged prices)
 
 | | Helm |
 |---|---|
 | Trial and Developer | **Helm preview**: the sample company, the guided tour, one replay a week of up to 3 months of your own documents |
-| Business | Helm: the mandate library, Propose and Act, bank statement import, supplier reconciliation, a 6-month replay, the 90-day forecast, up to 15 active mandates |
-| Enterprise | adds unlimited mandates, planning across all workspaces, a 24-month replay; custom condition mandates, approval chains, API keys and webhooks are in the plan (N-082) and their screens are being finished (STATE box 7) |
+| Business | Helm: the mandate library, Propose and Act, bank statement import, supplier reconciliation, a 6-month replay, the 90-day forecast, what-if, up to 15 active mandates |
+| Enterprise | adds unlimited mandates, planning across all workspaces, a 24-month replay, custom condition mandates and approval chains; API keys and webhooks are in the plan (N-082) and are being finished (STATE box 7) |
 
 ## Proof points (the sample company, Meridian Wholesale Pvt Ltd, an invented Pune distributor)
 

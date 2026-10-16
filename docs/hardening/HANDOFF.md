@@ -358,7 +358,7 @@ and least-privilege database roles (N-074).
 
 The flagship session built **Helm** (docs/helm/ARCHITECTURE.md is the design, kept current;
 docs/helm/MANDATES.md lists the mandates in plain words; docs/product/FLAGSHIP.md is the product
-story for the website). Its decisions are N-082 to N-097 in NEEDS-OWNER.md (`DECIDED (owner and
+story for the website). Its decisions are N-082 to N-100 in NEEDS-OWNER.md (`DECIDED (owner and
 planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in FINDINGS.md under
 "Flagship session". Migrations `h1a1_helm`, `h1a2_helm_bank`, `h1a3_helm_reconcile` (one head).
 
@@ -380,6 +380,13 @@ planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in
   (`organization_notification_service.APP_ACTIONS`).
 - **Performance.** ARCHITECTURE §13 has the budget measured at 1,000 and 10,000 documents
   (`tests/performance/test_helm_budgets.py`; `HELM_PERF_DOCUMENTS=10000` reruns the large one).
+  One item is over budget: the ledger update after one document change takes 2.9 s at 10,000
+  documents in a workspace (budget 1 s; within it up to about 2,000). Nobody waits on it (it runs in
+  the worker, debounced), but the next step is a truly incremental ledger: today
+  `ledger_store.rebuild_workspace` re-projects the whole workspace; instead re-project only the
+  promises of the changed document, its counterparty and the bank lines that can match it
+  (`lines_by_amount` already narrows them), and keep the full rebuild as the nightly check that the
+  two agree.
 
 **Build on these:**
 - Every Helm decision is deterministic code in `backend/app/services/helm/`; the only model call
