@@ -3349,3 +3349,38 @@ refused, billing never changes mandates, settings, books or the sample company, 
 of 43 routes); every Helm page in light and dark through axe-core (spec 83: no serious or critical
 violation); the API and worker logs of the Helm browser specs (no traceback).
 
+
+## Website and payments session: Servabo, the website and Dodo Payments (2026-10-16 to 2026-10-17)
+
+Each defect proven by a failing test before the fix (the commit named holds the test), unless the
+row says otherwise. "In session" means the defect came from this session's own rename and never
+reached `main`; it is recorded because a test now guards it.
+
+| ID | Severity | Area | Finding | Evidence | Status |
+|---|---|---|---|---|---|
+| F-444 | Medium | Billing gateways | **The Stripe gateway lacked the `name` and `capabilities` the gateway protocol requires**: asking the configured gateway what it can do raised an error when it was Stripe (found by the website's price export). | `test_with_usage_billing_the_seed_policies_stand` and the protocol test (d9f9346) | Fixed |
+| F-445 | Medium | API middleware | **A client that hung up in the middle of a request body produced a server error and three tracebacks** (the NUL-byte guard returned no response). It now ends quietly (499). | `tests/core/test_a_client_that_hangs_up_mid_body_is_not_an_error.py` (1a42403) | Fixed |
+| F-446 | High | Frontend | **A browser reporting an unusual language tag (`en-US@posix`) crashed the Helm cockpit** ("Something went wrong"): relative times passed `navigator.language` unchecked. They now use the validated display language; the self-check covers it. | `npm run check:self` and the display-time unit test (83a0cde) | Fixed |
+| F-447 | High (in session) | Rename | **API keys issued as `fp_live_`/`fp_test_` were refused after the prefix rename**; they work for one release. | `test_a_key_issued_before_the_rename_still_works` (3bc34be) | Fixed |
+| F-448 | Medium (in session) | Rename | **The password policy lost the old product name as a forbidden word**, so "flowpilot2026" was accepted. Restored. | password policy test (783cc99) | Fixed |
+| F-449 | High | Dodo billing | **Two Dodo checkouts paid in two tabs dead-lettered the second subscription's events** (unique index), with no alert, while the customer paid twice. Servabo now keeps one, ignores the other and alerts the operator to refund it (RUNBOOK §9.8). | `test_two_checkouts_racing_record_one_subscription_and_alert_the_operator` (98892f7) | Fixed |
+| F-450 | High | Dodo billing | **The period-close backstop wrote an OPEN statement for a Dodo subscription whose renewal webhook was late, and the dunning sweep chases OPEN invoices**: a paying Dodo customer could be made read-only. The backstop now closes Stripe periods only. | `tests/services/test_dodo_invoices.py` (4343a5d) | Fixed |
+| F-451 | High | Dodo billing | **Dodo payments never became invoices**: a Dodo customer's Invoices page was empty. Each payment is now a paid invoice issued by Dodo, with its tax invoice PDF downloadable. | `tests/services/test_dodo_invoices.py` (7 tests failed before; 4343a5d) | Fixed |
+| F-452 | High | Dodo billing | **Dodo refunds and disputes were ignored**: a refunded invoice still said Paid, RevOps never counted refunds, a chargeback went unnoticed and a lost one changed nothing. Now recorded, notified, counted; a lost dispute makes the organization read-only until a later payment or the operator lifts it. | `tests/services/test_dodo_refunds_and_disputes.py` (6 of 7 failed before; 4343a5d) | Fixed |
+| F-453 | Medium | Dodo billing | **Billing email and company name changes never reached the Dodo customer**, and the code path called Stripe on a Dodo account. Now sent to Dodo; never Stripe on a Dodo account. | `tests/services/test_dodo_customer_details.py` (5a52d52) | Fixed |
+| F-454 | Low | Copy | **A screen said "Quoted by Stripe"** and treated Dodo's seat quote as unavailable. Gateway-neutral now; a self-check refuses "Stripe" on screen. | `npm run check:self` "no Stripe on screen" (failed before; 740ed32) | Fixed |
+| F-455 | Medium | Plans | **Yearly prices were never published in the app** (only the website listed them), so Yearly was never offered. The seed publishes them once their products are configured. | `tests/services/test_yearly_prices_are_seeded.py` (2 failed before; a6b07dd) | Fixed |
+| F-456 | Medium | Unit economics | **Enterprise kept 54.7% at its ceilings after Dodo's fees**, under the 55% rule. Its OCR allowance is 95,000 pages a seat (price unchanged; N-108). | `tests/scripts/test_plan_unit_economics.py` (failed before; 125f810) | Fixed |
+| F-457 | Medium | Platform admin | **The margin console ignored what the payment provider keeps.** It now reports payments, Dodo's fee, refunds and the net. | `tests/services/test_margin_counts_payment_fees.py` (failed before; 68c8c2c) | Fixed |
+| F-458 | High | Checkout | **The checkout return page said "Payment received" before anything was confirmed, and called Dodo's declined-card return a success.** It now waits for the webhook (a minute, then says it is late) and says a decline at once. | Browser journey 60 on Dodo (aec7b81, dc21245). No failing test preceded the fix: the defect itself is **unverified** by test, the fixed behaviour is proven | Fixed |
+| F-459 | High | Dodo billing | **A held Dodo renewal turned the organization read-only silently**: one "Payment failed" notice, then nothing for 13 days, no reminder, no final notice, no read-only notice. The hourly `billing.hold_notices` job now reminds, warns and tells, once per hold (N-109). | `tests/services/test_dodo_hold_notices.py` (3 failed before; c0ee423) | Fixed |
+| F-460 | Critical | Dodo billing | **An upgrade on Dodo was undone by Dodo's own webhooks**: the reconciler read the plan from the checkout's metadata, which Dodo keeps after a plan change, so a customer paying for Business was put back on Developer. The billed product now decides. Found by the new browser journey 68. | `test_an_upgrade_survives_dodos_webhooks_when_checkout_named_the_old_plan` (failed before; f7ed29c) and journey 68 | Fixed |
+| F-461 | Low | Tests | **Three tests depended on what ran before them** (a cached plan tier, a once-only warning and an environment loaded from `.env`, and the order four same-transaction webhook rows are claimed in). Each now sets up what it needs; the racing test asserts one kept and the other flagged, whichever came first. | 66e9d9a, f511951, d2dcaa6 | Fixed |
+
+**Website and payments session — unverified (recorded for the next session):** every Dodo call and
+event shape was built from Dodo's documentation and proven against the stand-in only; the ten points
+in `docs/billing/DODO.md` §6 need one pass against a real Dodo test account.
+
+**Website and payments session — checked and sound:** the Stripe customer journeys after the switch
+to Dodo (60–67 pass with `E2E_GATEWAY=stripe`); one Dodo subscription's whole life delivered twice
+and at once to a real server with four workers (`tests/engines/test_dodo_concurrent_deliveries_live.py`).
