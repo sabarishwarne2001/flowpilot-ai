@@ -42,13 +42,16 @@ function parseRefreshCookie(response: Response): string {
  * fetch, retried once when the server had already closed the pooled keep-alive connection
  * ("other side closed"): uvicorn drops an idle connection after a few seconds, and Node can pick
  * it up in the same instant. The request never reached the server, so sending it again is safe.
+ * While a body is being written (an upload) the same race shows as EPIPE or ECONNRESET (CI, spec
+ * 71 and spec 78): the server closed the socket before reading the request, so it never ran.
  */
 export async function fetchOnce(url: string, init: RequestInit): Promise<Response> {
   try {
     return await fetch(url, init);
   } catch (error) {
     const cause = (error as { cause?: { code?: string; message?: string } }).cause;
-    if (cause?.code === "UND_ERR_SOCKET" || /other side closed/.test(String(cause?.message ?? ""))) {
+    if (cause?.code === "UND_ERR_SOCKET" || cause?.code === "EPIPE" || cause?.code === "ECONNRESET"
+      || /other side closed/.test(String(cause?.message ?? ""))) {
       return fetch(url, init);
     }
     throw error;
