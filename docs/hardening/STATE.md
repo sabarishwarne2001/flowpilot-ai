@@ -27,7 +27,10 @@ the first unticked box. Never restart.**
   true `helm-plan` shot, every screenshot recaptured as an Indian reader.
 - [x] 10. Records: VISUAL.md, FLAGSHIP identity, NEEDS-OWNER, FINDINGS, COVERAGE (`--check all` exits 0),
   HANDOFF.
-- [ ] 11. Finish: full browser suite, website checks, PR ready.
+- [x] 11. Full browser suite (808 passed, 2 skipped, 0 failed, on 17f3896) and website checks.
+- [x] 12. Owner's added task: the Documents Overview redesigned in Lumen (N-117), with two read-only
+  overview fields (documents read, the last 14 days; test failed first).
+- [ ] 13. Finish: the Overview's specs re-run, CI green, PR ready.
 
 **Checkpoint (2026-10-17).** Helm specs 78–85 pass on the new look (axe in both themes; no sideways
 scroll at 1440, 1024, 768, 375). Spec 85: six tests, including the cockpit ready within 1.5 s and no
@@ -35,6 +38,9 @@ long task over 200 ms after it. Backend: `tests/services/helm` and the route wal
 role matrix 4 passed. Frontend: lint, typecheck, e2e typecheck, `check:self` clean. Bundle: Helm's lazy
 chunks 59.0 → 76.1 kB gzipped (+17.1, allowance 35); the main stylesheet 23.5 → 24.8 kB gzipped (Helm's
 CSS is in it because the switch sits in Documents' header). No new runtime dependency.
+Backend (tests/api, core, security, services/helm and the Helm live tests): 2,206 passed, 11 skipped.
+Website: typecheck 0 errors, 18 pages, 1,296 links, HTML valid, axe clean in 72 page views, Lighthouse
+97/97/96 (other categories 100).
 
 ## Previous phase — Website and payments session: Servabo, the website and Dodo Payments
 Branch `claude/new-session-3qnrpb` (the session's assigned branch), based on `main` at `906c921`

@@ -1724,3 +1724,13 @@ the screenshots in glass frames with a soft glow) and a looping Documents → He
 motion). The rest of the site keeps the Servabo brand; the home page's Helm shots get the same glass
 frame. Screenshots are taken as an Indian reader (`en-IN`, Asia/Kolkata). The shot that showed a Guard
 certificate is now called `helm-certificate`; `helm-plan` is a true picture of the payment run.
+
+## N-117 — The Documents Overview in Lumen (DECIDED (Helm visual session, owner's added task))
+
+The owner asked for the Overview to be upgraded in its own style, with the reference images as ideas
+only. It now opens with a greeting and a live pill, then a hero card (the total as a big numeral, the
+last 14 days as columns, the success rate as a ring), the pipeline as five stages (uploaded, waiting,
+being read, read, failed), the KPI cards, Helm's card, Recent Activity and the document types as a
+donut with matching bars. Two read-only fields were added to the overview API for it (documents read,
+and a count for each of the last 14 days), so nothing on the page is invented. "Today" keeps the
+existing UTC day boundary (the workspace time zone is not used yet; noted in the code as before).

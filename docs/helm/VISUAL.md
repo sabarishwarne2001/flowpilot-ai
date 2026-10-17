@@ -177,3 +177,12 @@ cards carry a hairline of light on their top edge and lift when they are links; 
 wells (`.fp-well`); bars fill blue into violet; page titles are larger (`.fp-title`); the primary button
 has a violet edge and a sweep of light. Helm's card on the Overview is a window onto the flagship in
 Night Bridge's colours. The brand tokens the website shares (`brand/tokens.css`) are unchanged.
+
+**The Overview** (`pages/Dashboard/Dashboard.tsx`, `OverviewParts.tsx`; N-117): a greeting and a live
+pill; a hero card (`.fp-hero`) with the total as a count-up numeral (`.fp-hero-numeral`), the last 14
+days as rounded columns (`.fp-columns`, today lit) and the success rate as a blue-to-violet ring; the
+pipeline (`.fp-pipeline`: uploaded, waiting, being read, read, failed; a stage with work breathes); the
+KPI cards (`.fp-kpi-figure`); Helm's card; Recent Activity; the document types as a donut with bars in
+the same eight hues (`.fp-kind-1…8`). The 14 days and the "read" count come from the overview API
+(`daily_completed`, `completed_count`). Each chart has a list or words for screen readers.
+
