@@ -83,6 +83,11 @@ def _tier(db, key: str, name: str, product_id: str | None, at: datetime, cents: 
 @pytest.fixture()
 def org(db):
     """An organization with no billing account yet: Dodo's checkout creates the customer (D-10)."""
+    return make_org(db)
+
+
+def make_org(db) -> dict:
+    """The `org` fixture's organization, owner, price book and plans, in any session."""
     suffix = uuid.uuid4().hex[:8]
     at = datetime(2026, 1, 1, tzinfo=timezone.utc)
     owner = User(email=f"owner-{suffix}@acme.test", hashed_password="!x", is_active=True, email_verified_at=at)
