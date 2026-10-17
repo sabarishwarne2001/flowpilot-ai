@@ -131,14 +131,14 @@ export const HelmCertificate: React.FC = () => {
         All certificates
       </Link>
       <div className="helm-panel helm-panel-strong helm-enter helm-certificate relative overflow-hidden p-6 sm:p-8">
-        <div className="pointer-events-none absolute -right-6 -top-6 hidden sm:block">
-          <CertificateSeal fingerprint={cert.sha256} passed={cert.passed} verified={cert.verified} size={170} />
+        <div className="pointer-events-none absolute right-6 top-6 hidden sm:block">
+          <CertificateSeal fingerprint={cert.sha256} passed={cert.passed} verified={cert.verified} size={140} />
         </div>
         <div className="sm:hidden">
           <CertificateSeal fingerprint={cert.sha256} passed={cert.passed} verified={cert.verified} size={96} />
         </div>
         <p className="helm-label mt-3 sm:mt-0">Certificate · {STAGE_WORDS[cert.stage]}</p>
-        <h1 className="mt-2 max-w-[34rem] text-2xl font-semibold leading-snug tracking-tight">
+        <h1 className="mt-2 text-2xl sm:pr-40 font-semibold leading-snug tracking-tight">
           {cert.readable ? String(action.title ?? "An action") : "An action in a workspace you cannot read"}
         </h1>
         <p className={`mt-2 inline-flex items-center gap-1.5 text-sm font-semibold ${cert.passed ? "helm-state-holding" : "helm-state-breached"}`}>

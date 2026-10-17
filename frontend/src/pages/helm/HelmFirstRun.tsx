@@ -6,6 +6,8 @@ import { Check, Plus } from "lucide-react";
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { toMicros } from "@/components/helm/EditableReadback";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
+import { HelmSkeleton } from "@/components/helm/ui/HelmSkeleton";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { BacktestReport } from "@/pages/helm/HelmTimeMachine";
 import { helmPath } from "@/routes/tenantPaths";
@@ -37,19 +39,33 @@ const STEPS = ["Who you are", "Your cash", "Your mandates", "What Helm would hav
 
 const today = (): string => new Date().toISOString().slice(0, 10);
 
+/**
+ * The first run as a boot sequence: a progress rail that fills as steps finish, and a glowing
+ * marker per step (done, current, to come). Each step also says its state in words for screen
+ * readers; the rail is decoration.
+ */
 const Stepper: React.FC<{ readonly step: number }> = ({ step }) => (
-  <ol className="flex flex-wrap gap-2 text-xs" aria-label="Setting up Helm">
-    {STEPS.map((name, index) => (
-      <li
-        key={name}
-        className={`helm-chip gap-1.5 py-1 ${index === step ? "helm-chip-accent" : ""}`}
-        aria-current={index === step ? "step" : undefined}
-      >
-        {index < step ? <Check className="h-3 w-3" aria-hidden="true" /> : <span className="helm-figure">{index + 1}</span>}
-        {name}
-      </li>
-    ))}
-  </ol>
+  <div className="helm-panel helm-enter p-4">
+    <div className="helm-rail-track" aria-hidden="true">
+      <div className="helm-rail-fill" style={{ transform: `scaleX(${Math.min(1, (step + 0.5) / STEPS.length)})` }} />
+    </div>
+    <ol className="mt-4 grid gap-3 text-xs sm:grid-cols-4" aria-label="Setting up Helm">
+      {STEPS.map((name, index) => {
+        const state = index < step ? "done" : index === step ? "current" : "next";
+        return (
+          <li key={name} className="flex items-center gap-2.5" aria-current={index === step ? "step" : undefined}>
+            <span className="helm-step-marker" data-state={state} aria-hidden="true">
+              {index < step ? <Check className="h-3.5 w-3.5" /> : index + 1}
+            </span>
+            <span className={index === step ? "font-semibold" : "helm-muted"}>
+              {name}
+              <span className="sr-only">{state === "done" ? " (done)" : state === "current" ? " (now)" : ""}</span>
+            </span>
+          </li>
+        );
+      })}
+    </ol>
+  </div>
 );
 
 const Identities: React.FC<{ readonly settings: HelmSettings; readonly onDone: () => void }> = ({ settings, onDone }) => {
@@ -380,22 +396,18 @@ export const HelmFirstRun: React.FC = () => {
     return <LoadFailed what="Helm's setup" onRetry={() => void settings.refetch()} />;
   }
   if (!settings.data || step === null) {
-    return (
-      <p className="helm-muted text-sm" role="status">
-        Loading…
-      </p>
-    );
+    return <HelmSkeleton label="Loading…" />;
   }
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Set up Helm on {book.name}</h1>
-        <div className="mt-3">
-          <Stepper step={step} />
-        </div>
-      </div>
-      <section className="helm-panel p-5" aria-labelledby="helm-setup-step">
-        <h2 id="helm-setup-step" ref={heading} tabIndex={-1} className="mb-3 text-base font-semibold outline-none">
+    <div className="mx-auto max-w-4xl space-y-5">
+      <HelmPageHeader
+        eyebrow={`Step ${step + 1} of ${STEPS.length}`}
+        title={`Set up Helm on ${book.name}`}
+        description="Four short steps. Helm starts in Propose mode: it suggests, a person decides."
+      />
+      <Stepper step={step} />
+      <section key={step} className="helm-panel helm-panel-strong helm-enter p-6" aria-labelledby="helm-setup-step">
+        <h2 id="helm-setup-step" ref={heading} tabIndex={-1} className="mb-4 text-lg font-semibold tracking-tight outline-none">
           {STEPS[step]}
         </h2>
         {step === 0 ? <Identities settings={settings.data} onDone={advance} /> : null}

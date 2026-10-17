@@ -162,12 +162,11 @@
   }
 }
 
-/* A headline word picked out in the signal gradient (decoration: the words are the same text). */
+/* A headline word picked out in the signal colour, with a soft glow. Solid ink, not a gradient clip,
+   so its contrast can be measured (and passes AA in both themes). */
 .helm-signal-text {
-  background-image: linear-gradient(100deg, hsl(var(--helm-accent)), hsl(var(--helm-aqua)));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: hsl(var(--helm-accent));
+  text-shadow: 0 0 28px hsl(var(--helm-accent) / 0.45);
 }
 
 .helm-state-holding { color: hsl(var(--helm-holding)); }
@@ -337,6 +336,11 @@ label.helm-chip:has(input:focus-visible) {
 .helm :focus-visible {
   outline: 3px solid hsl(var(--helm-focus));
   outline-offset: 2px;
+}
+
+/* A heading or region given focus by script (tabindex="-1") to move the reader there: no ring. */
+.helm [tabindex="-1"]:focus-visible {
+  outline: none;
 }
 
 .helm .helm-btn:focus-visible,

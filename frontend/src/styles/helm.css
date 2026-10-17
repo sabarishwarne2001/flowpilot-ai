@@ -140,9 +140,7 @@
 /* The guided tour: the part of the page a step explains wears a glowing ring, and the ring glides
    between targets (HelmTour moves one ring element). */
 .helm-tour-target {
-  outline: 3px solid hsl(var(--helm-accent));
-  outline-offset: 4px;
-  border-radius: var(--helm-r-panel);
+  scroll-margin: 6rem;
 }
 
 .helm-tour-ring {

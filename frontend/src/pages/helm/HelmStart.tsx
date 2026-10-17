@@ -2,15 +2,18 @@ import React, { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Building2, Compass, History, Lock, Trash2 } from "lucide-react";
+import { BookOpen, Building2, History, Lock, Route as RouteIcon, ScrollText, ShieldCheck, Sparkles, Trash2 } from "lucide-react";
 
 import { useHelm } from "@/components/helm/HelmContext";
+import { InstrumentRing, StateBadge } from "@/components/helm/HelmBits";
+import { HelmMark } from "@/components/helm/ui/HelmMark";
 import { helmPath, organizationBillingPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import {
   buildHelmSample,
   createHelmBook,
   deleteHelmSample,
+  getHelmCockpit,
   getHelmOverview,
   helmKeys,
   requestHelmBacktest,
@@ -50,9 +53,9 @@ const SampleCompany: React.FC = () => {
   const [confirming, setConfirming] = useState(false);
 
   return (
-    <section aria-labelledby="helm-start-sample" className="helm-panel p-5" data-testid="helm-sample">
-      <h2 id="helm-start-sample" className="flex items-center gap-2 text-sm font-semibold">
-        <Building2 className="h-4 w-4" aria-hidden="true" />
+    <section aria-labelledby="helm-start-sample" className="helm-panel helm-panel-primary helm-enter p-6" style={{ ["--i" as string]: 2 }} data-testid="helm-sample">
+      <h2 id="helm-start-sample" className="flex items-center gap-2 text-[15px] font-semibold">
+        <Building2 className="helm-accent h-4 w-4" aria-hidden="true" />
         Explore Helm with a sample company
       </h2>
       <p className="helm-muted mt-1 text-sm">
@@ -96,7 +99,8 @@ const SampleCompany: React.FC = () => {
           ) : null}
         </div>
       ) : sample.building || build.isPending ? (
-        <p className="mt-3 text-sm" role="status" aria-live="polite">
+        <p className="mt-4 flex items-center gap-3 text-sm" role="status" aria-live="polite">
+          <HelmMark size={22} spinning className="helm-accent shrink-0" />
           Building {sample.name}: Helm is reading its documents. This takes about a minute.
         </p>
       ) : canDecide ? (
@@ -129,8 +133,8 @@ const PreviewReplay: React.FC = () => {
   }
   const { backtest_allowed: allowed, next_backtest_at: next } = overview.preview;
   return (
-    <section aria-labelledby="helm-start-replay" className="helm-panel p-5">
-      <h2 id="helm-start-replay" className="flex items-center gap-2 text-sm font-semibold">
+    <section aria-labelledby="helm-start-replay" className="helm-panel helm-enter p-6" style={{ ["--i" as string]: 3 }}>
+      <h2 id="helm-start-replay" className="flex items-center gap-2 text-[15px] font-semibold">
         <History className="h-4 w-4" aria-hidden="true" />
         Replay your own documents
       </h2>
@@ -161,13 +165,44 @@ const PreviewReplay: React.FC = () => {
   );
 };
 
-const FIVE_PARTS: { name: string; text: string }[] = [
-  { name: "Promise ledger", text: "Every promise your documents make: what you owe, what is owed to you, agreed prices, deadlines." },
-  { name: "Mandates", text: "Rules that must always be true, such as never paying above the agreed price, in plain words." },
-  { name: "Planner", text: "A payment plan that keeps every mandate, the law on MSME payments and your cash floor." },
-  { name: "Guard", text: "Checks every action twice, when planned and just before it runs, and certifies it." },
-  { name: "Time machine", text: "Replays your own history to show what Helm would have held, before you trust it." },
+const FIVE_PARTS: { name: string; text: string; icon: typeof BookOpen }[] = [
+  { name: "Promise ledger", text: "Every promise your documents make: what you owe, what is owed to you, agreed prices, deadlines.", icon: BookOpen },
+  { name: "Mandates", text: "Rules that must always be true, such as never paying above the agreed price, in plain words.", icon: ScrollText },
+  { name: "Planner", text: "A payment plan that keeps every mandate, the law on MSME payments and your cash floor.", icon: RouteIcon },
+  { name: "Guard", text: "Checks every action twice, when planned and just before it runs, and certifies it.", icon: ShieldCheck },
+  { name: "Time machine", text: "Replays your own history to show what Helm would have held, before you trust it.", icon: History },
 ];
+
+/**
+ * Behind the preview's sales card: the sample company's live instruments, blurred and inert, so
+ * the card sits on the real thing. Nothing is drawn until the sample exists (no invented numbers).
+ */
+const SampleBackdrop: React.FC<{ readonly bookId: string }> = ({ bookId }) => {
+  const { organizationId } = useHelm();
+  const cockpit = useQuery({
+    queryKey: helmKeys.cockpit(organizationId, bookId),
+    queryFn: () => getHelmCockpit(organizationId, bookId),
+    staleTime: 60_000,
+  });
+  const instruments = cockpit.data?.summary.instruments ?? [];
+  if (instruments.length === 0) {
+    return null;
+  }
+  return (
+    <div className="helm-preview-veil absolute inset-0 grid grid-cols-2 gap-3 p-4 sm:grid-cols-3" aria-hidden="true" inert>
+      {instruments.slice(0, 6).map((instrument) => (
+        <div key={instrument.mandate_id} className="helm-panel-raised flex gap-3 p-3">
+          <InstrumentRing state={instrument.state} size={40} />
+          <div className="min-w-0">
+            <p className="truncate text-xs font-semibold">{instrument.title}</p>
+            <StateBadge state={instrument.state} />
+            <p className="helm-figure mt-1 truncate text-sm font-semibold">{instrument.figure}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+};
 
 /** Where Helm begins: start it on a workspace (Business and up), or read what preview offers. */
 export const HelmStart: React.FC = () => {
@@ -186,21 +221,33 @@ export const HelmStart: React.FC = () => {
   const candidates = overview.workspaces.filter((w) => !w.is_sample && !w.has_book);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <div className="helm-panel p-6">
-        <Compass className="helm-accent h-7 w-7" aria-hidden="true" />
-        <h1 className="mt-3 text-xl font-semibold tracking-tight">Helm keeps your business promises</h1>
-        <p className="helm-muted mt-2 text-sm leading-relaxed">
+    <div className="mx-auto max-w-5xl space-y-5">
+      <div className="helm-panel helm-panel-strong helm-enter relative overflow-hidden p-6 sm:p-9">
+        <div className="pointer-events-none absolute -right-16 -top-16 hidden text-[hsl(var(--helm-accent)/0.12)] md:block" aria-hidden="true">
+          <HelmMark size={340} />
+        </div>
+        <span className="helm-accent flex h-14 w-14 items-center justify-center rounded-2xl border border-[hsl(var(--helm-accent)/0.4)] bg-[hsl(var(--helm-accent)/0.12)] shadow-[0_0_40px_-8px_hsl(var(--helm-accent)/0.8)]">
+          <HelmMark size={32} />
+        </span>
+        <p className="helm-label mt-5">The flagship engine</p>
+        <h1 className="helm-title mt-2 max-w-2xl text-[2.25rem] lg:text-[2.75rem]">
+          Helm keeps your business <span className="helm-signal-text">promises</span>
+        </h1>
+        <p className="helm-muted mt-3 max-w-2xl text-[15px] leading-relaxed">
           Helm reads the documents you already have and keeps what they promise. It decides with rules you can read; AI
           only helps you write a rule. It never moves money: payments go through your own bank.
         </p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-2">
-          {FIVE_PARTS.map((part) => (
-            <li key={part.name} className="helm-panel-raised p-3">
-              <p className="text-sm font-semibold">{part.name}</p>
-              <p className="helm-muted mt-0.5 text-xs">{part.text}</p>
-            </li>
-          ))}
+        <ul className="relative mt-7 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {FIVE_PARTS.map((part, index) => {
+            const Icon = part.icon;
+            return (
+              <li key={part.name} className="helm-panel-raised helm-enter p-4" style={{ ["--i" as string]: index + 1 }}>
+                <Icon className="helm-accent h-4 w-4" aria-hidden="true" />
+                <p className="mt-2 text-sm font-semibold">{part.name}</p>
+                <p className="helm-muted mt-1 text-xs leading-relaxed">{part.text}</p>
+              </li>
+            );
+          })}
         </ul>
       </div>
 
@@ -209,24 +256,32 @@ export const HelmStart: React.FC = () => {
       {access.preview ? <PreviewReplay /> : null}
 
       {access.preview ? (
-        <div className="helm-panel p-5">
-          <p className="flex items-center gap-2 text-sm font-semibold">
-            <Lock className="h-4 w-4" aria-hidden="true" />
-            Helm preview
-          </p>
-          <p className="helm-muted mt-1 text-sm">
-            Helm is included on the Business and Enterprise plans. On your plan you can explore Helm with a sample company
-            and run one backtest a week, of up to three months, on your own documents.
-          </p>
-          {role === "OWNER" || role === "BILLING" ? (
-            <Link to={organizationBillingPath(orgSlug)} className="helm-btn helm-btn-primary mt-3">
-              See plans
-            </Link>
-          ) : null}
+        <div className="helm-panel helm-enter relative min-h-[17rem] overflow-hidden" style={{ ["--i" as string]: 4 }} data-testid="helm-preview-card">
+          {overview.sample.book_id ? <SampleBackdrop bookId={overview.sample.book_id} /> : null}
+          <div className="relative flex min-h-[17rem] items-center justify-center p-5 sm:p-8">
+            <div className="helm-panel helm-panel-strong helm-panel-primary max-w-lg p-6 text-center">
+              <span className="helm-accent mx-auto flex h-11 w-11 items-center justify-center rounded-2xl border border-[hsl(var(--helm-accent)/0.4)] bg-[hsl(var(--helm-accent)/0.12)]">
+                <Sparkles className="h-5 w-5" aria-hidden="true" />
+              </span>
+              <p className="mt-3 flex items-center justify-center gap-2 text-lg font-semibold tracking-tight">
+                <Lock className="h-4 w-4" aria-hidden="true" />
+                Helm preview
+              </p>
+              <p className="helm-muted mt-2 text-sm leading-relaxed">
+                Helm is included on the Business and Enterprise plans. On your plan you can explore Helm with a sample company
+                and run one backtest a week, of up to three months, on your own documents.
+              </p>
+              {role === "OWNER" || role === "BILLING" ? (
+                <Link to={organizationBillingPath(orgSlug)} className="helm-btn helm-btn-primary helm-btn-hero mt-4">
+                  See plans
+                </Link>
+              ) : null}
+            </div>
+          </div>
         </div>
       ) : canDecide ? (
-        <section aria-labelledby="helm-start-workspaces" className="helm-panel p-5">
-          <h2 id="helm-start-workspaces" className="text-sm font-semibold">
+        <section aria-labelledby="helm-start-workspaces" className="helm-panel helm-enter p-6" style={{ ["--i" as string]: 4 }}>
+          <h2 id="helm-start-workspaces" className="text-[15px] font-semibold">
             Start Helm on a workspace
           </h2>
           <p className="helm-muted mt-1 text-xs">
