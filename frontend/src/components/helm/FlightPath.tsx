@@ -1,7 +1,7 @@
 import React, { useId, useMemo, useState } from "react";
 
 import { formatCalendarDate, formatMoney, formatNumber } from "@/utils/displayTime";
-import { formatMoneyMicros } from "@/utils/formatters";
+import { formatHelmMoney as formatMoneyMicros } from "@/components/helm/money";
 import type { CashPoint } from "@/types/helm";
 
 export interface FlightPin {

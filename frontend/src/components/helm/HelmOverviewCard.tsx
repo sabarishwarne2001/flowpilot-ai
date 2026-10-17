@@ -6,7 +6,7 @@ import { Compass, Lock } from "lucide-react";
 import { seesHelm } from "@/components/helm/modeMemory";
 import { helmPath } from "@/routes/tenantPaths";
 import { getHelmWorkspaceCard, helmKeys } from "@/services/api/helm";
-import { formatMoneyMicros } from "@/utils/formatters";
+import { formatHelmMoney } from "@/components/helm/money";
 
 /**
  * Helm on the workspace Overview (brief §10.3), in Documents mode's own look: what Helm has held
@@ -55,7 +55,7 @@ export const HelmOverviewCard: React.FC<{
                   {amounts.map(([currency, micros], i) => (
                     <React.Fragment key={currency}>
                       {i > 0 ? ", " : null}
-                      <span className="fp-num font-semibold text-foreground">{formatMoneyMicros(micros, currency)}</span>
+                      <span className="fp-num font-semibold text-foreground">{formatHelmMoney(micros, currency)}</span>
                     </React.Fragment>
                   ))}
                   , backed by evidence.

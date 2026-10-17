@@ -2,7 +2,7 @@
 import React from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, ShieldAlert, ShieldCheck, ShieldQuestion, XCircle } from "lucide-react";
 
-import { formatMoneyMicros } from "@/utils/formatters";
+import { formatHelmMoney } from "@/components/helm/money";
 import { formatNumber } from "@/utils/displayTime";
 import type { ActionKind, DriftState, HelmAction, PlanSummary } from "@/types/helm";
 
@@ -108,7 +108,7 @@ export const Money: React.FC<{
   readonly currency: string | null | undefined;
   readonly className?: string;
 }> = ({ micros, currency, className = "" }) => (
-  <span className={`helm-figure ${className}`}>{formatMoneyMicros(micros ?? null, currency ?? null)}</span>
+  <span className={`helm-figure ${className}`}>{formatHelmMoney(micros ?? null, currency ?? null)}</span>
 );
 
 /** Totals in several currencies, each in its own (Helm never converts between currencies). */

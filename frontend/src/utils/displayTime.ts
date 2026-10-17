@@ -219,6 +219,24 @@ export const formatMoney = (
 };
 
 /**
+ * Helm visual session: money in a fixed locale's grouping, whatever the person's language. Helm
+ * prints rupees with Indian grouping (₹6,59,440.64) because its sentences say lakh and crore
+ * (components/helm/money.ts); nothing else should need it.
+ */
+export const formatMoneyInLocale = (
+  amount: number,
+  currency: string,
+  locale: string,
+  options: Intl.NumberFormatOptions = {},
+): string => {
+  try {
+    return new Intl.NumberFormat(locale, { style: "currency", currency, ...options }).format(amount);
+  } catch {
+    return formatMoney(amount, currency, options);
+  }
+};
+
+/**
  * "5 minutes ago", "yesterday", "3 months ago", in the person's language.
  *
  * Website and payments session: this lived in utils/formatters.ts and passed
