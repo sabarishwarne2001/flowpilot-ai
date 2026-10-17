@@ -69,14 +69,14 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, hint, icon: Icon, testI
       <div className="flex items-start justify-between gap-3">
         <p className="fp-eyebrow">{title}</p>
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-inner-highlight ${
-            danger ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-muted/60 text-muted-foreground"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center ${
+            danger ? "rounded-xl border border-destructive/30 bg-destructive/10 text-destructive" : "fp-well"
           }`}
         >
           <Icon className={`h-4 w-4 ${spin ? "animate-spin" : ""}`} aria-hidden />
         </span>
       </div>
-      <p className={`fp-num mt-2 text-[28px] font-semibold leading-none tracking-tight ${danger ? "text-destructive" : "text-foreground"}`}>
+      <p className={`fp-num mt-3 text-[32px] font-semibold leading-none tracking-[-0.03em] ${danger ? "text-destructive" : "text-foreground"}`}>
         {value}
       </p>
       <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
@@ -114,7 +114,7 @@ const KindBars: React.FC<{ readonly items: readonly DashboardDocTypeDistribution
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-              <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(item.count / widest) * 100}%` }} />
+              <div className="fp-bar-fill h-full rounded-full transition-[width] duration-500" style={{ width: `${(item.count / widest) * 100}%` }} />
             </div>
           </li>
         ))}
@@ -218,8 +218,9 @@ export const Dashboard: React.FC = () => {
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
-          <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
+          <p className="fp-eyebrow">{resolvedTenant?.organization.organization_name ?? "Workspace"}</p>
+          <h1 className="fp-title mt-1">Overview</h1>
+          <p className="mt-1 truncate text-[13px] text-muted-foreground">
             {resolvedTenant?.workspace.workspace_name ?? "This workspace"}: documents, processing and recent activity.
           </p>
         </div>

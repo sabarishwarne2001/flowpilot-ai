@@ -111,7 +111,7 @@ export const PlatformLayout: React.FC = () => {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
+      <main className="fp-canvas flex-1 overflow-y-auto p-3 sm:p-5 md:px-8 md:py-7">
         <RouteErrorBoundary>
           <Outlet />
         </RouteErrorBoundary>

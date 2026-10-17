@@ -94,7 +94,7 @@ export const DashboardLayout: React.FC = () => {
           change while its uploads are still running. */}
       <UploadTray />
 
-      <div className="flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
+      <div className="fp-canvas flex min-w-0 flex-1 flex-col h-screen overflow-hidden">
         <Header />
         <IncomingOwnershipBanner />
         <PendingInvitationsBanner />
@@ -112,7 +112,7 @@ export const DashboardLayout: React.FC = () => {
           />
         ) : null}
 
-        <main className="flex-1 overflow-y-auto bg-background p-3 sm:p-5 md:px-8 md:py-7">
+        <main className="flex-1 overflow-y-auto bg-transparent p-3 sm:p-5 md:px-8 md:py-7">
           <DisplayPreferencesBoundary>
             <RouteErrorBoundary>
               <Outlet />
