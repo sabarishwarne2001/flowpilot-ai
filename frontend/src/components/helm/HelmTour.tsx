@@ -8,7 +8,7 @@
  * marked `data-tour="…"`): it scrolls into view and is outlined. The panel is a non-modal dialog
  * (the page stays usable); Escape or "End the tour" closes it. Only on the sample company's book.
  */
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { Compass, X } from "lucide-react";
 
@@ -91,7 +91,7 @@ export const useTourPath = (): ((step: number) => string) => {
 export const StartTour: React.FC = () => {
   const path = useTourPath();
   return (
-    <Link to={path(0)} className="helm-btn helm-btn-primary" data-testid="helm-tour-start">
+    <Link to={path(0)} className="helm-btn helm-btn-hero" data-testid="helm-tour-start">
       <Compass className="h-3.5 w-3.5" aria-hidden="true" />
       Take the guided tour
     </Link>
@@ -116,17 +116,36 @@ export const HelmTour: React.FC = () => {
     navigate(`${location.pathname}${query ? `?${query}` : ""}`, { replace: true });
   };
 
+  // The glowing ring: one element that glides from target to target, following scroll and resize.
+  const [ring, setRing] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+
   // Point at the step's part of the page once it has rendered (data arrives after the route does).
   useEffect(() => {
     if (!step) {
+      setRing(null);
       return undefined;
     }
     headingRef.current?.focus();
     if (!step.target) {
+      setRing(null);
       return undefined;
     }
     let marked: Element | null = null;
     let tries = 0;
+    let frame = 0;
+    const place = (): void => {
+      frame = 0;
+      if (!marked) {
+        return;
+      }
+      const box = marked.getBoundingClientRect();
+      setRing({ x: box.left - 6, y: box.top - 6, w: box.width + 12, h: box.height + 12 });
+    };
+    const follow = (): void => {
+      if (!frame) {
+        frame = requestAnimationFrame(place);
+      }
+    };
     const find = (): boolean => {
       const found = document.querySelector(`[data-tour="${step.target}"]`);
       if (!found) {
@@ -135,8 +154,11 @@ export const HelmTour: React.FC = () => {
       marked = found;
       found.classList.add("helm-tour-target");
       found.scrollIntoView({ block: "center", behavior: "smooth" });
+      follow();
       return true;
     };
+    window.addEventListener("scroll", follow, true);
+    window.addEventListener("resize", follow);
     const timer = find()
       ? undefined
       : window.setInterval(() => {
@@ -149,6 +171,11 @@ export const HelmTour: React.FC = () => {
       if (timer !== undefined) {
         window.clearInterval(timer);
       }
+      if (frame) {
+        cancelAnimationFrame(frame);
+      }
+      window.removeEventListener("scroll", follow, true);
+      window.removeEventListener("resize", follow);
       (marked as Element | null)?.classList.remove("helm-tour-target");
     };
   }, [step, location.pathname]);
@@ -171,12 +198,21 @@ export const HelmTour: React.FC = () => {
   }
   const last = index === TOUR_STEPS.length - 1;
   return (
+    <>
+    {ring ? (
+      <div
+        className="helm-tour-ring"
+        aria-hidden="true"
+        style={{ left: 0, top: 0, width: ring.w, height: ring.h, transform: `translate(${ring.x}px, ${ring.y}px)` }}
+        data-testid="helm-tour-ring"
+      />
+    ) : null}
     <section
       role="dialog"
       aria-modal="false"
       aria-labelledby="helm-tour-title"
       aria-describedby="helm-tour-body"
-      className="helm-tour helm-panel fixed inset-x-3 bottom-3 z-40 p-4 shadow-lg sm:inset-x-auto sm:right-5 sm:bottom-5 sm:w-96"
+      className="helm-tour helm-panel helm-enter fixed inset-x-3 bottom-3 z-40 p-5 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[25rem]"
       data-testid="helm-tour"
     >
       <div className="flex items-start justify-between gap-2">
@@ -216,5 +252,6 @@ export const HelmTour: React.FC = () => {
         )}
       </div>
     </section>
+    </>
   );
 };

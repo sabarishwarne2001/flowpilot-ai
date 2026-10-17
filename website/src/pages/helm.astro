@@ -47,6 +47,15 @@ const helmPlans = PLANS.map((p) => ({
   ].filter(Boolean) as string[],
 }));
 
+/** Facts about Helm itself, not the sample company's money: each one is how the product works today. */
+const facts = [
+  { figure: "13", label: "ready mandates in the library" },
+  { figure: "1,000", label: "simulated futures behind every flight path" },
+  { figure: "2", label: "Guard checks for every action: when planned, and just before it runs" },
+  // No currency sign here: "₹" would pull in a second 86 kB font file just for this tile (Lighthouse).
+  { figure: "0", label: "rupees moved by Helm: a person pays from your bank" },
+];
+
 const product = {
   "@context": "https://schema.org",
   "@type": "SoftwareApplication",
@@ -59,13 +68,13 @@ const product = {
 };
 ---
 <Base title="Helm — keep your business promises" description="Helm reads every promise in your invoices, orders and contracts, plans what to pay, hold and chase, checks every step against your rules, and never moves money by itself." structuredData={[product]}>
-  <div class="helm">
+  <div class="helm helm-shell helm-page">
     <section class="relative overflow-hidden border-b helm-hairline" aria-labelledby="helm-title">
       <div class="page pb-16 pt-16 sm:pt-24">
         <div class="grid items-center gap-12 lg:grid-cols-[1fr_1.2fr]">
           <div>
             <p class="helm-label">Helm · the flagship engine of Servabo</p>
-            <h1 id="helm-title" class="display helm-ink mt-5">Helm keeps your business promises.</h1>
+            <h1 id="helm-title" class="display helm-ink mt-5">Helm keeps your business <span class="helm-signal-text">promises.</span></h1>
             <p class="lede mt-6 helm-muted">
               You write the outcomes and the limits once. Helm reads every promise in your documents,
               plans what to pay, hold and chase, checks every step against your rules, and shows you
@@ -76,9 +85,45 @@ const product = {
               <a href="#plans" class="btn helm-btn">Where Helm is included</a>
             </div>
             <p class="mt-4 text-sm helm-muted">Every account can open the sample company and take the guided tour during the {TRIAL_DAYS}-day trial.</p>
+            <figure class="mt-10 max-w-md">
+              <div class="nb-demo" data-switch-demo aria-hidden="true">
+                <div class="nb-demo-docs">
+                  <div class="nb-demo-line w-1/3"></div>
+                  <div class="nb-demo-line w-2/3"></div>
+                  <div class="mt-[6%]"><span class="nb-demo-card"></span><span class="nb-demo-card"></span><span class="nb-demo-card"></span></div>
+                  <div class="nb-demo-line mt-[6%] w-full"></div>
+                  <div class="nb-demo-line w-5/6"></div>
+                </div>
+                <div class="nb-demo-helm">
+                  <svg viewBox="0 0 320 170" aria-hidden="true">
+                    <g fill="none" stroke-width="5">
+                      <circle cx="40" cy="38" r="20" stroke="hsl(150 40% 90% / 0.1)" />
+                      <circle cx="100" cy="38" r="20" stroke="hsl(150 40% 90% / 0.1)" />
+                      <circle cx="160" cy="38" r="20" stroke="hsl(150 40% 90% / 0.1)" />
+                    </g>
+                    <circle class="nb-demo-ring nb-ring-a" cx="40" cy="38" r="20" stroke="hsl(152 72% 56%)" transform="rotate(-90 40 38)" />
+                    <circle class="nb-demo-ring nb-ring-b" cx="100" cy="38" r="20" stroke="hsl(38 94% 62%)" transform="rotate(-90 100 38)" />
+                    <circle class="nb-demo-ring nb-ring-c" cx="160" cy="38" r="20" stroke="hsl(172 70% 50%)" transform="rotate(-90 160 38)" />
+                    <path d="M10 150 C 60 120, 80 140, 120 110 S 190 70, 230 88 S 290 60, 310 66 L 310 120 C 270 116, 230 128, 190 122 S 90 160, 10 158 Z" fill="hsl(152 72% 56% / 0.14)" />
+                    <path class="nb-demo-fan" d="M10 154 C 60 125, 80 145, 120 116 S 190 78, 230 96 S 290 70, 310 76" />
+                    <line x1="10" x2="310" y1="140" y2="140" stroke="hsl(352 88% 71%)" stroke-dasharray="5 4" stroke-width="1.5" />
+                  </svg>
+                </div>
+                <div class="nb-demo-switch"><span class="nb-demo-thumb"></span></div>
+              </div>
+              <figcaption class="mt-3 text-sm helm-muted">One switch away: Documents is where your team works; Helm is where the business is steered.</figcaption>
+            </figure>
           </div>
-          <Shot name="helm-cockpit" eager alt="The Helm cockpit: one instrument per mandate, the cash flight path with its floor, and the plan." />
+          <Shot name="helm-cockpit" tone="helm" eager alt="The Helm cockpit: one instrument per mandate, the cash flight path with its floor, and the plan." />
         </div>
+        <ul class="mt-16 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" aria-label="Helm in figures">
+          {facts.map((f) => (
+            <li class="helm-panel p-6">
+              <p class="helm-numeral helm-ink text-5xl">{f.figure}</p>
+              <p class="mt-3 text-sm leading-relaxed helm-muted">{f.label}</p>
+            </li>
+          ))}
+        </ul>
       </div>
     </section>
 
@@ -133,11 +178,20 @@ const product = {
         <h2 id="guard" class="h2 mt-3 helm-ink">Every action carries its certificate.</h2>
         <p class="lede mt-5 helm-muted">Before you see an action, and again before it runs, the Guard checks it against your mandates, the facts behind it, open fraud and duplicate flags, your cash floor and your cap. The certificate lists each check and its evidence, and it is sealed so it can never change.</p>
       </div>
-      <Shot name="helm-plan" alt="The Guard certificate for one payment in Helm's plan: every check, its result and its evidence, sealed with a fingerprint." />
+      <Shot name="helm-certificate" tone="helm" alt="The Guard certificate for one payment in Helm's plan: every check with an icon for its result, and a seal engraved with the start of its fingerprint." />
+    </section>
+
+    <section class="page mt-24 grid items-center gap-12 lg:grid-cols-2" aria-labelledby="plan">
+      <Shot name="helm-plan" tone="helm" alt="Helm's plan: the payment run, run day by run day, with each payment a person approved and its certificate." class="lg:order-1" />
+      <div class="lg:order-2">
+        <p class="helm-label">The plan</p>
+        <h2 id="plan" class="h2 mt-3 helm-ink">A payment run your team pays from its bank.</h2>
+        <p class="lede mt-5 helm-muted">Once a person approves, each payment lands on its run day with the supplier, the masked account, the invoice and its certificate. Download the list for your bank or accounting system; Helm records it as paid when the bank statement shows it.</p>
+      </div>
     </section>
 
     <section class="page mt-24 grid items-center gap-12 lg:grid-cols-2" aria-labelledby="replay">
-      <Shot name="helm-time-machine" alt="Helm's Time machine replaying past months of the sample company, each amount marked confirmed, likely or potential." class="lg:order-1" />
+      <Shot name="helm-time-machine" tone="helm" alt="Helm's Time machine replaying past months of the sample company, each amount marked confirmed, likely or potential." class="lg:order-1" />
       <div class="lg:order-2">
         <p class="helm-label">The Time machine</p>
         <h2 id="replay" class="h2 mt-3 helm-ink">See what Helm would have held, on your own past.</h2>
@@ -207,4 +261,5 @@ const product = {
       </div>
     </section>
   </div>
+  <script is:inline src="/helm-switch-demo.js" defer></script>
 </Base>

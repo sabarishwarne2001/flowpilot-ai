@@ -2,7 +2,8 @@
 import React from "react";
 import { AlertTriangle, CheckCircle2, CircleDashed, ShieldAlert, ShieldCheck, ShieldQuestion, XCircle } from "lucide-react";
 
-import { formatMoneyMicros } from "@/utils/formatters";
+import { formatHelmMoney } from "@/components/helm/money";
+import { RingGauge } from "@/components/helm/ui/RingGauge";
 import { formatNumber } from "@/utils/displayTime";
 import type { ActionKind, DriftState, HelmAction, PlanSummary } from "@/types/helm";
 
@@ -24,7 +25,7 @@ const STATE_ICONS: Record<DriftState, React.ComponentType<{ className?: string; 
 export const StateBadge: React.FC<{ readonly state: DriftState }> = ({ state }) => {
   const Icon = STATE_ICONS[state] ?? CircleDashed;
   return (
-    <span className={`inline-flex items-center gap-1 text-xs font-semibold helm-state-${state}`}>
+    <span className={`helm-chip helm-state-${state} gap-1 px-2 text-xs font-semibold`}>
       <Icon className="h-3.5 w-3.5" aria-hidden="true" />
       {STATE_WORDS[state] ?? state}
     </span>
@@ -108,7 +109,7 @@ export const Money: React.FC<{
   readonly currency: string | null | undefined;
   readonly className?: string;
 }> = ({ micros, currency, className = "" }) => (
-  <span className={`helm-figure ${className}`}>{formatMoneyMicros(micros ?? null, currency ?? null)}</span>
+  <span className={`helm-figure ${className}`}>{formatHelmMoney(micros ?? null, currency ?? null)}</span>
 );
 
 /** Totals in several currencies, each in its own (Helm never converts between currencies). */
@@ -133,8 +134,10 @@ export const percent = (share: number | null | undefined): string =>
   share === null || share === undefined ? "—" : formatNumber(share, { style: "percent", maximumFractionDigits: 0 });
 
 /**
- * The visibility meter (brief §10.1): how much of the business Helm can see. Never presented as
- * more than it is: an empty part says so instead of showing 0% or 100%.
+ * The visibility meter (brief §10.1): how much of the business Helm can see, as three rings
+ * (payables, suppliers, contracts). Never presented as more than it is: an empty part says so
+ * instead of showing 0% or 100%. Each ring is a meter to assistive technology, with its detail in
+ * words.
  */
 export const VisibilityMeter: React.FC<{ readonly visibility: PlanSummary["visibility"] }> = ({ visibility }) => {
   const parts: { key: "payables" | "suppliers" | "contracts"; label: string; detail: (p: Record<string, number | null>) => string }[] = [
@@ -144,36 +147,41 @@ export const VisibilityMeter: React.FC<{ readonly visibility: PlanSummary["visib
   ];
   const overall = visibility?.overall ?? null;
   return (
-    <section aria-labelledby="helm-visibility" className="helm-panel p-4">
+    <section aria-labelledby="helm-visibility" className="helm-panel p-5">
       <div className="flex items-baseline justify-between gap-2">
         <h2 id="helm-visibility" className="helm-label">
           Visibility
         </h2>
-        <span className="helm-figure text-lg font-semibold">{percent(overall)}</span>
+        <span className="helm-numeral text-2xl">{percent(overall)}</span>
       </div>
       <p className="helm-muted mt-1 text-xs">What Helm can see of the business. It plans only with what it sees.</p>
-      <ul className="mt-3 space-y-2.5">
+      <ul className="mt-4 grid grid-cols-3 gap-2">
         {parts.map((part) => {
           const data = (visibility?.[part.key] ?? null) as Record<string, number | null> | null;
           const share = data?.share ?? null;
           return (
-            <li key={part.key}>
-              <div className="flex justify-between text-xs">
-                <span>{part.label}</span>
-                <span className="helm-figure">{share === null ? "nothing seen yet" : percent(share)}</span>
-              </div>
-              <div
-                className="helm-meter-track mt-1 h-1.5 overflow-hidden rounded-full"
+            <li key={part.key} className="flex min-w-0 flex-col items-center gap-2 text-center">
+              <span
                 role="meter"
                 aria-label={`${part.label} visibility`}
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={share === null ? undefined : Math.round(share * 100)}
                 aria-valuetext={share === null ? "Nothing seen yet" : `${percent(share)}: ${part.detail(data ?? {})}`}
+                className="inline-flex"
               >
-                <div className="helm-meter-fill h-full rounded-full" style={{ width: `${Math.round((share ?? 0) * 100)}%` }} />
-              </div>
-              {data ? <p className="helm-muted mt-0.5 text-[11px]">{part.detail(data)}</p> : null}
+                {share === null ? (
+                  <RingGauge value={0} tone="unknown" size={68} thickness={5}>
+                    <span className="helm-faint text-[10px] font-semibold">none</span>
+                  </RingGauge>
+                ) : (
+                  <RingGauge value={share} tone={part.key === "payables" ? "accent" : part.key === "suppliers" ? "aqua" : "sky"} size={68} thickness={5}>
+                    <span className="helm-figure text-sm font-semibold">{percent(share)}</span>
+                  </RingGauge>
+                )}
+              </span>
+              <span className="text-xs font-semibold">{part.label}</span>
+              <span className="helm-muted text-[11px] leading-snug">{data ? part.detail(data) : "nothing seen yet"}</span>
             </li>
           );
         })}
@@ -182,30 +190,20 @@ export const VisibilityMeter: React.FC<{ readonly visibility: PlanSummary["visib
   );
 };
 
-/** A thin instrument ring: a full circle in the state's colour, a partial one when a share is known. */
+/**
+ * An instrument's ring (Night Bridge RingGauge): holding is a full signal ring, drifting amber
+ * (the share at risk when known), breached rose with a soft pulse, unknown a quiet ring. The state
+ * is also a word and an icon beside it.
+ */
 export const InstrumentRing: React.FC<{ readonly state: DriftState; readonly share?: number | null; readonly size?: number }> = ({
   state,
   share = null,
-  size = 44,
+  size = 52,
 }) => {
-  const radius = size / 2 - 3;
-  const circumference = 2 * Math.PI * radius;
-  const filled = share === null ? 1 : Math.max(0, Math.min(1, share));
+  const Icon = STATE_ICONS[state] ?? CircleDashed;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" className="shrink-0">
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" strokeWidth="2" className="helm-ring-track" />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        className={`helm-ring-${state} helm-motion`}
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - filled)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
+    <RingGauge value={share} tone={state} size={size} thickness={4} pulse={state === "breached"}>
+      <Icon className={`helm-state-${state} h-4 w-4`} aria-hidden="true" />
+    </RingGauge>
   );
 };

@@ -3384,3 +3384,22 @@ in `docs/billing/DODO.md` §6 need one pass against a real Dodo test account.
 **Website and payments session — checked and sound:** the Stripe customer journeys after the switch
 to Dodo (60–67 pass with `E2E_GATEWAY=stripe`); one Dodo subscription's whole life delivered twice
 and at once to a real server with four workers (`tests/engines/test_dodo_concurrent_deliveries_live.py`).
+
+## Helm visual session: Night Bridge, the switch, Lumen and the website's Helm page (2026-10-17)
+
+Each defect proven by a failing test before the fix unless the row says otherwise; where only a
+screenshot shows it, the row says **unverified** by test.
+
+| ID | Severity | Area | Finding | Evidence | Status |
+|---|---|---|---|---|---|
+| F-462 | Medium | Helm money | **Helm printed rupees in thousands grouping** ("₹659,440.64", and "659.440,64 ₹" for a German reader) beside its own "₹6.6 lakh". INR in Helm now uses Indian grouping in every language (N-112). | `npm run check:self` "helm money" failed first (got "₹659,440.64"); passes (366017a) | Fixed |
+| F-463 | Medium | Helm navigation | **On Start, before a book was chosen, every sidebar page and the breadcrumb blinked**: the link pushed /helm/plan, the layout sent it straight back to Start, history grew by one and nothing said why. The pages are now closed (aria-disabled, a lock) and choosing one explains it. | Spec 85 "the sidebar's pages explain they need a book" failed on the old bundle (history.length 2 → 3, no explanation); passes (57c9dda) | Fixed |
+| F-464 | Medium | Mode switch | **React Router's `viewTransition` option does nothing in this app**: the pages are descendant `<Routes>`, where `navigate()` drops the option (`startViewTransition` was never called). The switch starts the transition itself (N-114). | Spec 85's transition test failed with the router option (0 calls), passes with the switch's own call (808c8b7) | Fixed |
+| F-465 | Low | Helm cockpit | **Instrument titles were cut mid-meaning** ("Never pay a changed bank account unt…", "Pay micro and small suppliers within th…"). They wrap to two lines now, the full title in the tooltip. | The "before" screenshots; **unverified** by test (3f28f40) | Fixed |
+| F-466 | Low | Time machine | **The period selector said "6 months" over a 9-month replay and nothing said which replay was on screen.** The replay now says "Showing the 9-month replay" with its period and when it ran. | Screenshots; **unverified** by test (8be33a7) | Fixed |
+| F-467 | Low | Helm money | **Chromium's Indian English writes thousands as "T"** (₹1,453.05 showed as "₹1.5T" on the Time machine's Likely tile, read as trillions). Short rupee figures under a lakh are written out. | Screenshot; Node's ICU prints "K", so the self-check guards the rule without reproducing Chromium; **unverified** by test (40cb71a) | Fixed |
+| F-468 | Low | Helm styles | **Some Helm lists drew no dividers**: `divide-[var(--helm-line)]` gave `border-color: 220 14% 86%`, not a colour. They use the glass rim now. | Code reading; **unverified** by test (8be33a7) | Fixed |
+
+**Helm visual session — checked and sound:** the Helm specs 78–84 on the new look (axe in both themes,
+no sideways scroll at 1440, 1024, 768 and 375 px); spec 85 (six tests, including the cockpit ready within
+1.5 s and no long task over 200 ms after it); the role-matrix sweep including the new calendar route.

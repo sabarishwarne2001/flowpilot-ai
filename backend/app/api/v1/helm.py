@@ -31,6 +31,7 @@
     PATCH  /organizations/{oid}/helm/books/{bid}/mandates/{mid}       edit: a new immutable version
     POST   /organizations/{oid}/helm/books/{bid}/mandates/{mid}/activate | pause | archive
     GET    /organizations/{oid}/helm/books/{bid}/ledger               the Promise ledger, filtered
+    GET    /organizations/{oid}/helm/books/{bid}/calendar             money due per day (the cockpit's calendar)
     GET    /organizations/{oid}/helm/books/{bid}/payment-run          the hand-over list (masked accounts)
     POST   /organizations/{oid}/helm/books/{bid}/invoices/{wid}/paid  a person records a payment
     GET    /organizations/{oid}/helm/books/{bid}/certificates
@@ -490,7 +491,8 @@ router.add_api_route(f"{P}/books/{{book_id}}/mandates/{{mandate_id}}/archive", _
 def helm_ledger(organization_id: uuid.UUID, book_id: uuid.UUID, kind: Optional[str] = Query(None),
                 direction: Optional[str] = Query(None), status: Optional[str] = Query(None),
                 counterparty: Optional[str] = Query(None, max_length=255), at_risk: bool = Query(False),
-                limit: int = Query(200, ge=1, le=500), offset: int = Query(0, ge=0),
+                due_on: Optional[date] = Query(None), limit: int = Query(200, ge=1, le=500),
+                offset: int = Query(0, ge=0),
                 db: Session = Depends(get_db),
                 context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
     who = _viewer(db, context)
@@ -500,7 +502,18 @@ def helm_ledger(organization_id: uuid.UUID, book_id: uuid.UUID, kind: Optional[s
 
             raise HelmInvalid(f"Unknown filter value {value!r}.", reason="FILTER")
     return service.ledger_view(db, who, service.book_for(db, who, book_id), kind=kind, direction=direction,
-                               status=status, counterparty=counterparty, at_risk=at_risk, limit=limit, offset=offset)
+                               status=status, counterparty=counterparty, at_risk=at_risk, due_on=due_on,
+                               limit=limit, offset=offset)
+
+
+@router.get(f"{P}/books/{{book_id}}/calendar")
+def helm_promise_calendar(organization_id: uuid.UUID, book_id: uuid.UUID, start: Optional[date] = Query(None),
+                          days: int = Query(84, ge=1, le=366), db: Session = Depends(get_db),
+                          context: OrganizationContext = Depends(RequireAnyOrgRole)) -> dict[str, Any]:
+    """The cockpit's Promise calendar: money due per day (read-only)."""
+    who = _viewer(db, context)
+    return service.promise_calendar(db, who, service.book_for(db, who, book_id), start=start or date.today(),
+                                    days=days)
 
 
 @router.get(f"{P}/books/{{book_id}}/payment-run")

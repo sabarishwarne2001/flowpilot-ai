@@ -64,6 +64,12 @@ export interface DashboardActivityFeed {
    */
   readonly work_item_id: string | null;
 }
+/** Documents that finished being read on one day (the workspace's last 14 days). */
+export interface DashboardDailyCount {
+  readonly on: string;
+  readonly count: number;
+}
+
 /**
  * Dashboard KPI metrics returned by the backend.
  */
@@ -110,6 +116,12 @@ export interface DashboardMetricsResponse {
    * Recent dashboard activity.
    */
   readonly recent_activity: readonly DashboardActivityFeed[];
+
+  /** Documents read successfully, all time (Helm visual session: the Overview's pipeline). */
+  readonly completed_count?: number;
+
+  /** Documents read each day for the last 14 days, oldest first, today last. */
+  readonly daily_completed?: readonly DashboardDailyCount[];
 }
 /**
  * Future dashboard extensions.

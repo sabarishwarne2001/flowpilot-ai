@@ -465,6 +465,42 @@ downgrade, one refund and one card decline (Dodo's test cards), and compare with
   be online with pricing, terms, refund policy and contact).
 - The ledger performance item from the flagship section is unchanged.
 
+## Helm visual session → next sessions
+
+_2026-10-17. Branch `claude/beautiful-dijkstra-yvlspo`, PR sabarishwarne2001/servabo#26._
+
+**What changed.** Helm wears Night Bridge on every page (`docs/helm/VISUAL.md`), the Documents | Helm
+switch glides and reveals Helm with a circle from the switch, Documents wears its own calm look (Lumen),
+and the website's Helm page and every screenshot were redone. Decisions N-111 to N-116; findings F-462
+to F-468.
+
+**How to see it locally.** `.\start_dev.ps1` (or `./start_dev.sh`), sign in, open the sample company
+from Helm's Start page (or press Helm in the header), then press Documents and Helm again to see the
+switch. Try both themes (the sun/moon button) and a phone width.
+
+**Keep in mind.**
+- Read `docs/helm/VISUAL.md` before touching a Helm page. Use the classes and `components/helm/ui/`;
+  every number on screen must come from the data (leave a badge out rather than invent it).
+- Helm money goes through `formatHelmMoney` / `formatHelmMoneyCompact` (`components/helm/money.ts`);
+  never `formatMoneyMicros` directly in Helm.
+- The switch starts its own view transition (N-114). If the routes are ever moved to a data-router
+  route tree, React Router's `viewTransition` option would work and the switch could use it instead.
+- The entrance animations are short so axe never sees text mid-fade; keep them under a second.
+- The website's CSP forbids inline styles and `data:` images: no `style=` in `.astro` pages, and the
+  Helm page has no grain layer. Its switch demo is `public/helm-switch-demo.js` plus CSS in
+  `website/src/styles/global.css`.
+- Bundle: Helm's lazy chunks grew from 58.2 kB to the figure in STATE.md (gzipped), inside the 35 kB
+  allowance; no new runtime dependency.
+
+**Seen, not fixed (pre-existing).** Spec 34 leaves a rescanned copy of Tenant C's INV-E2E-1001 in
+the workspace, so spec 22's "a filtered list pages over the matches only" finds 3 rows instead of 2
+when it runs after 34 on the same database (a partial re-run). In a full run 22 comes first and
+passes; a fresh database also passes. Spec 34 should delete its copy at the end.
+
+**Not done / for later.** The Plan page's what-if is still the cockpit's panel (not a drawer of its
+own); the template gallery's sheen is the shared panel hover. Findings F-465 to F-468 are fixed but proven
+by screenshots only.
+
 ## Owner launch checklist
 
 Only you can do these. Do them in this order; each step says what you need, where to click and how

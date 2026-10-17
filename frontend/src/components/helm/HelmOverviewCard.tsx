@@ -1,12 +1,13 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Compass, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
+import { HelmMark } from "@/components/helm/ui/HelmMark";
 
 import { seesHelm } from "@/components/helm/modeMemory";
 import { helmPath } from "@/routes/tenantPaths";
 import { getHelmWorkspaceCard, helmKeys } from "@/services/api/helm";
-import { formatMoneyMicros } from "@/utils/formatters";
+import { formatHelmMoney } from "@/components/helm/money";
 
 /**
  * Helm on the workspace Overview (brief §10.3), in Documents mode's own look: what Helm has held
@@ -34,9 +35,11 @@ export const HelmOverviewCard: React.FC<{
   const { state, book_id: bookId, value_held: held, waiting } = card.data;
   const amounts = Object.entries(held).filter(([, micros]) => micros > 0);
   return (
-    <section className="fp-card flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="helm-overview-card" data-testid="helm-overview-card">
+    <section className="fp-card fp-helm-teaser flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between" aria-labelledby="helm-overview-card" data-testid="helm-overview-card">
       <div className="flex min-w-0 items-start gap-3">
-        <Compass className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+        <span className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-[hsl(152_60%_45%/0.4)] bg-[hsl(152_72%_50%/0.12)] text-[hsl(158_82%_28%)] shadow-[0_0_24px_-6px_hsl(152_72%_50%/0.6)] dark:text-[hsl(152_72%_60%)]">
+          <HelmMark size={22} />
+        </span>
         <div className="min-w-0">
           <h2 id="helm-overview-card" className="text-[15px] font-semibold tracking-tight">
             Helm
@@ -55,7 +58,7 @@ export const HelmOverviewCard: React.FC<{
                   {amounts.map(([currency, micros], i) => (
                     <React.Fragment key={currency}>
                       {i > 0 ? ", " : null}
-                      <span className="fp-num font-semibold text-foreground">{formatMoneyMicros(micros, currency)}</span>
+                      <span className="fp-num font-semibold text-foreground">{formatHelmMoney(micros, currency)}</span>
                     </React.Fragment>
                   ))}
                   , backed by evidence.

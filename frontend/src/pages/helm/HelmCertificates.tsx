@@ -2,10 +2,13 @@ import React from "react";
 import { Link, useParams } from "react-router-dom";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { ArrowLeft, Download, Lock, ShieldAlert, ShieldCheck } from "lucide-react";
+import { ArrowLeft, CircleCheck, CircleMinus, CircleX, Download, Lock, ShieldAlert, ShieldCheck, UserCheck } from "lucide-react";
 
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
+import { CertificateSeal } from "@/components/helm/ui/CertificateSeal";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
+import { HelmSkeleton } from "@/components/helm/ui/HelmSkeleton";
 import { helmCertificatePath, helmPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { downloadHelmCertificate, getHelmCertificate, helmKeys, listHelmCertificates } from "@/services/api/helm";
@@ -20,6 +23,10 @@ const CHECK_WORDS: Record<string, string> = {
   not_applicable: "Not applicable",
 };
 
+/** One icon per check result, beside its word (never the icon alone). */
+const CHECK_ICONS = { pass: CircleCheck, fail: CircleX, needs_approval: UserCheck, not_applicable: CircleMinus } as const;
+const CHECK_TONES = { pass: "holding", fail: "breached", needs_approval: "drifting", not_applicable: "unknown" } as const;
+
 export const HelmCertificates: React.FC = () => {
   const { organizationId, orgSlug, withBook } = useHelm();
   const book = useHelmBook();
@@ -28,46 +35,47 @@ export const HelmCertificates: React.FC = () => {
     queryFn: () => listHelmCertificates(organizationId, book.id),
   });
   return (
-    <div className="mx-auto max-w-5xl space-y-4" data-tour="certificates">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Certificates</h1>
-        <p className="helm-muted mt-1 text-sm">
-          Every action Helm proposes or runs gets a certificate: what it was, the facts it relied on, the mandate
-          versions in force and each check the Guard made. Its SHA-256 fingerprint shows it was never changed.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5" data-tour="certificates">
+      <HelmPageHeader
+        eyebrow={book.name}
+        title="Certificates"
+        description="Every action Helm proposes or runs gets a certificate: what it was, the facts it relied on, the mandate versions in force and each check the Guard made. Its SHA-256 fingerprint shows it was never changed."
+      />
       {list.isError ? (
         <LoadFailed what="the certificates" onRetry={() => void list.refetch()} />
       ) : list.isLoading ? (
-        <p className="helm-muted text-sm" role="status">
-          Loading…
-        </p>
+        <HelmSkeleton label="Loading…" />
       ) : (list.data ?? []).length === 0 ? (
         <p className="helm-panel p-4 text-sm">None yet. The first plan issues the first certificates.</p>
       ) : (
-        <div className="helm-panel overflow-x-auto p-4">
-          <table className="w-full min-w-[640px] text-sm">
+        <div className="helm-panel helm-enter max-h-[75vh] overflow-auto p-2">
+          <table className="helm-table w-full min-w-[640px] text-sm">
             <thead>
-              <tr className="helm-label text-left">
-                <th scope="col" className="py-1 pr-3">Action</th>
-                <th scope="col" className="py-1 pr-3">Stage</th>
-                <th scope="col" className="py-1 pr-3">Result</th>
-                <th scope="col" className="py-1 pr-3">Issued</th>
-                <th scope="col" className="py-1">Fingerprint</th>
+              <tr>
+                <th scope="col">Action</th>
+                <th scope="col">Stage</th>
+                <th scope="col">Result</th>
+                <th scope="col">Issued</th>
+                <th scope="col">Fingerprint</th>
               </tr>
             </thead>
             <tbody>
               {(list.data ?? []).map((row) => (
-                <tr key={row.id} className="helm-hairline border-t" data-testid="helm-certificate-row">
-                  <td className="py-2 pr-3">
-                    <Link to={withBook(helmCertificatePath(orgSlug, row.id))} className="helm-accent font-medium hover:underline">
+                <tr key={row.id} data-testid="helm-certificate-row">
+                  <td>
+                    <Link to={withBook(helmCertificatePath(orgSlug, row.id))} className="font-medium hover:underline">
                       {row.readable ? row.title : "An action in a workspace you cannot read"}
                     </Link>
                   </td>
-                  <td className="py-2 pr-3 text-xs">{STAGE_WORDS[row.stage]}</td>
-                  <td className="py-2 pr-3 text-xs">{row.passed ? "Passed" : "Refused"}</td>
-                  <td className="py-2 pr-3 text-xs">{formatTimestamp(row.created_at)}</td>
-                  <td className="helm-figure py-2 text-xs">{row.sha256.slice(0, 12)}…</td>
+                  <td className="whitespace-nowrap text-xs">{STAGE_WORDS[row.stage]}</td>
+                  <td>
+                    <span className={`helm-chip px-2 text-xs ${row.passed ? "helm-state-holding" : "helm-state-breached"}`}>
+                      {row.passed ? <ShieldCheck className="h-3 w-3" aria-hidden="true" /> : <ShieldAlert className="h-3 w-3" aria-hidden="true" />}
+                      {row.passed ? "Passed" : "Refused"}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap text-xs">{formatTimestamp(row.created_at)}</td>
+                  <td className="helm-id text-xs">{row.sha256.slice(0, 12)}…</td>
                 </tr>
               ))}
             </tbody>
@@ -108,11 +116,7 @@ export const HelmCertificate: React.FC = () => {
     return <LoadFailed what="the certificate" onRetry={() => void certificate.refetch()} />;
   }
   if (!certificate.data) {
-    return (
-      <p className="helm-muted text-sm" role="status">
-        Loading…
-      </p>
-    );
+    return <HelmSkeleton label="Loading…" />;
   }
   const cert = certificate.data;
   const body = cert.body;
@@ -121,14 +125,20 @@ export const HelmCertificate: React.FC = () => {
   const mandates = body.mandates ?? [];
 
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
+    <div className="mx-auto max-w-4xl space-y-5">
       <Link to={withBook(helmPath(orgSlug, "certificates"))} className="helm-accent inline-flex items-center gap-1 text-xs hover:underline">
         <ArrowLeft className="h-3.5 w-3.5" aria-hidden="true" />
         All certificates
       </Link>
-      <div className="helm-panel p-5">
-        <p className="helm-label">Certificate · {STAGE_WORDS[cert.stage]}</p>
-        <h1 className="mt-1 text-lg font-semibold">
+      <div className="helm-panel helm-panel-strong helm-enter helm-certificate relative overflow-hidden p-6 sm:p-8">
+        <div className="pointer-events-none absolute right-6 top-6 hidden sm:block">
+          <CertificateSeal fingerprint={cert.sha256} passed={cert.passed} verified={cert.verified} size={140} />
+        </div>
+        <div className="sm:hidden">
+          <CertificateSeal fingerprint={cert.sha256} passed={cert.passed} verified={cert.verified} size={96} />
+        </div>
+        <p className="helm-label mt-3 sm:mt-0">Certificate · {STAGE_WORDS[cert.stage]}</p>
+        <h1 className="mt-2 text-2xl sm:pr-40 font-semibold leading-snug tracking-tight">
           {cert.readable ? String(action.title ?? "An action") : "An action in a workspace you cannot read"}
         </h1>
         <p className={`mt-2 inline-flex items-center gap-1.5 text-sm font-semibold ${cert.passed ? "helm-state-holding" : "helm-state-breached"}`}>
@@ -139,7 +149,7 @@ export const HelmCertificate: React.FC = () => {
           <dt className="helm-muted">Issued</dt>
           <dd>{formatTimestamp(cert.created_at)}</dd>
           <dt className="helm-muted">Fingerprint</dt>
-          <dd className="helm-figure break-all text-xs">
+          <dd className="helm-id break-all text-xs">
             {cert.sha256}{" "}
             <span className={cert.verified ? "helm-state-holding" : "helm-state-breached"}>
               {cert.verified ? "(matches: unchanged since it was issued)" : "(does not match: altered)"}
@@ -148,14 +158,14 @@ export const HelmCertificate: React.FC = () => {
           {body.engine_version ? (
             <>
               <dt className="helm-muted">Engine</dt>
-              <dd className="helm-figure text-xs">{body.engine_version}</dd>
+              <dd className="helm-id text-xs">{body.engine_version}</dd>
             </>
           ) : null}
           {body.snapshot ? (
             <>
               <dt className="helm-muted">Facts as of</dt>
               <dd className="text-xs">
-                {body.snapshot.as_of} · inputs <span className="helm-figure">{body.snapshot.digest.slice(0, 16)}…</span>
+                {body.snapshot.as_of} · inputs <span className="helm-id">{body.snapshot.digest.slice(0, 16)}…</span>
               </dd>
             </>
           ) : null}
@@ -174,21 +184,26 @@ export const HelmCertificate: React.FC = () => {
         ) : null}
       </div>
 
-      <section aria-labelledby="cert-checks" className="helm-panel p-5">
+      <section aria-labelledby="cert-checks" className="helm-panel helm-enter p-5" style={{ ["--i" as string]: 2 }}>
         <h2 id="cert-checks" className="helm-label">
           What the Guard checked
         </h2>
-        <ul className="mt-2 space-y-2 text-sm">
-          {checks.map((check) => (
-            <li key={check.id} className="flex flex-col gap-0.5 sm:flex-row sm:gap-3">
-              <span className={`w-32 shrink-0 font-semibold ${check.result === "fail" ? "helm-state-breached" : ""}`}>
+        <ul className="mt-3 helm-divide text-sm">
+          {checks.map((check) => {
+            const Icon = CHECK_ICONS[check.result] ?? CircleMinus;
+            const tone = CHECK_TONES[check.result] ?? "unknown";
+            return (
+            <li key={check.id} className="flex flex-col gap-1 py-2.5 sm:flex-row sm:gap-3" data-result={check.result}>
+              <span className={`inline-flex w-40 shrink-0 items-center gap-1.5 font-semibold helm-state-${tone}`}>
+                <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
                 {CHECK_WORDS[check.result] ?? check.result}
               </span>
               <span>
                 <span className="font-medium">{check.title}.</span> {check.detail}
               </span>
             </li>
-          ))}
+            );
+          })}
         </ul>
       </section>
 
@@ -201,7 +216,7 @@ export const HelmCertificate: React.FC = () => {
             {mandates.map((mandate) => (
               <li key={`${mandate.mandate_id}-${mandate.version}`}>
                 {mandate.template.replace(/_/g, " ")}, version {mandate.version}{" "}
-                <span className="helm-muted helm-figure text-xs">{mandate.spec_hash.slice(0, 12)}…</span>
+                <span className="helm-muted helm-id text-xs">{mandate.spec_hash.slice(0, 12)}…</span>
               </li>
             ))}
           </ul>

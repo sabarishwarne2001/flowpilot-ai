@@ -1673,3 +1673,64 @@ Dodo does not document how a live key differs from a test key, so Servabo does n
 `DODO_LIVEMODE` chooses the host (test or live), the start-up guard refuses a host that disagrees with
 it, and `scripts/dodo_setup.py` refuses live mode outright. A live key sent to the test host is refused
 by Dodo itself. **Unverified** against a real Dodo account (DODO.md §6).
+
+## N-111 — Helm's look is Night Bridge, replacing the "calm instrument panel" (DECIDED (Helm visual session))
+
+The flagship brief's §10.2 asked for a calm instrument panel: hairlines, one accent, monospace numbers.
+The owner's verdict on it was "a regular demo", and their wish was a top-tier flagship look. Helm now
+wears **Night Bridge** (`docs/helm/VISUAL.md`): a near-black canvas with a green undertone, frosted glass
+panels, one signal green, rings that encode values, a slow aurora behind everything, and motion that
+explains change. Light mode ("Day Bridge") is finished to the same standard. The reason in plain words:
+Helm is what sells Servabo, so it should look like nothing else in the market, while every number on
+screen stays real and every state is still a word and an icon, not only a colour.
+
+## N-112 — Rupees in Helm always use Indian grouping (DECIDED (owner brief, Helm visual session))
+
+INR amounts in Helm print as ₹6,59,440.64 and ₹3,24,45,975.20 in every language, because Helm's own
+sentences say "lakh" and "crore"; other currencies keep following the person's language (N-064). Short
+figures use lakh and crore (₹6.6L, ₹1.2Cr) and write out anything under a lakh (₹1,453), because
+Chromium's Indian English writes thousands as "T", which reads as trillions. Only in Helm, not app-wide.
+
+## N-113 — Documents gets its own look, Lumen, not Helm's (DECIDED (Helm visual session))
+
+The owner asked for Documents, the main product, to be upgraded visually too, in its own style rather
+than copying the reference images. Documents wears **Lumen**: paper-clear surfaces, the brand blue with a
+violet glow, a still light on the canvas, frosted header, lit active page, light-edged cards. It is calm
+on purpose (nothing moves by itself), because people work in it all day; Helm keeps the drama. The brand
+colours the website shares did not change, so the website's look outside its Helm page is the same.
+
+## N-114 — The mode switch starts its view transition itself (DECIDED (Helm visual session))
+
+The brief asked to navigate with React Router's `viewTransition` option. In this app it does nothing:
+the pages are descendant `<Routes>` under one router route, and there React Router drops the option.
+Rather than restructure every route, the switch calls `document.startViewTransition` itself and waits
+(at most a second) until the other mode's page is on screen. The effect is the one asked for; reduced
+motion and browsers without View Transitions navigate plainly.
+
+## N-115 — The cockpit's KPI strip and Promise calendar (DECIDED (Helm visual session))
+
+Six tiles, each from data the API already had: mandates holding (with a delta against 7 days ago only
+when the daily trends hold a state for then), cash floor confidence (or the lowest cautious cash when no
+floor is set), money at risk, waiting for approval, payments planned, and value held confirmed. Money in
+the tiles is short (₹22.5L) with the exact figure underneath. The Promise calendar needed one small
+read-only endpoint (`GET …/books/{id}/calendar`): amounts only from workspaces the viewer can read;
+promises elsewhere are counted, never summed. Enter on a day opens the Promise ledger on that day.
+
+## N-116 — The website's Helm page and screenshots (DECIDED (Helm visual session))
+
+The Helm page wears Night Bridge (glass, signal green, big numerals for four facts about how Helm works,
+the screenshots in glass frames with a soft glow) and a looping Documents → Helm switch demo in the hero
+(CSS and SVG only, no video; it loops only while on screen and stands still, showing Helm, under reduced
+motion). The rest of the site keeps the Servabo brand; the home page's Helm shots get the same glass
+frame. Screenshots are taken as an Indian reader (`en-IN`, Asia/Kolkata). The shot that showed a Guard
+certificate is now called `helm-certificate`; `helm-plan` is a true picture of the payment run.
+
+## N-117 — The Documents Overview in Lumen (DECIDED (Helm visual session, owner's added task))
+
+The owner asked for the Overview to be upgraded in its own style, with the reference images as ideas
+only. It now opens with a greeting and a live pill, then a hero card (the total as a big numeral, the
+last 14 days as columns, the success rate as a ring), the pipeline as five stages (uploaded, waiting,
+being read, read, failed), the KPI cards, Helm's card, Recent Activity and the document types as a
+donut with matching bars. Two read-only fields were added to the overview API for it (documents read,
+and a count for each of the last 14 days), so nothing on the page is invented. "Today" keeps the
+existing UTC day boundary (the workspace time zone is not used yet; noted in the code as before).

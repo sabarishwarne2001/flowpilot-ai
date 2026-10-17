@@ -1,0 +1,592 @@
+/*
+ * Night Bridge surfaces (VISUAL.md "Glass panel", "Typography"): glass panels and tiles, buttons,
+ * chips, inputs, the sidebar's links and tables. The class names are the ones every Helm page
+ * already uses, so the whole engine takes the new look from here.
+ */
+
+/* ---- Glass panel ------------------------------------------------------------------------------
+   A gradient fill (lighter at the top), a 1px rim, a 1px inner top highlight, a deep ambient
+   shadow and a backdrop blur. On hover the rim brightens, a spotlight follows the pointer (--mx and
+   --my, set by useSpotlight) and a sheen runs along the border. The blur is on panels only, never
+   on rows. */
+:where(.helm-panel) {
+  /* Zero specificity, so a page's own utility (fixed, rounded-…) still wins. */
+  position: relative;
+  border-radius: var(--helm-r-panel);
+}
+
+.helm-panel {
+  isolation: isolate;
+  border: 1px solid hsl(var(--helm-rim));
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-top)), hsl(var(--helm-glass-bottom)));
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight)), var(--helm-shadow);
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+  transition:
+    border-color var(--helm-t-2) var(--helm-ease),
+    box-shadow var(--helm-t-2) var(--helm-ease),
+    transform var(--helm-t-2) var(--helm-ease);
+}
+
+/* The spotlight: a soft radial glow at the pointer, inside the panel, under its content. */
+.helm-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 0%), hsl(var(--helm-spot)), transparent 60%);
+  transition: opacity var(--helm-t-3) var(--helm-ease);
+}
+
+/* The border sheen: a gradient ring drawn with a mask, so only the 1px border shows it. */
+.helm-panel::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  pointer-events: none;
+  opacity: 0;
+  background: radial-gradient(260px circle at var(--mx, 50%) var(--my, 0%), hsl(var(--helm-accent) / 0.55), transparent 70%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0);
+  transition: opacity var(--helm-t-3) var(--helm-ease);
+}
+
+.helm-panel:hover {
+  border-color: hsl(var(--helm-rim-strong));
+}
+
+.helm-panel:hover::before,
+.helm-panel:hover::after,
+.helm-panel:focus-within::after {
+  opacity: 1;
+}
+
+/* A panel that is itself one thing to click (a template, a tile): it lifts 2px. */
+.helm-panel-lift:hover {
+  transform: translateY(-2px);
+}
+
+.helm-panel-strong {
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-strong-top)), hsl(var(--helm-glass-strong-bottom)));
+  border-color: hsl(var(--helm-rim-strong));
+}
+
+/* Selected or primary: the signal rim and its glow. */
+.helm-panel-primary,
+.helm-panel[aria-current="true"],
+.helm-panel[aria-selected="true"] {
+  border-color: hsl(var(--helm-accent) / 0.6);
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight)), var(--helm-glow), var(--helm-shadow);
+}
+
+/* A tile inside a panel: no blur, a quieter fill, 14px corners. */
+:where(.helm-panel-raised) {
+  border-radius: var(--helm-r-tile);
+}
+
+.helm-panel-raised {
+  border: 1px solid hsl(var(--helm-rim));
+  background-color: hsl(var(--helm-glass-top));
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight));
+}
+
+:root:not(.dark) .helm .helm-panel-raised {
+  background-color: hsl(var(--helm-panel-raised) / 0.85);
+}
+
+.helm-hairline {
+  border-color: hsl(var(--helm-rim));
+}
+
+/* ---- Ink, labels and figures ------------------------------------------------------------------ */
+.helm-muted {
+  color: hsl(var(--helm-ink-muted));
+}
+
+.helm-faint {
+  color: hsl(var(--helm-ink-faint));
+}
+
+.helm-accent {
+  color: hsl(var(--helm-accent));
+}
+
+.helm-label {
+  color: hsl(var(--helm-ink-muted));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Money and figures in Inter with tabular, slashed-zero figures: aligned and more premium than a
+   monospace. JetBrains Mono stays for identifiers only (.helm-id). */
+.helm-figure {
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum", "zero", "cv01", "cv11", "ss01";
+  letter-spacing: -0.02em;
+}
+
+.helm-id {
+  font-family: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.helm-numeral {
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums slashed-zero;
+  font-feature-settings: "tnum", "zero", "cv01", "cv11", "ss01";
+  font-weight: 600;
+  letter-spacing: -0.035em;
+  line-height: 1.02;
+}
+
+.helm-title {
+  font-size: 1.75rem;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+
+@media (min-width: 1024px) {
+  .helm-title {
+    font-size: 2rem;
+  }
+}
+
+/* A headline word picked out in the signal colour, with a soft glow. Solid ink, not a gradient clip,
+   so its contrast can be measured (and passes AA in both themes). */
+.helm-signal-text {
+  color: hsl(var(--helm-accent));
+  text-shadow: 0 0 28px hsl(var(--helm-accent) / 0.45);
+}
+
+.helm-state-holding { color: hsl(var(--helm-holding)); }
+.helm-state-drifting { color: hsl(var(--helm-drifting)); }
+.helm-state-breached { color: hsl(var(--helm-breached)); }
+.helm-state-unknown { color: hsl(var(--helm-unknown)); }
+.helm-state-sky { color: hsl(var(--helm-sky)); }
+
+/* ---- Chips ------------------------------------------------------------------------------------- */
+.helm-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  border: 1px solid hsl(var(--helm-rim-strong));
+  border-radius: 999px;
+  padding: 0.0625rem 0.55rem;
+  background-color: hsl(var(--helm-glass-bottom));
+  font-size: 0.75rem;
+  font-weight: 550;
+  line-height: 1.25rem;
+  white-space: nowrap;
+}
+
+button.helm-chip {
+  cursor: pointer;
+  transition: border-color var(--helm-t-1) var(--helm-ease), background-color var(--helm-t-1) var(--helm-ease),
+    box-shadow var(--helm-t-2) var(--helm-ease);
+}
+
+button.helm-chip:hover {
+  border-color: hsl(var(--helm-accent) / 0.6);
+}
+
+.helm-chip-accent,
+.helm-chip[aria-checked="true"],
+.helm-chip[aria-pressed="true"] {
+  border-color: hsl(var(--helm-accent) / 0.7);
+  background-color: hsl(var(--helm-accent) / 0.14);
+  color: hsl(var(--helm-ink));
+  box-shadow: 0 0 18px -6px hsl(var(--helm-accent) / 0.55);
+}
+
+/* State chips: tinted fill and rim in the state's colour, the word and icon carry the meaning. */
+.helm-chip.helm-state-holding,
+.helm-tone-holding { border-color: hsl(var(--helm-holding) / 0.45); background-color: hsl(var(--helm-holding) / 0.1); }
+.helm-chip.helm-state-drifting,
+.helm-tone-drifting { border-color: hsl(var(--helm-drifting) / 0.45); background-color: hsl(var(--helm-drifting) / 0.1); }
+.helm-chip.helm-state-breached,
+.helm-tone-breached { border-color: hsl(var(--helm-breached) / 0.45); background-color: hsl(var(--helm-breached) / 0.1); }
+.helm-chip.helm-state-unknown,
+.helm-tone-unknown { border-color: hsl(var(--helm-unknown) / 0.4); background-color: hsl(var(--helm-unknown) / 0.08); }
+.helm-chip.helm-state-sky,
+.helm-tone-sky { border-color: hsl(var(--helm-sky) / 0.45); background-color: hsl(var(--helm-sky) / 0.1); }
+
+/* A chip that wraps a checkbox or radio (weekdays, date order): it lights up when chosen. */
+label.helm-chip {
+  transition: border-color var(--helm-t-1) var(--helm-ease), background-color var(--helm-t-1) var(--helm-ease);
+}
+
+label.helm-chip:has(input:checked) {
+  border-color: hsl(var(--helm-accent) / 0.7);
+  background-color: hsl(var(--helm-accent) / 0.14);
+}
+
+label.helm-chip:has(input:focus-visible) {
+  outline: 3px solid hsl(var(--helm-focus));
+  outline-offset: 2px;
+}
+
+/* ---- Buttons ----------------------------------------------------------------------------------- */
+:where(.helm-btn) {
+  position: relative;
+}
+
+.helm-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 2.375rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--helm-rim-strong));
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-strong-top)), hsl(var(--helm-glass-bottom)));
+  color: hsl(var(--helm-ink));
+  padding: 0 1rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight));
+  transition:
+    border-color var(--helm-t-1) var(--helm-ease),
+    box-shadow var(--helm-t-2) var(--helm-ease),
+    transform var(--helm-t-2) var(--helm-ease),
+    filter var(--helm-t-2) var(--helm-ease);
+}
+
+.helm-btn:hover:not(:disabled) {
+  border-color: hsl(var(--helm-accent) / 0.65);
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight)), 0 0 22px -8px hsl(var(--helm-accent) / 0.6);
+  transform: translateY(-1px);
+}
+
+.helm-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.helm-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+/* The primary: the signal gradient with a soft glow. Its ink passes AA on the gradient's lightest
+   stop in both themes. */
+.helm-btn-primary {
+  border-color: hsl(var(--helm-accent) / 0.9);
+  background-image: linear-gradient(180deg, hsl(var(--helm-accent)), hsl(var(--helm-accent-deep)));
+  color: hsl(var(--helm-accent-ink));
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.28), var(--helm-glow);
+}
+
+.dark .helm .helm-btn-primary {
+  background-image: linear-gradient(180deg, hsl(152 76% 62%), hsl(var(--helm-accent)));
+}
+
+.helm-btn-primary:hover:not(:disabled) {
+  border-color: hsl(var(--helm-accent));
+  filter: brightness(1.06) saturate(1.08);
+  box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.3), 0 0 0 1px hsl(var(--helm-accent) / 0.7), 0 0 40px -6px hsl(var(--helm-accent) / 0.6);
+}
+
+/* A row's own decision (Approve): the signal as an outline, so a list of them stays calm and only
+   the page's hero glows. */
+.helm-btn-signal {
+  border-color: hsl(var(--helm-accent) / 0.75);
+  background-image: none;
+  background-color: hsl(var(--helm-accent) / 0.12);
+  color: hsl(var(--helm-ink));
+}
+
+.helm-btn-signal:hover:not(:disabled) {
+  background-color: hsl(var(--helm-accent) / 0.2);
+}
+
+/* The hero button of a page ("Apply plan (13)", "Re-plan now"): bigger, and a light sweep crosses
+   it once on hover. */
+.helm-btn-hero {
+  min-height: 2.75rem;
+  padding: 0 1.35rem;
+  font-size: 0.875rem;
+  overflow: hidden;
+}
+
+.helm-btn-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(105deg, transparent 35%, hsl(0 0% 100% / 0.45) 50%, transparent 65%);
+  transform: translateX(-120%);
+}
+
+.helm-btn-hero:hover:not(:disabled)::after {
+  transform: translateX(120%);
+  transition: transform var(--helm-t-4) var(--helm-ease);
+}
+
+/* ---- Focus: a 3px signal ring with an offset, visible on glass ---------------------------------- */
+.helm :focus-visible {
+  outline: 3px solid hsl(var(--helm-focus));
+  outline-offset: 2px;
+}
+
+/* A heading or region given focus by script (tabindex="-1") to move the reader there: no ring. */
+.helm [tabindex="-1"]:focus-visible {
+  outline: none;
+}
+
+.helm .helm-btn:focus-visible,
+.helm .helm-chip:focus-visible {
+  outline-offset: 3px;
+}
+
+/* ---- Inputs ------------------------------------------------------------------------------------ */
+.helm-input {
+  min-height: 2.375rem;
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid hsl(var(--helm-rim-strong));
+  background-color: hsl(var(--helm-panel) / 0.7);
+  color: hsl(var(--helm-ink));
+  padding: 0.375rem 0.75rem;
+  font-size: 0.875rem;
+  box-shadow: inset 0 1px 2px hsl(0 0% 0% / 0.12);
+  transition: border-color var(--helm-t-1) var(--helm-ease), box-shadow var(--helm-t-2) var(--helm-ease);
+}
+
+.helm-input:hover:not(:disabled) {
+  border-color: hsl(var(--helm-accent) / 0.45);
+}
+
+.helm .helm-input:focus-visible {
+  outline: none;
+  border-color: hsl(var(--helm-accent));
+  box-shadow: 0 0 0 3px hsl(var(--helm-accent) / 0.28), 0 0 24px -8px hsl(var(--helm-accent) / 0.6);
+}
+
+.helm select.helm-input option {
+  background-color: hsl(var(--helm-panel));
+  color: hsl(var(--helm-ink));
+}
+
+/* Range sliders: the signal track. */
+.helm input[type="range"] {
+  accent-color: hsl(var(--helm-accent));
+}
+
+/* Toggles (Settings): a pill switch drawn on a native checkbox with role="switch". */
+.helm-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
+  flex: none;
+  width: 2.5rem;
+  height: 1.4rem;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--helm-rim-strong));
+  background-color: hsl(var(--helm-ink) / 0.12);
+  cursor: pointer;
+  transition: background-color var(--helm-t-2) var(--helm-ease), border-color var(--helm-t-2) var(--helm-ease),
+    box-shadow var(--helm-t-2) var(--helm-ease);
+}
+
+.helm-toggle::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: calc(1.4rem - 6px);
+  height: calc(1.4rem - 6px);
+  border-radius: 999px;
+  background-color: hsl(var(--helm-ink));
+  transition: transform var(--helm-t-3) var(--helm-ease-pop);
+}
+
+.helm-toggle:checked {
+  border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent));
+  box-shadow: 0 0 18px -4px hsl(var(--helm-accent) / 0.6);
+}
+
+.helm-toggle:checked::after {
+  transform: translateX(1.1rem);
+  background-color: hsl(var(--helm-accent-ink));
+}
+
+/* ---- The sidebar ------------------------------------------------------------------------------- */
+.helm-nav-link {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  border-radius: 12px;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--helm-ink-muted));
+  transition: background-color var(--helm-t-1) var(--helm-ease), color var(--helm-t-1) var(--helm-ease),
+    box-shadow var(--helm-t-2) var(--helm-ease);
+}
+
+.helm-nav-link:hover {
+  background-color: hsl(var(--helm-glass-top));
+  color: hsl(var(--helm-ink));
+}
+
+.helm-nav-link[aria-current="page"] {
+  color: hsl(var(--helm-ink));
+  font-weight: 600;
+  background-image: linear-gradient(90deg, hsl(var(--helm-accent) / 0.2), hsl(var(--helm-accent) / 0.04));
+  box-shadow: inset 0 0 0 1px hsl(var(--helm-accent) / 0.32), 0 0 24px -12px hsl(var(--helm-accent) / 0.8);
+}
+
+/* The active page's marker: a short glowing bar on the left edge. */
+.helm-nav-link[aria-current="page"]::before {
+  content: "";
+  position: absolute;
+  left: -0.75rem;
+  top: 22%;
+  bottom: 22%;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background-color: hsl(var(--helm-accent));
+  box-shadow: 0 0 12px hsl(var(--helm-accent) / 0.9);
+}
+
+.helm-nav-link[aria-current="page"] svg {
+  color: hsl(var(--helm-accent));
+}
+
+/* Before a book is chosen the pages wait: they stay readable, the text says why they are closed. */
+.helm-nav-link[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
+.helm-nav-link[aria-disabled="true"]:hover {
+  background-color: transparent;
+  color: hsl(var(--helm-ink-muted));
+}
+
+/* ---- Tables ------------------------------------------------------------------------------------ */
+.helm-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.helm-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background-color: hsl(var(--helm-panel) / 0.82);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid hsl(var(--helm-rim-strong));
+  color: hsl(var(--helm-ink-muted));
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 0.6rem 0.75rem;
+}
+
+.helm-table tbody td,
+.helm-table tbody th {
+  border-top: 1px solid hsl(var(--helm-rim));
+  padding: 0.7rem 0.75rem;
+}
+
+.helm-table tbody tr:first-child td,
+.helm-table tbody tr:first-child th {
+  border-top: 0;
+}
+
+/* Rows: a spotlight follows the pointer (no blur on rows). */
+.helm-table tbody tr {
+  background-image: radial-gradient(360px circle at var(--mx, -100%) 50%, hsl(var(--helm-spot)), transparent 70%);
+  background-size: 100% 100%;
+  transition: background-color var(--helm-t-1) var(--helm-ease);
+}
+
+.helm-table tbody tr:hover {
+  background-color: hsl(var(--helm-glass-bottom));
+}
+
+/* A divided list inside a panel (findings, earlier replays). */
+.helm-divide > * + * {
+  border-top: 1px solid hsl(var(--helm-rim));
+}
+
+/* ---- Meters, rings and pips -------------------------------------------------------------------- */
+.helm-meter-track { background-color: hsl(var(--helm-ink) / 0.1); }
+.helm-meter-fill {
+  background-image: linear-gradient(90deg, hsl(var(--helm-accent-deep)), hsl(var(--helm-accent)));
+  box-shadow: 0 0 12px hsl(var(--helm-accent) / 0.5);
+}
+
+.helm-ring-track { stroke: hsl(var(--helm-ink) / 0.1); }
+.helm-ring-holding { stroke: hsl(var(--helm-holding)); color: hsl(var(--helm-holding) / 0.55); }
+.helm-ring-drifting { stroke: hsl(var(--helm-drifting)); color: hsl(var(--helm-drifting) / 0.55); }
+.helm-ring-breached { stroke: hsl(var(--helm-breached)); color: hsl(var(--helm-breached) / 0.55); }
+.helm-ring-unknown { stroke: hsl(var(--helm-unknown)); color: transparent; }
+.helm-ring-accent { stroke: hsl(var(--helm-accent)); color: hsl(var(--helm-accent) / 0.55); }
+.helm-ring-aqua { stroke: hsl(var(--helm-aqua)); color: hsl(var(--helm-aqua) / 0.55); }
+.helm-ring-sky { stroke: hsl(var(--helm-sky)); color: hsl(var(--helm-sky) / 0.55); }
+/* The value arc glows softly in its own colour. */
+.helm-ring-sweep { filter: drop-shadow(0 0 3px currentColor); }
+
+/* An approval chain's progress (Enterprise): one pip per approval a payment needs, filled as people
+   approve. Decoration only: the words beside it ("1 of 2 approvals") carry the meaning. */
+.helm-pips {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.1875rem;
+}
+
+.helm-pip {
+  width: 0.5rem;
+  height: 0.5rem;
+  border: 1px solid hsl(var(--helm-line-strong));
+  border-radius: 999px;
+}
+
+.helm-pip-on {
+  border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent));
+  box-shadow: 0 0 8px hsl(var(--helm-accent) / 0.7);
+}
+
+/* ---- Glass skeletons (loading) ------------------------------------------------------------------ */
+.helm-skeleton {
+  position: relative;
+  overflow: hidden;
+  border-radius: var(--helm-r-panel);
+  border: 1px solid hsl(var(--helm-rim));
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-top)), hsl(var(--helm-glass-bottom)));
+}
+
+.helm-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background-image: linear-gradient(100deg, transparent 20%, hsl(var(--helm-accent) / 0.08) 50%, transparent 80%);
+  animation: helm-shimmer 1.8s var(--helm-ease) infinite;
+}
+
+@keyframes helm-shimmer {
+  to { transform: translateX(100%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-skeleton::after { animation: none; }
+}

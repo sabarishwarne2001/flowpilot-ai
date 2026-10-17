@@ -39,7 +39,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
       {Icon ? (
         <span
           aria-hidden="true"
-          className="mt-0.5 flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border/70 bg-gradient-to-b from-card to-muted/70 text-foreground/80 shadow-elevation-1"
+          className="fp-well mt-0.5 h-10 w-10 shrink-0"
         >
           <Icon className="h-[18px] w-[18px]" />
         </span>
@@ -51,7 +51,7 @@ export const PageHeader: React.FC<PageHeaderProps> = ({
           </p>
         ) : null}
         <div className="flex flex-wrap items-center gap-2.5">
-          <h1 className="text-xl font-semibold tracking-tight text-foreground sm:text-[22px]">{title}</h1>
+          <h1 className="fp-title text-foreground">{title}</h1>
           {badge}
         </div>
         {description ? (

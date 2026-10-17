@@ -80,6 +80,7 @@ _HELM_KEY_ROUTES: tuple[tuple[str, str], ...] = (
     ("GET", "/books/{book_id}/mandates"),
     ("POST", "/books/{book_id}/mandates/preview"),
     ("GET", "/books/{book_id}/ledger"),
+    ("GET", "/books/{book_id}/calendar"),
     ("GET", "/books/{book_id}/payment-run"),
     ("POST", "/books/{book_id}/invoices/{work_item_id}/paid"),
     ("GET", "/books/{book_id}/certificates"),

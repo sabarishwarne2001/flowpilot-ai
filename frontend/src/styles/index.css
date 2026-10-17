@@ -489,6 +489,369 @@
   }
 }
 
+/*
+ * Lumen: Documents mode's visual identity (docs/helm/VISUAL.md "Documents: Lumen"). Paper-clear
+ * surfaces, ink-blue with a violet glow, and calm: nothing in it moves on its own, because this is
+ * where people work all day. Helm's Night Bridge is the flagship's own look; Lumen is the
+ * workbench's. Both share the brand tokens (brand/tokens.css).
+ */
+@layer components {
+  /* The canvas behind every page: a soft light from the top, blue on the left, violet on the right. */
+  .fp-canvas {
+    position: relative;
+    isolation: isolate;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(60rem 26rem at 18% -8rem, hsl(var(--primary) / 0.14), transparent 70%),
+      radial-gradient(44rem 22rem at 96% -6rem, hsl(var(--brand-accent) / 0.12), transparent 70%);
+    background-repeat: no-repeat;
+  }
+
+  .dark .fp-canvas {
+    background-image:
+      radial-gradient(60rem 26rem at 18% -8rem, hsl(var(--primary) / 0.2), transparent 70%),
+      radial-gradient(44rem 22rem at 96% -6rem, hsl(var(--brand-accent) / 0.16), transparent 70%);
+  }
+
+  /* A fine grid under the light, fading out a little way down the page. */
+  .fp-canvas::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 30rem;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+    background-size: 28px 28px;
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent);
+    mask-image: linear-gradient(180deg, #000, transparent);
+  }
+
+  /* The header floats over the canvas as frosted glass. */
+  .fp-topbar {
+    background-color: hsl(var(--background) / 0.62);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+  }
+
+  /* The sidebar: a faint wash of the brand at its top. */
+  .fp-rail {
+    background-image: linear-gradient(180deg, hsl(var(--primary) / 0.05), transparent 18rem);
+  }
+
+  /* The active page in the sidebar: a lit pill with a glowing marker. */
+  .fp-nav-active {
+    background-image: linear-gradient(90deg, hsl(var(--primary) / 0.14), hsl(var(--brand-accent) / 0.06));
+    box-shadow: inset 0 0 0 1px hsl(var(--primary) / 0.18);
+  }
+
+  .fp-nav-active::before {
+    box-shadow: 0 0 10px hsl(var(--primary) / 0.8);
+  }
+
+  /* Cards: a hairline of light along the top edge, and a gentle lift when the card is a link. */
+  :where(.fp-card) {
+    position: relative;
+  }
+
+  .fp-card::after {
+    content: "";
+    position: absolute;
+    top: -1px;
+    left: 12%;
+    right: 12%;
+    height: 1px;
+    pointer-events: none;
+    background-image: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.32), hsl(var(--brand-accent) / 0.28), transparent);
+    opacity: 0.6;
+  }
+
+  a.fp-card,
+  button.fp-card {
+    transition:
+      transform 180ms cubic-bezier(0.16, 1, 0.3, 1),
+      box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+      border-color 150ms ease;
+  }
+
+  a.fp-card:hover,
+  button.fp-card:hover {
+    transform: translateY(-2px);
+    border-color: hsl(var(--primary) / 0.38);
+    box-shadow:
+      0 1px 0 0 hsl(var(--highlight) / 0.05) inset,
+      0 14px 32px -16px hsl(var(--primary) / 0.45),
+      0 2px 6px -2px hsl(var(--shadow-color) / 0.08);
+  }
+
+  a.fp-card:hover::after,
+  button.fp-card:hover::after {
+    opacity: 1;
+  }
+
+  /* An icon well: the brand's light in a small tile. */
+  .fp-well {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    border: 1px solid hsl(var(--primary) / 0.22);
+    background-image: linear-gradient(145deg, hsl(var(--primary) / 0.16), hsl(var(--brand-accent) / 0.1));
+    color: hsl(var(--primary));
+    box-shadow: inset 0 1px 0 hsl(var(--highlight) / 0.25), 0 6px 16px -8px hsl(var(--primary) / 0.6);
+  }
+
+  .dark .fp-well {
+    color: hsl(var(--primary-on-dark));
+    box-shadow: inset 0 1px 0 hsl(var(--highlight) / 0.06), 0 6px 18px -8px hsl(var(--primary) / 0.7);
+  }
+
+  /* A bar's fill, blue into violet. */
+  .fp-bar-fill {
+    background-image: linear-gradient(90deg, hsl(var(--primary)), hsl(var(--brand-accent)));
+  }
+
+  /* A page title in the larger Lumen size. */
+  .fp-title {
+    font-size: 1.5rem;
+    font-weight: 650;
+    letter-spacing: -0.028em;
+    line-height: 1.15;
+  }
+
+  @media (min-width: 1024px) {
+    .fp-title {
+      font-size: 1.75rem;
+    }
+  }
+
+  /* The primary button gains a faint violet in its gradient and a sweep of light on hover. */
+  .fp-btn-primary {
+    position: relative;
+    overflow: hidden;
+    background-image: linear-gradient(180deg, hsl(var(--highlight) / 0.16), hsl(var(--highlight) / 0) 55%),
+      linear-gradient(100deg, hsl(var(--primary)), hsl(var(--primary)) 55%, hsl(var(--brand-accent) / 0.9));
+  }
+
+  .fp-btn-primary::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(105deg, transparent 35%, hsl(0 0% 100% / 0.3) 50%, transparent 65%);
+    transform: translateX(-120%);
+  }
+
+  .fp-btn-primary:hover:not(:disabled)::after {
+    transform: translateX(120%);
+    transition: transform 650ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  /* ---- The Overview (Lumen) ---------------------------------------------------------------- */
+
+  /* The hero: a card lit from its top-left corner, the total in a big numeral. */
+  .fp-hero {
+    background-image:
+      radial-gradient(40rem 18rem at 0% 0%, hsl(var(--primary) / 0.12), transparent 70%),
+      radial-gradient(30rem 16rem at 100% 100%, hsl(var(--brand-accent) / 0.1), transparent 70%);
+  }
+
+  .fp-hero-numeral {
+    font-size: 3.5rem;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.045em;
+  }
+
+  @media (min-width: 1280px) {
+    .fp-hero-numeral {
+      font-size: 4.25rem;
+    }
+  }
+
+  /* The last 14 days as rounded columns that grow in; today glows. */
+  .fp-columns {
+    display: grid;
+    grid-template-columns: repeat(14, minmax(0, 1fr));
+    align-items: end;
+    gap: 0.4rem;
+    height: 8.5rem;
+  }
+
+  .fp-column-track {
+    display: flex;
+    align-items: flex-end;
+    width: 100%;
+    max-width: 1.6rem;
+    height: 7rem;
+    border-radius: 999px;
+    background-color: hsl(var(--muted) / 0.9);
+    overflow: hidden;
+  }
+
+  .fp-column {
+    width: 100%;
+    border-radius: 999px;
+    background-image: linear-gradient(180deg, hsl(var(--primary) / 0.85), hsl(var(--primary) / 0.45));
+    transform-origin: bottom;
+    animation: fp-grow 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: calc(var(--i, 0) * 35ms + 100ms);
+  }
+
+  .fp-column-today {
+    background-image: linear-gradient(180deg, hsl(var(--brand-accent)), hsl(var(--primary)));
+    box-shadow: 0 0 18px -2px hsl(var(--primary) / 0.7);
+  }
+
+  /* The success ring: blue into violet, swept from zero. */
+  .fp-ring-track {
+    stroke: hsl(var(--muted));
+  }
+
+  .fp-ring-stop-a {
+    stop-color: hsl(var(--primary));
+  }
+
+  .fp-ring-stop-b {
+    stop-color: hsl(var(--brand-accent));
+  }
+
+  .fp-ring-value {
+    filter: drop-shadow(0 0 6px hsl(var(--primary) / 0.45));
+    animation: fp-sweep 1s cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation-delay: 150ms;
+  }
+
+  /* The pipeline: five stages on a lit rail. A stage with work in it breathes. */
+  .fp-pipeline {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .fp-pipeline::before {
+    content: "";
+    position: absolute;
+    left: 10%;
+    right: 10%;
+    top: 1.25rem;
+    height: 2px;
+    border-radius: 999px;
+    background-image: linear-gradient(90deg, hsl(var(--primary) / 0.15), hsl(var(--primary) / 0.55), hsl(var(--brand-accent) / 0.4), hsl(var(--primary) / 0.15));
+  }
+
+  .fp-stage {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+    text-align: center;
+  }
+
+  .fp-stage-node {
+    display: inline-flex;
+    width: 2.5rem;
+    height: 2.5rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    border: 1px solid hsl(var(--border-strong));
+    background-color: hsl(var(--card));
+    box-shadow: 0 0 0 4px hsl(var(--card)), 0 4px 14px -6px hsl(var(--shadow-color) / 0.3);
+  }
+
+  .fp-stage-ink .fp-stage-node { color: hsl(var(--muted-foreground)); }
+  .fp-stage-blue .fp-stage-node { color: hsl(var(--primary)); border-color: hsl(var(--primary) / 0.45); }
+  .fp-stage-amber .fp-stage-node { color: hsl(var(--warning)); border-color: hsl(var(--warning) / 0.45); }
+  .fp-stage-green .fp-stage-node { color: hsl(var(--success)); border-color: hsl(var(--success) / 0.45); }
+  .fp-stage-red .fp-stage-node { color: hsl(var(--destructive)); border-color: hsl(var(--destructive) / 0.5); }
+  .dark .fp-stage-blue .fp-stage-node { color: hsl(var(--primary-on-dark)); }
+
+  .fp-stage[data-live="true"] .fp-stage-node {
+    animation: fp-breathe 2.4s ease-in-out infinite;
+  }
+
+  @media (max-width: 639px) {
+    .fp-pipeline {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      row-gap: 1.25rem;
+    }
+
+    .fp-pipeline::before {
+      display: none;
+    }
+  }
+
+  /* The document-type donut and its legend dots. */
+  .fp-kind-arc {
+    transition: stroke-width 150ms ease;
+  }
+
+  .fp-kind-1 { stroke: hsl(221 83% 53%); background-color: hsl(221 83% 53%); }
+  .fp-kind-2 { stroke: hsl(262 78% 62%); background-color: hsl(262 78% 62%); }
+  .fp-kind-3 { stroke: hsl(186 72% 42%); background-color: hsl(186 72% 42%); }
+  .fp-kind-4 { stroke: hsl(36 92% 52%); background-color: hsl(36 92% 52%); }
+  .fp-kind-5 { stroke: hsl(330 72% 58%); background-color: hsl(330 72% 58%); }
+  .fp-kind-6 { stroke: hsl(152 60% 42%); background-color: hsl(152 60% 42%); }
+  .fp-kind-7 { stroke: hsl(201 90% 52%); background-color: hsl(201 90% 52%); }
+  .fp-kind-8 { stroke: hsl(240 6% 60%); background-color: hsl(240 6% 60%); }
+  .fp-kind-rest { stroke: hsl(var(--border-strong)); }
+
+  .fp-kind-dot {
+    display: inline-block;
+    width: 0.55rem;
+    height: 0.55rem;
+    flex: none;
+    border-radius: 999px;
+  }
+
+  /* A KPI card's figure, a little larger and tighter in Lumen. */
+  .fp-kpi-figure {
+    font-size: 2rem;
+    font-weight: 650;
+    line-height: 1;
+    letter-spacing: -0.035em;
+  }
+
+  /* The live pill: a dot that breathes while documents are being read. */
+  .fp-live-dot {
+    position: relative;
+    display: inline-flex;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 999px;
+    background-color: currentColor;
+  }
+
+  .fp-live-dot[data-live="true"]::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: 999px;
+    border: 1.5px solid currentColor;
+    animation: fp-ping 2.4s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+  }
+
+  /* Helm's card on the Documents overview: a window onto the flagship, in Night Bridge's colours. */
+  .fp-helm-teaser {
+    border-color: hsl(152 60% 45% / 0.35);
+    background-image:
+      radial-gradient(30rem 10rem at 0% 0%, hsl(152 72% 50% / 0.14), transparent 70%),
+      linear-gradient(180deg, hsl(var(--card)), hsl(var(--card)));
+  }
+
+  .dark .fp-helm-teaser {
+    background-color: hsl(160 24% 5%);
+    background-image:
+      radial-gradient(30rem 10rem at 0% 0%, hsl(152 72% 56% / 0.16), transparent 70%),
+      radial-gradient(20rem 8rem at 100% 100%, hsl(172 70% 50% / 0.1), transparent 70%);
+  }
+}
+
 @keyframes fp-fade-in {
   from {
     opacity: 0;
@@ -506,6 +869,45 @@
   to {
     opacity: 1;
     transform: none;
+  }
+}
+
+@keyframes fp-grow {
+  from {
+    transform: scaleY(0);
+    opacity: 0.3;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+@keyframes fp-sweep {
+  from {
+    stroke-dashoffset: var(--fp-ring-c);
+  }
+}
+
+@keyframes fp-breathe {
+  0%,
+  100% {
+    box-shadow: 0 0 0 4px hsl(var(--card)), 0 0 0 4px hsl(var(--primary) / 0);
+  }
+  50% {
+    box-shadow: 0 0 0 4px hsl(var(--card)), 0 0 0 9px hsl(var(--primary) / 0.18);
+  }
+}
+
+@keyframes fp-ping {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.6);
+  }
+  70%,
+  100% {
+    opacity: 0;
+    transform: scale(1.6);
   }
 }
 

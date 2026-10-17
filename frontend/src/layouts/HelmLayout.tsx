@@ -1,4 +1,4 @@
-import React, { Suspense, useMemo, useState } from "react";
+import React, { Suspense, useMemo, useRef, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -13,12 +13,16 @@ import {
   Route as RouteIcon,
   ScrollText,
   Settings2,
+  ShieldCheck,
   X,
 } from "lucide-react";
 
 import { HelmProvider, useHelm } from "@/components/helm/HelmContext";
 import { HelmTour } from "@/components/helm/HelmTour";
 import { ModeSwitch } from "@/components/helm/ModeSwitch";
+import { HelmMark } from "@/components/helm/ui/HelmMark";
+import { HelmSkeleton } from "@/components/helm/ui/HelmSkeleton";
+import { useSpotlight } from "@/components/helm/ui/useSpotlight";
 import ThemeToggle from "@/components/layout/ThemeToggle";
 import OrganizationNotificationBell from "@/components/notification/OrganizationNotificationBell";
 import DunningBanner from "@/components/billing/DunningBanner";
@@ -57,26 +61,59 @@ const pageOf = (pathname: string, orgSlug: string): HelmPage => {
   return (rest.split("/")[0] ?? "") as HelmPage;
 };
 
+/**
+ * Helm's sidebar. Every page but Start shows a book (a workspace's promises and plan), so before one
+ * is chosen the pages are listed but closed: choosing one says why and points at Start, instead of
+ * navigating to a page that would send the person straight back (the "blink" this replaced).
+ */
 const HelmSidebar: React.FC<{ readonly onNavigate?: () => void }> = ({ onNavigate }) => {
-  const { orgSlug, organizationName, withBook, access } = useHelm();
+  const { orgSlug, organizationName, withBook, access, book } = useHelm();
   const { pathname } = useLocation();
   const current = pageOf(pathname, orgSlug);
+  const [explained, setExplained] = useState(false);
+  const ready = book !== null;
   return (
     <nav aria-label="Helm" className="flex h-full flex-col gap-1 p-3">
-      <div className="mb-3 flex items-center gap-2 px-2 pt-1">
-        <svg viewBox="0 0 24 24" className="h-6 w-6" aria-hidden="true">
-          <circle cx="12" cy="12" r="9.5" fill="none" strokeWidth="1.5" className="helm-ring-holding" />
-          <circle cx="12" cy="12" r="2" className="helm-chart-pin" />
-          <path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4" strokeWidth="1.5" className="helm-ring-track" />
-        </svg>
+      <div className="mb-4 flex items-center gap-2.5 px-2 pt-1.5">
+        <span className="helm-accent flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-[hsl(var(--helm-accent)/0.35)] bg-[hsl(var(--helm-accent)/0.1)] shadow-[0_0_24px_-6px_hsl(var(--helm-accent)/0.7)]">
+          <HelmMark size={22} />
+        </span>
         <div className="min-w-0">
-          <p className="text-sm font-semibold leading-tight">Helm</p>
+          <p className="text-[15px] font-semibold leading-tight tracking-tight">Helm</p>
           <p className="helm-muted truncate text-xs">{organizationName}</p>
         </div>
       </div>
+      <p className="helm-label px-3 pb-1">{ready ? "Bridge" : "Choose a book first"}</p>
       {HELM_NAV.map((item) => {
-        const active = current === item.page || (item.page === "certificates" && current === "certificates");
         const Icon = item.icon;
+        if (!ready) {
+          return (
+            <a
+              key={item.page || "cockpit"}
+              role="link"
+              tabIndex={0}
+              aria-disabled="true"
+              aria-describedby="helm-nav-closed"
+              className="helm-nav-link"
+              data-testid={`helm-nav-${item.page || "cockpit"}`}
+              onClick={(event) => {
+                event.preventDefault();
+                setExplained(true);
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  setExplained(true);
+                }
+              }}
+            >
+              <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
+              {item.name}
+              <Lock className="helm-faint ml-auto h-3 w-3" aria-hidden="true" />
+            </a>
+          );
+        }
+        const active = current === item.page;
         return (
           <Link
             key={item.page || "cockpit"}
@@ -84,28 +121,44 @@ const HelmSidebar: React.FC<{ readonly onNavigate?: () => void }> = ({ onNavigat
             className="helm-nav-link"
             aria-current={active ? "page" : undefined}
             onClick={onNavigate}
+            data-testid={`helm-nav-${item.page || "cockpit"}`}
           >
             <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
             {item.name}
           </Link>
         );
       })}
-      <div className="mt-auto space-y-2 px-2 pb-1 pt-4">
+      {!ready ? (
+        <p
+          id="helm-nav-closed"
+          className={`mx-1 mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed ${explained ? "helm-panel-raised" : "helm-muted"}`}
+          role="status"
+          data-testid="helm-nav-closed"
+        >
+          {explained
+            ? "These pages show one book: a workspace's promises and plan. Open the sample company or start Helm on a workspace here on Start, and they open."
+            : "These pages open once you choose a book on Start."}
+        </p>
+      ) : null}
+      <div className="mt-auto space-y-3 px-1 pb-1 pt-4">
         <Link
           to={helmPath(orgSlug, "start")}
-          className="helm-accent block text-xs hover:underline"
+          className="helm-accent block px-2 text-xs font-medium hover:underline"
           aria-current={current === "start" ? "page" : undefined}
           onClick={onNavigate}
         >
           Another workspace, or the sample company
         </Link>
         {access.preview ? (
-          <p className="helm-muted flex items-start gap-1.5 text-xs leading-relaxed">
-            <Lock className="mt-0.5 h-3 w-3 shrink-0" aria-hidden="true" />
+          <p className="helm-panel-raised helm-muted flex items-start gap-2 p-3 text-xs leading-relaxed">
+            <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             Helm preview: the sample company and one backtest a week on your own documents.
           </p>
         ) : (
-          <p className="helm-muted text-xs leading-relaxed">Helm never moves money. Payments go through your bank.</p>
+          <p className="helm-panel-raised helm-muted flex items-start gap-2 p-3 text-xs leading-relaxed">
+            <ShieldCheck className="helm-accent mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+            Helm never moves money. Payments go through your bank.
+          </p>
         )}
       </div>
     </nav>
@@ -118,7 +171,7 @@ const PreviewBanner: React.FC = () => {
     return null;
   }
   return (
-    <div className="helm-hairline flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text-xs sm:px-6">
+    <div className="helm-hairline helm-topbar flex flex-wrap items-center gap-x-3 gap-y-1 border-b px-4 py-2 text-xs sm:px-6">
       <span className="helm-chip">Preview</span>
       <span className="helm-muted">
         Helm is included on the Business and Enterprise plans. On yours you can explore the sample company and run one
@@ -161,6 +214,8 @@ const HelmChrome: React.FC = () => {
   const { pathname } = useLocation();
   const { state } = useTenant();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const shell = useRef<HTMLDivElement>(null);
+  useSpotlight(shell);
   const page = pageOf(pathname, orgSlug);
   const pageName =
     page === "start" ? "Start" : page === "setup" ? "Setup" : HELM_NAV.find((item) => item.page === page)?.name ?? "Cockpit";
@@ -175,26 +230,27 @@ const HelmChrome: React.FC = () => {
   }
 
   return (
-    <div className="helm flex h-screen w-full overflow-hidden">
-      <aside className="helm-hairline hidden h-screen w-[248px] min-h-0 shrink-0 flex-col border-r lg:flex">
+    <div ref={shell} className="helm helm-shell flex h-screen w-full overflow-hidden" data-testid="helm-shell">
+      <div className="helm-grain" aria-hidden="true" />
+      <aside className="helm-rail helm-hairline hidden h-screen w-[256px] min-h-0 shrink-0 flex-col border-r lg:flex">
         <HelmSidebar />
       </aside>
 
       {mobileOpen ? (
         <div className="fixed inset-0 z-40 flex lg:hidden">
-          <div className="helm helm-hairline flex h-full w-[272px] max-w-[85vw] min-h-0 flex-col border-r">
+          <div className="helm helm-rail helm-hairline flex h-full w-[280px] max-w-[85vw] min-h-0 flex-col border-r bg-[hsl(var(--helm-bg))]">
             <HelmSidebar onNavigate={() => setMobileOpen(false)} />
           </div>
-          <div className="flex-1 bg-black/60" onClick={() => setMobileOpen(false)} aria-hidden="true" />
+          <div className="flex-1 bg-black/60 backdrop-blur-sm" onClick={() => setMobileOpen(false)} aria-hidden="true" />
         </div>
       ) : null}
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-        <header className="helm-hairline relative z-20 flex h-14 shrink-0 items-center justify-between gap-2 border-b px-3 sm:px-5">
+        <header className="helm-topbar helm-hairline relative z-20 flex h-16 shrink-0 items-center justify-between gap-2 border-b px-3 sm:px-6">
           <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
-              className="flex h-8 w-8 items-center justify-center rounded-md lg:hidden"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-[hsl(var(--helm-rim-strong))] lg:hidden"
               onClick={() => setMobileOpen((open) => !open)}
               aria-label="Toggle Helm navigation"
               aria-expanded={mobileOpen}
@@ -207,12 +263,16 @@ const HelmChrome: React.FC = () => {
                 <li aria-hidden="true" className="helm-muted hidden md:block">
                   <ChevronRight className="h-3.5 w-3.5" />
                 </li>
-                <li className="min-w-0 truncate">
-                  <Link to={withBook(helmPath(orgSlug))} className="helm-muted hover:underline">
-                    {book ? book.name : "Helm"}
-                  </Link>
+                <li className="hidden min-w-0 truncate sm:block">
+                  {book ? (
+                    <Link to={withBook(helmPath(orgSlug))} className="helm-muted hover:underline">
+                      {book.name}
+                    </Link>
+                  ) : (
+                    <span className="helm-muted">Helm</span>
+                  )}
                 </li>
-                <li aria-hidden="true" className="helm-muted">
+                <li aria-hidden="true" className="helm-muted hidden sm:block">
                   <ChevronRight className="h-3.5 w-3.5" />
                 </li>
                 <li className="min-w-0 truncate font-medium" aria-current="page">
@@ -234,16 +294,10 @@ const HelmChrome: React.FC = () => {
         <TrialBanner organizationId={organizationId} organizationSlug={orgSlug} canChoosePlan={role === "OWNER"} />
         <PreviewBanner />
 
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:px-8 lg:py-7">
+        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 lg:px-9 lg:py-8">
           <DisplayPreferencesBoundary>
             <RouteErrorBoundary>
-              <Suspense
-                fallback={
-                  <p className="helm-muted text-sm" role="status">
-                    Loading…
-                  </p>
-                }
-              >
+              <Suspense fallback={<HelmSkeleton label="Loading…" />}>
                 <Outlet />
               </Suspense>
             </RouteErrorBoundary>
@@ -267,14 +321,15 @@ export const HelmLayout: React.FC = () => {
   const body = useMemo(() => {
     if (overview.isLoading) {
       return (
-        <div className="helm flex h-screen items-center justify-center" role="status" aria-live="polite">
+        <div className="helm helm-shell flex h-screen flex-col items-center justify-center gap-3" role="status" aria-live="polite">
+          <HelmMark size={44} spinning className="helm-accent" />
           <span className="helm-muted text-sm">Opening Helm…</span>
         </div>
       );
     }
     if (overview.isError || !overview.data) {
       return (
-        <div className="helm flex h-screen items-center justify-center p-6">
+        <div className="helm helm-shell flex h-screen items-center justify-center p-6">
           <LoadFailed what="Helm" onRetry={() => void overview.refetch()} />
         </div>
       );

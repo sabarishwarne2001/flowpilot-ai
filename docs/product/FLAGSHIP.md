@@ -90,3 +90,17 @@ anyone can delete it).
 Cockpit with the tour on step 1; the plan with a Guard certificate open; the Time machine replay;
 Bank statements after an import (one matched by Helm, one suggested); a reconciliation with its
 differences and the drafted email; the mandate composer reading a sentence back.
+
+## Identity: Night Bridge (Helm visual session, 2026-10-17)
+
+Helm has its own look, **Night Bridge**, which replaced the brief's "calm instrument panel" (N-111;
+the whole system is in `docs/helm/VISUAL.md`): a near-black canvas with a green undertone and a slow
+aurora, frosted glass panels, one signal green, rings that encode a value, big tabular figures in Inter,
+and a ship's-wheel mark. Light mode ("Day Bridge") is just as finished. Changing mode is a moment: the
+switch's thumb glides, and Helm is revealed by a circle growing from the switch. Documents keeps a calm
+look of its own, **Lumen** (N-113). For the website and sales: rupees always print in lakh and crore
+grouping (₹6,59,440.64; N-112), and every figure in a screenshot is the sample company's real data.
+
+Website screenshots now taken (`website/scripts/capture-screenshots.mjs`, as an Indian reader): the
+cockpit, the plan (the payment run), a Guard certificate (`helm-certificate`), the Time machine replay,
+bank statements after an import, and a reconciliation with its drafted email.

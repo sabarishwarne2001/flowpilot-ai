@@ -1,167 +1,22 @@
 /*
- * Helm's visual identity: an instrument panel (brief §10.2). Every Helm-specific token lives in this
- * one file, scoped to `.helm` (HelmLayout's root), so Documents mode is untouched.
+ * Helm's visual identity: Night Bridge (docs/helm/VISUAL.md). It replaced the flagship brief's
+ * "calm instrument panel" (§10.2) in the Helm visual session.
  *
- * Calm and precise: hairlines instead of shadows, one luminous accent, numbers in JetBrains Mono
- * with tabular figures, thin instrument rings, and motion that stops under reduced-motion.
- * Contrast: every text token is at least 4.5:1 on --helm-panel and --helm-bg in both themes; the
- * state colours are used for text and rings, never as the only signal (each state is also a word).
+ * The parts, in cascade order:
+ *   helm/tokens.css      colours, glass, radii, motion tokens (dark Night Bridge, light Day Bridge)
+ *   helm/atmosphere.css  the canvas, aurora, dot grid and grain behind every page; the shell's chrome
+ *   helm/surfaces.css    glass panels and tiles, type, chips, buttons, inputs, nav, tables, meters
+ *   helm/charts.css      the fan chart, sparklines, pill bars and the calendar heatmap
+ *   helm/motion.css      entrances, the live dot, the breached pulse, the radar; reduced motion
+ *   helm/switch.css      the Documents | Helm switch and the view transition (also outside `.helm`)
+ * Page-specific pieces follow below.
  */
-
-.helm {
-  --helm-bg: 220 20% 96.5%;
-  --helm-panel: 0 0% 100%;
-  --helm-panel-raised: 220 22% 98.5%;
-  --helm-line: 220 14% 86%;
-  --helm-line-strong: 220 12% 74%;
-  --helm-ink: 222 32% 11%;
-  --helm-ink-muted: 220 10% 36%;
-  --helm-accent: 176 84% 24%;
-  --helm-accent-ink: 0 0% 100%;
-  --helm-accent-soft: 176 52% 93%;
-  --helm-holding: 152 62% 26%;
-  --helm-drifting: 32 94% 31%;
-  --helm-breached: 0 72% 40%;
-  --helm-unknown: 220 9% 40%;
-  --helm-band: 176 60% 40%;
-  --helm-floor: 0 72% 40%;
-  --helm-focus: 176 84% 24%;
-
-  background-color: hsl(var(--helm-bg));
-  color: hsl(var(--helm-ink));
-}
-
-.dark .helm {
-  --helm-bg: 222 24% 5.5%;
-  --helm-panel: 222 20% 8.5%;
-  --helm-panel-raised: 222 18% 11%;
-  --helm-line: 222 14% 19%;
-  --helm-line-strong: 222 12% 30%;
-  --helm-ink: 210 24% 94%;
-  --helm-ink-muted: 215 14% 68%;
-  --helm-accent: 172 72% 52%;
-  --helm-accent-ink: 222 30% 8%;
-  --helm-accent-soft: 174 46% 13%;
-  --helm-holding: 152 56% 54%;
-  --helm-drifting: 38 92% 62%;
-  --helm-breached: 0 84% 70%;
-  --helm-unknown: 215 12% 64%;
-  --helm-band: 172 60% 50%;
-  --helm-floor: 0 84% 70%;
-  --helm-focus: 172 72% 52%;
-}
-
-.helm-panel {
-  background-color: hsl(var(--helm-panel));
-  border: 1px solid hsl(var(--helm-line));
-  border-radius: 0.75rem;
-}
-
-.helm-panel-raised {
-  background-color: hsl(var(--helm-panel-raised));
-  border: 1px solid hsl(var(--helm-line));
-  border-radius: 0.625rem;
-}
-
-.helm-hairline {
-  border-color: hsl(var(--helm-line));
-}
-
-.helm-muted {
-  color: hsl(var(--helm-ink-muted));
-}
-
-.helm-accent {
-  color: hsl(var(--helm-accent));
-}
-
-.helm-label {
-  color: hsl(var(--helm-ink-muted));
-  font-size: 0.6875rem;
-  font-weight: 600;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.helm-figure {
-  font-family: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: -0.01em;
-}
-
-.helm-state-holding { color: hsl(var(--helm-holding)); }
-.helm-state-drifting { color: hsl(var(--helm-drifting)); }
-.helm-state-breached { color: hsl(var(--helm-breached)); }
-.helm-state-unknown { color: hsl(var(--helm-unknown)); }
-
-.helm-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.25rem;
-  border: 1px solid hsl(var(--helm-line-strong));
-  border-radius: 999px;
-  padding: 0.0625rem 0.5rem;
-  font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.25rem;
-  white-space: nowrap;
-}
-
-.helm-chip-accent {
-  border-color: hsl(var(--helm-accent));
-  background-color: hsl(var(--helm-accent-soft));
-  color: hsl(var(--helm-ink));
-}
-
-.helm-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 0.375rem;
-  min-height: 2.25rem;
-  border-radius: 0.5rem;
-  border: 1px solid hsl(var(--helm-line-strong));
-  background-color: hsl(var(--helm-panel));
-  color: hsl(var(--helm-ink));
-  padding: 0 0.875rem;
-  font-size: 0.8125rem;
-  font-weight: 600;
-}
-
-.helm-btn:hover:not(:disabled) {
-  border-color: hsl(var(--helm-accent));
-}
-
-.helm-btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.helm-btn-primary {
-  border-color: hsl(var(--helm-accent));
-  background-color: hsl(var(--helm-accent));
-  color: hsl(var(--helm-accent-ink));
-}
-
-.helm-btn-primary:hover:not(:disabled) {
-  filter: brightness(1.08);
-}
-
-.helm :focus-visible {
-  outline: 2px solid hsl(var(--helm-focus));
-  outline-offset: 2px;
-}
-
-.helm-input {
-  min-height: 2.25rem;
-  width: 100%;
-  border-radius: 0.5rem;
-  border: 1px solid hsl(var(--helm-line-strong));
-  background-color: hsl(var(--helm-panel));
-  color: hsl(var(--helm-ink));
-  padding: 0.375rem 0.625rem;
-  font-size: 0.875rem;
-}
+@import "./helm/tokens.css";
+@import "./helm/atmosphere.css";
+@import "./helm/surfaces.css";
+@import "./helm/charts.css";
+@import "./helm/motion.css";
+@import "./helm/switch.css";
 
 /* A custom condition's row: fact, comparison, value and remove. It wraps on a phone and lines up
    in four columns from the small breakpoint. */
@@ -182,88 +37,6 @@
 .helm-condition-value { display: flex; align-items: center; gap: 0.375rem; min-width: 0; }
 .helm-condition-currency { width: 4.5rem; flex: none; }
 
-.helm-nav-link {
-  display: flex;
-  align-items: center;
-  gap: 0.625rem;
-  border-radius: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-  color: hsl(var(--helm-ink-muted));
-}
-
-.helm-nav-link:hover {
-  background-color: hsl(var(--helm-panel-raised));
-  color: hsl(var(--helm-ink));
-}
-
-.helm-nav-link[aria-current="page"] {
-  background-color: hsl(var(--helm-accent-soft));
-  color: hsl(var(--helm-ink));
-  font-weight: 600;
-  box-shadow: inset 2px 0 0 hsl(var(--helm-accent));
-}
-
-/* The mode switch (Documents | Helm) in both headers. */
-.helm-mode-switch {
-  display: inline-flex;
-  border: 1px solid hsl(var(--border));
-  border-radius: 0.5rem;
-  padding: 2px;
-  background-color: hsl(var(--card) / 0.6);
-}
-
-.helm-mode-option {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.3rem;
-  border-radius: 0.375rem;
-  padding: 0.25rem 0.625rem;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  cursor: pointer;
-}
-
-.helm-mode-option[aria-checked="true"] {
-  background-color: hsl(var(--foreground));
-  color: hsl(var(--background));
-}
-
-.helm-mode-option:focus-visible {
-  outline: 2px solid hsl(var(--ring));
-  outline-offset: 1px;
-}
-
-/* Thin instrument ring (an SVG circle's stroke). */
-.helm-ring-track { stroke: hsl(var(--helm-line)); }
-.helm-ring-holding { stroke: hsl(var(--helm-holding)); }
-.helm-ring-drifting { stroke: hsl(var(--helm-drifting)); }
-.helm-ring-breached { stroke: hsl(var(--helm-breached)); }
-.helm-ring-unknown { stroke: hsl(var(--helm-unknown)); }
-
-.helm-motion {
-  transition: stroke-dashoffset 600ms ease-out, opacity 300ms ease-out;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .helm-motion {
-    transition: none;
-  }
-}
-
-/* The flight path chart. */
-.helm-chart-band { fill: hsl(var(--helm-band) / 0.16); }
-.helm-chart-p50 { stroke: hsl(var(--helm-accent)); fill: none; stroke-width: 1.75; }
-.helm-chart-floor { stroke: hsl(var(--helm-floor)); stroke-dasharray: 4 3; stroke-width: 1.25; }
-.helm-chart-axis { stroke: hsl(var(--helm-line)); }
-.helm-chart-text { fill: hsl(var(--helm-ink-muted)); font-size: 10px; }
-.helm-chart-today { stroke: hsl(var(--helm-ink)); stroke-width: 1; stroke-dasharray: 2 2; }
-.helm-chart-pin { fill: hsl(var(--helm-accent)); }
-.helm-chart-past { stroke: hsl(var(--helm-ink-muted)); fill: none; stroke-width: 1.5; }
-/* A what-if's middle estimate: ink, long dashes, so it reads apart from the accent line and the floor. */
-.helm-chart-scenario { stroke: hsl(var(--helm-ink)); fill: none; stroke-width: 2; stroke-dasharray: 7 4; }
-
 /* The What if… panel: its comparison table keeps two figures side by side at phone width. */
 .helm-what-if-table th,
 .helm-what-if-table td {
@@ -275,48 +48,226 @@
   font-weight: 600;
 }
 
-/* An instrument's small trend: ink, not a status colour (the badge says the state in words). */
-.helm-trend-line { stroke: hsl(var(--helm-ink-muted)); }
-.helm-trend-end { fill: hsl(var(--helm-ink)); stroke: hsl(var(--helm-panel)); stroke-width: 2; }
-
-.helm-meter-track { background-color: hsl(var(--helm-line)); }
-.helm-meter-fill { background-color: hsl(var(--helm-accent)); }
-
-/* An approval chain's progress (Enterprise): one pip per approval a payment needs, filled as people
-   approve. Decoration only: the words beside it ("1 of 2 approvals") carry the meaning. */
-.helm-pips {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.1875rem;
-}
-
-.helm-pip {
-  width: 0.5rem;
-  height: 0.5rem;
-  border: 1px solid hsl(var(--helm-line-strong));
+/* The mandate composer: a command bar. Its input is large, and glows while it has focus. */
+.helm-command-input {
+  min-height: 3rem;
   border-radius: 999px;
+  padding-left: 1.15rem;
+  padding-right: 1.15rem;
+  font-size: 1rem;
 }
 
-.helm-pip-on {
-  border-color: hsl(var(--helm-accent));
-  background-color: hsl(var(--helm-accent));
+.helm-command:focus-within {
+  border-color: hsl(var(--helm-accent) / 0.55);
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight)), var(--helm-glow), var(--helm-shadow);
 }
 
-/* The guided tour (owner addition C): the part of the page a step explains. */
-.helm-tour-target {
-  outline: 3px solid hsl(var(--helm-accent));
-  outline-offset: 4px;
-  border-radius: 0.75rem;
-  transition: outline-color 150ms ease;
+/* A read-back's chips light up one after another as the sentence is read back. */
+.helm-readback .helm-chip-accent {
+  animation: helm-chip-fill var(--helm-t-4) var(--helm-ease-pop) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 60ms + 80ms);
+}
+
+@keyframes helm-chip-fill {
+  from {
+    transform: scale(0.86);
+    filter: brightness(1.6);
+  }
+  60% {
+    filter: brightness(1.35);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .helm-tour-target {
+  .helm-readback .helm-chip-accent {
+    animation: none;
+  }
+}
+
+/* The motion of a page change: a row the plan adds rises in, a row it removes fades out. */
+.helm-row-in {
+  animation: helm-rise var(--helm-t-3) var(--helm-ease) both;
+}
+
+/* The plan: a timeline of rows on a thin rail, each with a node that glows when the Guard passed it. */
+.helm-plan-list {
+  position: relative;
+}
+
+.helm-plan-list::before {
+  content: "";
+  position: absolute;
+  left: 0.4rem;
+  top: 1.4rem;
+  bottom: 1.4rem;
+  width: 1px;
+  background-image: linear-gradient(180deg, hsl(var(--helm-accent) / 0.5), hsl(var(--helm-rim-strong)) 60%, transparent);
+}
+
+.helm-plan-row + .helm-plan-row {
+  border-top: 1px solid hsl(var(--helm-rim));
+}
+
+.helm-plan-node {
+  position: absolute;
+  left: calc(0.4rem - 4.5px);
+  top: 1.35rem;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  border: 2px solid hsl(var(--helm-bg));
+  background-color: hsl(var(--helm-accent));
+  box-shadow: 0 0 0 1px hsl(var(--helm-accent) / 0.6), 0 0 10px hsl(var(--helm-accent) / 0.8);
+}
+
+.helm-plan-node[data-guard="blocked"] {
+  background-color: hsl(var(--helm-breached));
+  box-shadow: 0 0 0 1px hsl(var(--helm-breached) / 0.6), 0 0 10px hsl(var(--helm-breached) / 0.6);
+}
+
+.helm-plan-row[data-state="EXECUTED"] .helm-plan-node,
+.helm-plan-row[data-state="UNDONE"] .helm-plan-node,
+.helm-plan-row[data-state="REJECTED"] .helm-plan-node,
+.helm-plan-row[data-state="SUPERSEDED"] .helm-plan-node {
+  background-color: hsl(var(--helm-ink-faint));
+  box-shadow: none;
+}
+
+/* The guided tour: the part of the page a step explains wears a glowing ring, and the ring glides
+   between targets (HelmTour moves one ring element). */
+.helm-tour-target {
+  scroll-margin: 6rem;
+}
+
+.helm-tour-ring {
+  position: fixed;
+  z-index: 35;
+  pointer-events: none;
+  border-radius: calc(var(--helm-r-panel) + 6px);
+  border: 2px solid hsl(var(--helm-accent));
+  box-shadow: 0 0 0 9999px hsl(var(--helm-bg) / 0.45), 0 0 36px 2px hsl(var(--helm-accent) / 0.55),
+    inset 0 0 24px -6px hsl(var(--helm-accent) / 0.5);
+  transition: transform var(--helm-t-4) var(--helm-ease), width var(--helm-t-4) var(--helm-ease),
+    height var(--helm-t-4) var(--helm-ease), opacity var(--helm-t-3) var(--helm-ease);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-tour-ring,
+  .helm-row-in {
     transition: none;
+    animation: none;
   }
 }
 
 .helm-tour {
-  background-color: hsl(var(--helm-panel-raised));
+  border-color: hsl(var(--helm-accent) / 0.55);
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-strong-top)), hsl(var(--helm-glass-strong-bottom)));
+  box-shadow: var(--helm-glow), var(--helm-shadow);
+}
+
+:root:not(.dark) .helm .helm-tour,
+.dark .helm .helm-tour {
+  background-color: hsl(var(--helm-panel) / 0.86);
+}
+
+/* Bank statements: while a file imports, the drop zone's border scans. */
+.helm-dropzone {
+  position: relative;
+  border-radius: var(--helm-r-panel);
+  border: 1.5px dashed hsl(var(--helm-rim-strong));
+  transition: border-color var(--helm-t-2) var(--helm-ease), background-color var(--helm-t-2) var(--helm-ease);
+}
+
+.helm-dropzone:hover,
+.helm-dropzone[data-over="true"] {
+  border-color: hsl(var(--helm-accent) / 0.7);
+  background-color: hsl(var(--helm-accent) / 0.05);
+}
+
+.helm-dropzone[data-scanning="true"] {
+  border-style: solid;
+  border-color: transparent;
+  overflow: hidden;
+}
+
+.helm-dropzone[data-scanning="true"]::before {
+  content: "";
+  position: absolute;
+  inset: -50%;
+  background: conic-gradient(from 0deg, transparent 0 75%, hsl(var(--helm-accent)) 90%, transparent 100%);
+  animation: helm-spin 1.6s linear infinite;
+  z-index: -2;
+}
+
+.helm-dropzone[data-scanning="true"]::after {
+  content: "";
+  position: absolute;
+  inset: 1.5px;
+  border-radius: calc(var(--helm-r-panel) - 1.5px);
+  background-color: hsl(var(--helm-bg));
+  z-index: -1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-dropzone[data-scanning="true"]::before {
+    animation: none;
+  }
+}
+
+/* The Start page's boot sequence: a progress rail with glowing step markers. */
+.helm-rail-track {
+  position: relative;
+  height: 4px;
+  border-radius: 999px;
+  background-color: hsl(var(--helm-ink) / 0.1);
+  overflow: hidden;
+}
+
+.helm-rail-fill {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  background-image: linear-gradient(90deg, hsl(var(--helm-accent-deep)), hsl(var(--helm-accent)), hsl(var(--helm-aqua)));
+  box-shadow: 0 0 14px hsl(var(--helm-accent) / 0.8);
+  transition: transform var(--helm-t-4) var(--helm-ease);
+}
+
+.helm-step-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid hsl(var(--helm-rim-strong));
+  background-color: hsl(var(--helm-glass-top));
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: hsl(var(--helm-ink-muted));
+}
+
+.helm-step-marker[data-state="done"] {
   border-color: hsl(var(--helm-accent));
+  background-color: hsl(var(--helm-accent));
+  color: hsl(var(--helm-accent-ink));
+  box-shadow: 0 0 14px -2px hsl(var(--helm-accent) / 0.8);
+}
+
+.helm-step-marker[data-state="current"] {
+  border-color: hsl(var(--helm-accent));
+  color: hsl(var(--helm-ink));
+  box-shadow: 0 0 0 3px hsl(var(--helm-accent) / 0.2), 0 0 18px -2px hsl(var(--helm-accent) / 0.7);
+}
+
+/* Helm preview: the live sample cockpit sits blurred behind a glass sales card. */
+.helm-preview-veil {
+  filter: blur(6px) saturate(120%);
+  opacity: 0.6;
+  pointer-events: none;
+  user-select: none;
 }

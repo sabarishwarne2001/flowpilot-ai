@@ -51,7 +51,7 @@ const DesktopSidebarComponent: React.FC<DesktopSidebarProps> = ({
       aria-label="Primary Navigation Sidebar"
       className={`
         relative flex h-full min-h-0 flex-col
-        border-r border-border/80 bg-sidebar text-sidebar-foreground
+        fp-rail border-r border-border/80 bg-sidebar text-sidebar-foreground
         transition-[width] duration-200 ease-out-expo
         ${collapsed ? "w-[68px]" : "w-[260px]"}
         ${className}

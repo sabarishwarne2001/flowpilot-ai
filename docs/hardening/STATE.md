@@ -2,9 +2,49 @@
 
 _FlowPilot AI was renamed Servabo on 2026-10-16. Entries below that date keep the old name._
 
-_Last updated: 2026-10-16 (website and payments session: started)_
+_Last updated: 2026-10-17 (Helm visual session)_
 
-## Current phase — Website and payments session: Servabo, the website and Dodo Payments
+## Current phase — Helm visual session: Night Bridge, the switch, Lumen and the website's Helm page
+Branch `claude/beautiful-dijkstra-yvlspo` (the session's assigned branch), based on `main` at `5e4366d`
+(PR #25 merged). PR sabarishwarne2001/servabo#26. Founder authority on design: decisions in NEEDS-OWNER.md as
+`DECIDED (Helm visual session)` (N-111 to N-116). The owner also asked for Documents to be upgraded in
+its own style (Lumen, N-113). **If cut off, paste the prompt again: continue on this branch and PR from
+the first unticked box. Never restart.** All boxes are ticked: the session is done; next is the owner's review of PR #26.
+
+- [x] 0. Start-up: docs read; stack up (Postgres 16 + pgvector 0.8.0 on :5433 e2e and :5434 backend
+  tests, Redis, API, worker, model stand-in); `seed_website_demo.py`; "before" shots of every Helm page
+  and Documents (light, dark, 1440, 390; scratch only); Helm chunks measured (58.2 kB gzipped).
+- [x] 1. Night Bridge design system (`styles/helm/`, `components/helm/ui/`, `docs/helm/VISUAL.md`).
+- [x] 2. Rupees in Indian grouping in Helm (F-462, self-check failed first).
+- [x] 3. Read-only promise calendar API and the ledger's due-day filter (backend tests failed first).
+- [x] 4. Helm shell; Start no longer blinks before a book is chosen (F-463, spec 85 failed first).
+- [x] 5. The switch and its view transition (F-464: the router's option is dropped; the switch starts it).
+- [x] 6. Cockpit: KPI strip, fan chart, Promise calendar, pill bars, instruments, plan; spec 85.
+- [x] 7. Plan, Mandates, ledger, Time machine (F-466), Bank, Certificates, Settings, Start, first run,
+  tour, preview; F-467 (₹1.5T).
+- [x] 8. Documents: Lumen.
+- [x] 9. Website: Helm page in Night Bridge, switch demo, glass frames, `helm-certificate` rename and a
+  true `helm-plan` shot, every screenshot recaptured as an Indian reader.
+- [x] 10. Records: VISUAL.md, FLAGSHIP identity, NEEDS-OWNER, FINDINGS, COVERAGE (`--check all` exits 0),
+  HANDOFF.
+- [x] 11. Full browser suite (808 passed, 2 skipped, 0 failed, on 17f3896) and website checks.
+- [x] 12. Owner's added task: the Documents Overview redesigned in Lumen (N-117), with two read-only
+  overview fields (documents read, the last 14 days; test failed first).
+- [x] 13. The Overview's specs re-run (10, 21, 22, 72, 74, 80, 85: 335 passed, 2 failed; spec 10's
+  label fixed and re-run green; spec 22's is the pre-existing order dependence in HANDOFF).
+- [x] 14. Finish: CI green on 0da2906 (all 11 checks, browser suite included), PR marked ready for review.
+
+**Checkpoint (2026-10-17).** Helm specs 78–85 pass on the new look (axe in both themes; no sideways
+scroll at 1440, 1024, 768, 375). Spec 85: six tests, including the cockpit ready within 1.5 s and no
+long task over 200 ms after it. Backend: `tests/services/helm` and the route walkers 486 passed; the
+role matrix 4 passed. Frontend: lint, typecheck, e2e typecheck, `check:self` clean. Bundle: Helm's lazy
+chunks 59.0 → 76.1 kB gzipped (+17.1, allowance 35); the main stylesheet 23.5 → 24.8 kB gzipped (Helm's
+CSS is in it because the switch sits in Documents' header). No new runtime dependency.
+Backend (tests/api, core, security, services/helm and the Helm live tests): 2,206 passed, 11 skipped.
+Website: typecheck 0 errors, 18 pages, 1,296 links, HTML valid, axe clean in 72 page views, Lighthouse
+97/97/96 (other categories 100).
+
+## Previous phase — Website and payments session: Servabo, the website and Dodo Payments
 Branch `claude/new-session-3qnrpb` (the session's assigned branch), based on `main` at `906c921`
 (PR #24, the flagship session, is merged; `docs/product/FLAGSHIP.md` and HANDOFF "Flagship session →
 website and payments session" are present). The owner gave full founder authority: decisions are

@@ -7,7 +7,6 @@ import {
   ArrowRight,
   CheckCircle2,
   Clock,
-  FileText,
   Loader2,
   RefreshCw,
   Shapes,
@@ -27,6 +26,9 @@ import { canInviteMembers } from "@/permissions/organizationPermissions";
 import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorState } from "@/components/common/ErrorState";
 import { HelmOverviewCard } from "@/components/helm/HelmOverviewCard";
+import { CountUp, DailyColumns, KindsDonut, PipelineStrip, SuccessRing, kindTone } from "@/pages/Dashboard/OverviewParts";
+import { useMeContext } from "@/hooks/useMeContext";
+import { formatNumber } from "@/utils/displayTime";
 import { SkeletonCard } from "@/components/common/skeletons/SkeletonCard";
 import { SkeletonTable } from "@/components/common/skeletons/SkeletonTable";
 
@@ -69,14 +71,14 @@ const KpiCard: React.FC<KpiCardProps> = ({ title, value, hint, icon: Icon, testI
       <div className="flex items-start justify-between gap-3">
         <p className="fp-eyebrow">{title}</p>
         <span
-          className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border shadow-inner-highlight ${
-            danger ? "border-destructive/30 bg-destructive/10 text-destructive" : "border-border bg-muted/60 text-muted-foreground"
+          className={`flex h-9 w-9 shrink-0 items-center justify-center ${
+            danger ? "rounded-xl border border-destructive/30 bg-destructive/10 text-destructive" : "fp-well"
           }`}
         >
           <Icon className={`h-4 w-4 ${spin ? "animate-spin" : ""}`} aria-hidden />
         </span>
       </div>
-      <p className={`fp-num mt-2 text-[28px] font-semibold leading-none tracking-tight ${danger ? "text-destructive" : "text-foreground"}`}>
+      <p className={`fp-num fp-kpi-figure mt-3 ${danger ? "text-destructive" : "text-foreground"}`}>
         {value}
       </p>
       <p className="mt-2 flex items-center gap-1 text-xs text-muted-foreground">
@@ -105,16 +107,19 @@ const KindBars: React.FC<{ readonly items: readonly DashboardDocTypeDistribution
   return (
     <div>
       <ul className="space-y-3" aria-label="Documents by type">
-        {shown.map((item) => (
+        {shown.map((item, index) => (
           <li key={item.document_type} title={`${item.document_type}: ${item.count} documents (${item.percentage}%)`}>
             <div className="mb-1 flex items-baseline justify-between gap-3 text-[13px]">
-              <span className="truncate font-medium text-foreground">{item.document_type}</span>
+              <span className="flex min-w-0 items-center gap-2 truncate font-medium text-foreground">
+                <span className={`fp-kind-dot ${kindTone(index)}`} aria-hidden />
+                {item.document_type}
+              </span>
               <span className="fp-num shrink-0 text-muted-foreground">
                 {item.count} <span className="text-[11px]">· {item.percentage}%</span>
               </span>
             </div>
             <div className="h-2 overflow-hidden rounded-full bg-muted" aria-hidden>
-              <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${(item.count / widest) * 100}%` }} />
+              <div className={`h-full rounded-full transition-[width] duration-500 ${kindTone(index)}`} style={{ width: `${(item.count / widest) * 100}%` }} />
             </div>
           </li>
         ))}
@@ -137,6 +142,7 @@ export const Dashboard: React.FC = () => {
   const orgSlug = resolvedTenant?.organization.organization_slug ?? "";
   const workspaceSlug = resolvedTenant?.workspace.slug ?? "";
   const documentsPath = resolvedTenant ? workItemsPath(orgSlug, workspaceSlug) : undefined;
+  const { context: me } = useMeContext();
 
   const {
     data: metrics,
@@ -214,25 +220,34 @@ export const Dashboard: React.FC = () => {
   const classified = kinds.reduce((sum, item) => sum + item.count, 0);
   const rate = metrics.automation_success_rate;
 
+  const completed = metrics.completed_count ?? null;
+  const daily = metrics.daily_completed ?? [];
+  const firstName = me?.user.display_name?.trim().split(/\s+/)[0] ?? null;
+  const hour = new Date().getHours();
+  const greeting = `${hour < 12 ? "Good morning" : hour < 18 ? "Good afternoon" : "Good evening"}${firstName ? `, ${firstName}` : ""}.`;
+
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-semibold tracking-tight">Overview</h1>
-          <p className="mt-0.5 truncate text-[13px] text-muted-foreground">
-            {resolvedTenant?.workspace.workspace_name ?? "This workspace"}: documents, processing and recent activity.
+          <p className="fp-eyebrow">{resolvedTenant?.organization.organization_name ?? "Workspace"}</p>
+          <h1 className="fp-title mt-1">Overview</h1>
+          <p className="mt-1 truncate text-[13px] text-muted-foreground">
+            {greeting} {resolvedTenant?.workspace.workspace_name ?? "This workspace"}: documents, processing and recent activity.
           </p>
         </div>
         <div className="flex items-center gap-3">
-          {inFlight > 0 ? (
-            <span role="status" className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-1 text-xs text-muted-foreground">
-              <span className="relative flex h-2 w-2" aria-hidden>
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary/60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
-              </span>
-              Updating live
-            </span>
-          ) : null}
+          <span
+            role="status"
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium ${
+              inFlight > 0
+                ? "border-primary/30 bg-primary/10 text-primary dark:text-[hsl(var(--primary-on-dark))]"
+                : "border-success/30 bg-success/10 text-success"
+            }`}
+          >
+            <span className="fp-live-dot" data-live={inFlight > 0 ? "true" : undefined} aria-hidden />
+            <span className="text-foreground">{inFlight > 0 ? "Updating live" : "All caught up"}</span>
+          </span>
           {documentsPath ? (
             <Link to={documentsPath} className="fp-btn fp-btn-secondary h-8 text-xs">
               All documents <ArrowRight className="h-3.5 w-3.5" aria-hidden />
@@ -255,28 +270,44 @@ export const Dashboard: React.FC = () => {
         />
       ) : null}
 
-      {resolvedTenant && workspaceId ? (
-        <HelmOverviewCard
-          organizationId={resolvedTenant.organization.organization_id}
-          orgSlug={orgSlug}
-          workspaceId={workspaceId}
-          workspaceName={resolvedTenant.workspace.workspace_name ?? workspaceSlug}
-          organizationRole={resolvedTenant.organizationRole}
-        />
-      ) : null}
+      {/* The hero: the total, the last 14 days, and how many finished well. */}
+      <section aria-labelledby="overview-hero" className="fp-card fp-hero grid gap-6 overflow-hidden p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto] lg:items-center">
+        <div className="min-w-0" data-testid="kpi-total">
+          <h2 id="overview-hero" className="fp-eyebrow">Total Documents</h2>
+          <CountUp value={metrics.total_work_items} className="fp-num fp-hero-numeral mt-3 block text-foreground" />
+          <p className="mt-3 text-[13px] text-muted-foreground">
+            {metrics.total_work_items === 0 ? "Upload a document to begin" : `${formatNumber(classified)} classified by type`}
+          </p>
+          {documentsPath && metrics.total_work_items > 0 ? (
+            <Link to={documentsPath} className="mt-4 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline dark:text-[hsl(var(--primary-on-dark))]">
+              Open the documents <ArrowRight className="h-3 w-3" aria-hidden />
+            </Link>
+          ) : null}
+        </div>
+        {daily.length > 0 ? <DailyColumns days={daily} /> : <div className="hidden lg:block" />}
+        <SuccessRing rate={rate} completed={completed} failed={failed} />
+      </section>
 
-      <section aria-label="Dashboard Metrics" className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-        <KpiCard
-          title="Total Documents"
-          value={metrics.total_work_items}
-          hint={metrics.total_work_items === 0 ? "Upload a document to begin" : `${classified} classified by type`}
-          icon={FileText}
-          testId="kpi-total"
-          to={documentsPath}
+      <section aria-labelledby="overview-pipeline" className="fp-card p-5 sm:p-6">
+        <div className="mb-5 flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="overview-pipeline" className="text-[15px] font-semibold tracking-tight">Where your documents are</h2>
+          <p className="text-[13px] text-muted-foreground">
+            {inFlight > 0 ? `${formatNumber(inFlight)} being read now; this page refreshes itself.` : "Nothing waiting: every upload has been read."}
+          </p>
+        </div>
+        <PipelineStrip
+          total={metrics.total_work_items}
+          queued={metrics.processing_status.queued}
+          processing={metrics.processing_status.processing}
+          completed={completed}
+          failed={failed}
         />
+      </section>
+
+      <section aria-label="Dashboard Metrics" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <KpiCard
           title="Processed Today"
-          value={metrics.processed_today}
+          value={<CountUp value={metrics.processed_today} />}
           hint="Finished processing today"
           icon={CheckCircle2}
           testId="kpi-today"
@@ -305,10 +336,18 @@ export const Dashboard: React.FC = () => {
           hint={rate === null ? "Nothing has finished yet" : "Of finished documents"}
           icon={TrendingUp}
           testId="kpi-success"
-          // Five cards in a two-column grid: the last one takes the whole row on a phone.
-          className="col-span-2 md:col-span-1"
         />
       </section>
+
+      {resolvedTenant && workspaceId ? (
+        <HelmOverviewCard
+          organizationId={resolvedTenant.organization.organization_id}
+          orgSlug={orgSlug}
+          workspaceId={workspaceId}
+          workspaceName={resolvedTenant.workspace.workspace_name ?? workspaceSlug}
+          organizationRole={resolvedTenant.organizationRole}
+        />
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
         <section className="fp-card min-w-0 p-5" aria-labelledby="recent-activity">
@@ -391,7 +430,12 @@ export const Dashboard: React.FC = () => {
               description="Each processed document is classified (invoice, purchase order, contract, ...). The mix appears here."
             />
           ) : (
-            <KindBars items={kinds} />
+            <div className="space-y-5">
+              <div className="flex justify-center">
+                <KindsDonut items={kinds} shown={KINDS_SHOWN} />
+              </div>
+              <KindBars items={kinds} />
+            </div>
           )}
 
           {metrics.document_type_distribution.length > 0 ? (

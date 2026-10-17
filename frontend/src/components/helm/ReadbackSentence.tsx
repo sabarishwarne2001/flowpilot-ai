@@ -14,10 +14,15 @@ export const ReadbackSentence: React.FC<{ readonly readback: Readback | null | u
     return null;
   }
   return (
-    <p className={`leading-relaxed ${className}`}>
+    <p className={`helm-readback leading-relaxed ${className}`}>
       {readback.parts.map((part, index) =>
         part.chip !== undefined ? (
-          <span key={index} className="helm-chip helm-chip-accent helm-figure mx-0.5 align-baseline" title={part.chip}>
+          <span
+            key={index}
+            className="helm-chip helm-chip-accent helm-figure mx-0.5 align-baseline"
+            title={part.chip}
+            style={{ ["--i" as string]: index }}
+          >
             {part.display ?? String(part.value ?? "")}
           </span>
         ) : (

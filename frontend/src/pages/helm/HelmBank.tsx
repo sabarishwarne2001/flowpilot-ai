@@ -6,6 +6,7 @@ import { AlertTriangle, Check, FileUp, Landmark, Plus, RotateCcw } from "lucide-
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money } from "@/components/helm/HelmBits";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { helmCertificatePath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
@@ -197,6 +198,16 @@ const ImportPanel: React.FC<{ readonly accounts: HelmBankAccount[]; readonly onI
     onError: (error) => toast.error(errorMessage(error, "Helm could not import the statement.")),
   });
 
+  const [over, setOver] = useState(false);
+  const choose = (chosen: File | null): void => {
+    setFile(chosen);
+    setPreview(null);
+    setMapping(null);
+    if (chosen) {
+      read.mutate({ file: chosen });
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-2">
@@ -210,26 +221,41 @@ const ImportPanel: React.FC<{ readonly accounts: HelmBankAccount[]; readonly onI
             ))}
           </select>
         </label>
-        <label className="helm-btn cursor-pointer">
-          <FileUp className="h-3.5 w-3.5" aria-hidden="true" />
-          {file ? file.name : "Choose a CSV or Excel file"}
-          <input
-            type="file"
-            className="sr-only"
-            aria-label="Statement file"
-            accept=".csv,.txt,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={(event) => {
-              const chosen = event.target.files?.[0] ?? null;
-              setFile(chosen);
-              setPreview(null);
-              setMapping(null);
-              if (chosen) {
-                read.mutate({ file: chosen });
-              }
-            }}
-          />
-        </label>
       </div>
+      <label
+        className="helm-dropzone flex cursor-pointer flex-col items-center justify-center gap-2 px-4 py-8 text-center"
+        data-scanning={read.isPending || run.isPending ? "true" : undefined}
+        data-over={over ? "true" : undefined}
+        data-testid="helm-bank-dropzone"
+        onDragOver={(event) => {
+          event.preventDefault();
+          setOver(true);
+        }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setOver(false);
+          const dropped = event.dataTransfer.files?.[0] ?? null;
+          if (dropped) {
+            choose(dropped);
+          }
+        }}
+      >
+        <span className="helm-accent flex h-12 w-12 items-center justify-center rounded-2xl border border-[hsl(var(--helm-accent)/0.35)] bg-[hsl(var(--helm-accent)/0.1)]">
+          <FileUp className="h-5 w-5" aria-hidden="true" />
+        </span>
+        <span className="text-sm font-semibold">{file ? file.name : "Choose a CSV or Excel file, or drop it here"}</span>
+        <span className="helm-muted text-xs">
+          {read.isPending ? "Scanning the statement…" : run.isPending ? "Importing and matching…" : "Your bank's own export: CSV, XLS or XLSX"}
+        </span>
+        <input
+          type="file"
+          className="sr-only"
+          aria-label="Statement file"
+          accept=".csv,.txt,.xlsx,.xls,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+          onChange={(event) => choose(event.target.files?.[0] ?? null)}
+        />
+      </label>
       {read.isPending ? (
         <p className="helm-muted text-sm" role="status">
           Reading the file…
@@ -322,7 +348,7 @@ const Suggestion: React.FC<{ readonly line: BankLine }> = ({ line }) => {
   });
   const suggestions = line.match.suggestions ?? [];
   return (
-    <li className="helm-hairline border-t py-3 first:border-t-0" data-testid="helm-bank-line">
+    <li className="helm-panel-raised helm-row-in p-4" data-testid="helm-bank-line">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="text-sm">
@@ -330,7 +356,7 @@ const Suggestion: React.FC<{ readonly line: BankLine }> = ({ line }) => {
             {line.description}
             {line.reference ? <span className="helm-muted"> · {line.reference}</span> : null}
           </p>
-          <p className="helm-figure mt-0.5 text-sm font-semibold">{signed(line.amount_micros, line.currency)}</p>
+          <p className="helm-numeral mt-1 text-lg">{signed(line.amount_micros, line.currency)}</p>
           <p className="helm-muted text-xs">{line.account}</p>
         </div>
         <div className="flex shrink-0 flex-col gap-2 sm:items-end">
@@ -507,7 +533,7 @@ export const HelmBank: React.FC = () => {
   if (!book.readable) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
-        <h1 className="text-xl font-semibold tracking-tight">Bank statements</h1>
+        <HelmPageHeader eyebrow={book.name} title="Bank statements" />
         <p className="helm-panel p-4 text-sm">
           This book&apos;s bank statements belong to {book.name}, a workspace you cannot read. Ask a workspace admin for
           access.
@@ -519,17 +545,14 @@ export const HelmBank: React.FC = () => {
     return <LoadFailed what="the bank statements" onRetry={() => void Promise.all([accounts.refetch(), waiting.refetch()])} />;
   }
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Bank statements</h1>
-        <p className="helm-muted mt-1 text-sm">
-          Import your bank's CSV or Excel export. Helm sets the account's cash from the closing balance and matches payments
-          to invoices when the statement leaves one answer; what it cannot be sure of waits below for you. A match records the
-          payment, with the bank line as its evidence, and can be undone.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <HelmPageHeader
+        eyebrow={book.name}
+        title="Bank statements"
+        description="Import your bank's CSV or Excel export. Helm sets the account's cash from the closing balance and matches payments to invoices when the statement leaves one answer; what it cannot be sure of waits below for you. A match records the payment, with the bank line as its evidence, and can be undone."
+      />
 
-      <section aria-labelledby="helm-bank-accounts" className="helm-panel p-4">
+      <section aria-labelledby="helm-bank-accounts" className="helm-panel p-5">
         <h2 id="helm-bank-accounts" className="helm-label mb-2 flex items-center gap-1.5">
           <Landmark className="h-3.5 w-3.5" aria-hidden="true" />
           Accounts
@@ -564,7 +587,7 @@ export const HelmBank: React.FC = () => {
       </section>
 
       {canImport && list.length > 0 ? (
-        <section aria-labelledby="helm-bank-import" className="helm-panel p-4">
+        <section aria-labelledby="helm-bank-import" className="helm-panel p-5">
           <h2 id="helm-bank-import" className="helm-label mb-2">
             Import a statement
           </h2>
@@ -592,7 +615,7 @@ export const HelmBank: React.FC = () => {
         </section>
       ) : null}
 
-      <section aria-labelledby="helm-bank-waiting" className="helm-panel p-4">
+      <section aria-labelledby="helm-bank-waiting" className="helm-panel p-5">
         <h2 id="helm-bank-waiting" className="helm-label mb-1">
           For you to check{counts ? ` (${counts.UNMATCHED + counts.SUGGESTED})` : ""}
         </h2>
@@ -603,7 +626,7 @@ export const HelmBank: React.FC = () => {
         ) : (waiting.data?.lines ?? []).length === 0 ? (
           <p className="text-sm">Nothing waits for you.</p>
         ) : (
-          <ul>
+          <ul className="grid gap-3 lg:grid-cols-2">
             {(waiting.data?.lines ?? []).map((line) => (
               <Suggestion key={line.id} line={line} />
             ))}
@@ -611,7 +634,7 @@ export const HelmBank: React.FC = () => {
         )}
       </section>
 
-      <section aria-labelledby="helm-bank-matched" className="helm-panel p-4">
+      <section aria-labelledby="helm-bank-matched" className="helm-panel p-5">
         <h2 id="helm-bank-matched" className="helm-label mb-1">
           Matched and set aside
         </h2>

@@ -162,7 +162,7 @@ export const OrganizationLayout: React.FC = () => {
           canChoosePlan={String(organizationRole).toUpperCase() === "OWNER"}
         />
 
-        <main className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-background p-4 sm:p-5 lg:px-8 lg:py-7">
+        <main className="fp-canvas min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-5 lg:px-8 lg:py-7">
           <DisplayPreferencesBoundary>
             <RouteErrorBoundary>
               <Outlet />

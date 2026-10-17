@@ -7,6 +7,7 @@ import { AlertTriangle, Lock, Plus, Trash2 } from "lucide-react";
 import { fromMicros, toMicros } from "@/components/helm/EditableReadback";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money } from "@/components/helm/HelmBits";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { organizationBillingPath } from "@/routes/tenantPaths";
 import { ApiError, errorMessage } from "@/services/api/errors";
@@ -60,8 +61,8 @@ const Identities: React.FC<{ readonly settings: Settings; readonly writable: boo
     setRows((current) => current.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
 
   return (
-    <section aria-labelledby="helm-identities" className="helm-panel p-4">
-      <h2 id="helm-identities" className="text-sm font-semibold">
+    <section aria-labelledby="helm-identities" className="helm-panel p-5">
+      <h2 id="helm-identities" className="text-[15px] font-semibold tracking-tight">
         Who we are
       </h2>
       <p className="helm-muted mt-1 text-xs">
@@ -148,8 +149,8 @@ const Cash: React.FC<{ readonly settings: Settings; readonly canEnter: boolean }
   const valid = /^-?\d+(\.\d{1,2})?$/.test(amount.replace(/[, ]/g, "")) && /^[A-Za-z]{3}$/.test(currency);
 
   return (
-    <section aria-labelledby="helm-cash" className="helm-panel p-4">
-      <h2 id="helm-cash" className="text-sm font-semibold">
+    <section aria-labelledby="helm-cash" className="helm-panel p-5">
+      <h2 id="helm-cash" className="text-[15px] font-semibold tracking-tight">
         Cash
       </h2>
       <p className="helm-muted mt-1 text-xs">
@@ -236,8 +237,8 @@ const Planning: React.FC<{ readonly settings: Settings; readonly writable: boole
     onError: (error) => toast.error(errorMessage(error, "Helm could not save these settings.")),
   });
   return (
-    <section aria-labelledby="helm-planning" className="helm-panel p-4">
-      <h2 id="helm-planning" className="text-sm font-semibold">
+    <section aria-labelledby="helm-planning" className="helm-panel p-5">
+      <h2 id="helm-planning" className="text-[15px] font-semibold tracking-tight">
         Payment runs and planning
       </h2>
       <form
@@ -281,7 +282,13 @@ const Planning: React.FC<{ readonly settings: Settings; readonly writable: boole
           <span className="helm-muted mt-1 block">What paying early costs you; Helm weighs it against discounts.</span>
         </label>
         <label className="flex items-center gap-2 text-sm">
-          <input type="checkbox" checked={briefing} disabled={!writable} onChange={(event) => setBriefing(event.target.checked)} />
+          <input
+            type="checkbox"
+            className="helm-toggle"
+            checked={briefing}
+            disabled={!writable}
+            onChange={(event) => setBriefing(event.target.checked)}
+          />
           Send owners and admins the Monday briefing email
         </label>
         {writable ? (
@@ -377,7 +384,7 @@ const ApprovalChain: React.FC<{ readonly settings: Settings; readonly writable: 
 
   if (!chain.available) {
     return (
-      <section aria-labelledby="helm-chain" className="helm-panel p-4" data-testid="helm-approval-chain-locked">
+      <section aria-labelledby="helm-chain" className="helm-panel p-5" data-testid="helm-approval-chain-locked">
         <h2 id="helm-chain" className="flex items-center gap-2 text-sm font-semibold">
           <Lock className="h-4 w-4" aria-hidden="true" />
           Approval chain
@@ -407,7 +414,7 @@ const ApprovalChain: React.FC<{ readonly settings: Settings; readonly writable: 
   }
 
   return (
-    <section aria-labelledby="helm-chain" className="helm-panel p-4" data-testid="helm-approval-chain">
+    <section aria-labelledby="helm-chain" className="helm-panel p-5" data-testid="helm-approval-chain">
       <h2 id="helm-chain" className="flex items-center gap-2 text-sm font-semibold">
         Approval chain
         <span className="helm-chip">Enterprise</span>
@@ -634,17 +641,14 @@ export const HelmSettings: React.FC = () => {
   }
   const suppliers = (counterparties.data ?? []).filter((c) => c.name !== "hidden");
   return (
-    <div className="mx-auto max-w-4xl space-y-4">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Settings</h1>
-        <p className="helm-muted mt-1 text-sm">For {book.name}. Changes are audited and Helm re-plans after each one.</p>
-      </div>
+    <div className="mx-auto max-w-4xl space-y-5">
+      <HelmPageHeader eyebrow={book.name} title="Settings" description={`For ${book.name}. Changes are audited and Helm re-plans after each one.`} />
       <Identities settings={settings.data} writable={writable} />
       <Cash settings={settings.data} canEnter={!book.read_only && (canDecide || role === "BILLING")} />
       <Planning settings={settings.data} writable={writable} />
       <ApprovalChain settings={settings.data} writable={writable} />
-      <section aria-labelledby="helm-counterparties" className="helm-panel p-4">
-        <h2 id="helm-counterparties" className="text-sm font-semibold">
+      <section aria-labelledby="helm-counterparties" className="helm-panel p-5">
+        <h2 id="helm-counterparties" className="text-[15px] font-semibold tracking-tight">
           Suppliers and customers
         </h2>
         <p className="helm-muted mt-1 text-xs">

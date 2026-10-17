@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -7,6 +7,7 @@ import { ChevronDown, FileCheck2, Lock, Undo2 } from "lucide-react";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { useHelm } from "@/components/helm/HelmContext";
 import { ACTION_STATE_WORDS, ACTION_VERBS, GuardBadge, Money, ROLE_WORDS, rolesWords } from "@/components/helm/HelmBits";
+import { VerbChip } from "@/components/helm/ui/VerbChip";
 import { helmCertificatePath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { approveAllHelmActions, approveHelmAction, helmKeys, rejectHelmAction, undoHelmAction } from "@/services/api/helm";
@@ -141,7 +142,11 @@ const Differences: React.FC<{ readonly action: HelmAction }> = ({ action }) => {
   );
 };
 
-const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: boolean }> = ({ action, readOnly }) => {
+const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: boolean; readonly fresh?: boolean }> = ({
+  action,
+  readOnly,
+  fresh = false,
+}) => {
   const { organizationId, orgSlug, role, book, withBook } = useHelm();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -200,15 +205,22 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
   const draft = action.readable ? draftOf(action) : null;
 
   return (
-    <li className="helm-hairline border-t py-3 first:border-t-0" data-testid="helm-action">
+    <li
+      className={`helm-plan-row relative py-3.5 pl-7 ${fresh ? "helm-row-in" : ""}`}
+      data-testid="helm-action"
+      data-state={action.state}
+    >
+      <span className="helm-plan-node" data-guard={action.guard_passed && action.state !== "BLOCKED" ? "passed" : "blocked"} aria-hidden="true" />
       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <p className="flex flex-wrap items-center gap-2">
-            <span className="helm-chip helm-chip-accent">{verb}</span>
+            <VerbChip kind={action.kind} verb={verb} />
             <span className="font-medium">{action.title}</span>
           </p>
-          <p className="helm-muted mt-1 flex flex-wrap gap-x-3 gap-y-1 text-xs">
-            {action.amount_micros !== null ? <Money micros={action.amount_micros} currency={action.currency} /> : null}
+          <p className="helm-muted mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
+            {action.amount_micros !== null ? (
+              <Money micros={action.amount_micros} currency={action.currency} className="text-[13px] font-semibold text-[hsl(var(--helm-ink))]" />
+            ) : null}
             {action.run_date ? <span>on {formatCalendarDate(action.run_date)}</span> : null}
             {action.value_micros ? (
               <span>
@@ -226,7 +238,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
           {approvable ? (
             <button
               type="button"
-              className="helm-btn helm-btn-primary"
+              className="helm-btn helm-btn-signal"
               disabled={busy}
               onClick={() => approve.mutate()}
               aria-label={`${approveLabel(action)}: ${action.title}`}
@@ -272,7 +284,7 @@ const ActionRow: React.FC<{ readonly action: HelmAction; readonly readOnly: bool
             Why, and what the Guard checked
           </button>
           {open ? (
-            <div id={detailsId} className="helm-panel-raised mt-2 space-y-2 p-3 text-xs">
+            <div id={detailsId} className="helm-panel-raised helm-row-in mt-2 space-y-2 p-3.5 text-xs">
               {action.kind === "draft_reconciliation" ? <Differences action={action} /> : <p>{action.explanation}</p>}
               {checks.length > 0 ? (
                 <ul className="space-y-1">
@@ -328,6 +340,14 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
   const { organizationId, role, book } = useHelm();
   const queryClient = useQueryClient();
   const [confirming, setConfirming] = useState(false);
+  // Rows a new plan adds rise in; the ones on screen from the start do not (the panel already entered).
+  const seen = useRef<Set<string> | null>(null);
+  if (seen.current === null) {
+    seen.current = new Set(actions.map((a) => a.id));
+  }
+  useEffect(() => {
+    actions.forEach((a) => seen.current?.add(a.id));
+  }, [actions]);
   const approvable = actions.filter((a) => mayApprove(a, role));
   const chained = approvable.filter((a) => a.approvals_given + 1 < a.required_approvals).length;
   const applyAll = useMutation({
@@ -359,15 +379,15 @@ export const PlanDiff: React.FC<{ readonly actions: readonly HelmAction[]; reado
   return (
     <div>
       {!readOnly && approvable.length > 0 ? (
-        <div className="mb-2 flex justify-end">
-          <button type="button" className="helm-btn helm-btn-primary" onClick={() => setConfirming(true)}>
+        <div className="mb-3 flex justify-end">
+          <button type="button" className="helm-btn helm-btn-primary helm-btn-hero" onClick={() => setConfirming(true)}>
             Apply plan ({formatNumber(approvable.length)})
           </button>
         </div>
       ) : null}
-      <ul aria-label="Plan">
+      <ul aria-label="Plan" className="helm-plan-list">
         {actions.map((action) => (
-          <ActionRow key={action.id} action={action} readOnly={readOnly} />
+          <ActionRow key={action.id} action={action} readOnly={readOnly} fresh={!seen.current?.has(action.id)} />
         ))}
       </ul>
       <ConfirmDialog

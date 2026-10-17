@@ -81,7 +81,7 @@ export const Header: React.FC<HeaderProps> = React.memo(({ className = "" }) => 
 
   return (
     <header
-      className={`relative z-20 flex h-14 shrink-0 select-none items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-5 ${className}`}
+      className={`fp-topbar relative z-20 flex h-14 shrink-0 select-none items-center justify-between gap-3 border-b border-border/70 px-3 sm:px-5 ${className}`}
       aria-label="Dashboard Header"
     >
       {/* The glass is a layer behind the bar, not a filter on it: a filter on an

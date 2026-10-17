@@ -83,10 +83,12 @@ const SHOTS = {
   identity: { path: org("identity") },
   egress: { path: org("egress") },
   "helm-cockpit": { path: helm(), helm: true },
-  "helm-plan": {
+  // The payment run, with the payments approved by demoActivity() on their run days.
+  "helm-plan": { path: helm("plan"), helm: true },
+  "helm-certificate": {
     path: helm("plan"),
     helm: true,
-    // The plan with one payment's Guard certificate open beside it.
+    // One payment's Guard certificate, opened from the plan.
     prepare: async (page) => {
       const certificate = page.getByRole("main").getByRole("button", { name: /^Certificate/ }).or(page.getByRole("main").getByRole("link", { name: /^Certificate/ })).first();
       if (await certificate.count()) {
@@ -223,7 +225,14 @@ const browser = await chromium.launch();
 const failures = [];
 try {
   for (const theme of ["light", "dark"]) {
-    const context = await browser.newContext({ viewport: VIEWPORT, colorScheme: theme, deviceScaleFactor: 1 });
+    // An Indian reader of the Pune sample company: rupees in lakh grouping, dates on Indian time.
+    const context = await browser.newContext({
+      viewport: VIEWPORT,
+      colorScheme: theme,
+      deviceScaleFactor: 1,
+      locale: "en-IN",
+      timezoneId: "Asia/Kolkata",
+    });
     // The app follows the system theme unless a person chose one; make sure it is the system.
     await context.addInitScript(() => {
       try {

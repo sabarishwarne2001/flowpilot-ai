@@ -2,15 +2,17 @@ import React, { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, FileCheck2, Lock } from "lucide-react";
+import { CalendarCheck2, Download, FileCheck2, Lock } from "lucide-react";
 
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money, MoneyByCurrency } from "@/components/helm/HelmBits";
-import { helmCertificatePath } from "@/routes/tenantPaths";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
+import { HelmSkeleton } from "@/components/helm/ui/HelmSkeleton";
+import { helmCertificatePath, helmPath } from "@/routes/tenantPaths";
 import { errorMessage } from "@/services/api/errors";
 import { getHelmPaymentRun, helmKeys, markHelmInvoicePaid } from "@/services/api/helm";
-import { formatCalendarDate } from "@/utils/displayTime";
+import { formatCalendarDate, formatCalendarMonthShort, formatNumber } from "@/utils/displayTime";
 import type { PaymentRun, PaymentRunLine } from "@/types/helm";
 
 const today = (): string => new Date().toISOString().slice(0, 10);
@@ -48,6 +50,17 @@ const downloadCsv = (run: PaymentRun): void => {
   URL.revokeObjectURL(url);
 };
 
+/** Every run day's totals added up, per currency (never across currencies). */
+const totalsOf = (run: PaymentRun): Record<string, number> => {
+  const out: Record<string, number> = {};
+  for (const day of run.days) {
+    for (const [currency, micros] of Object.entries(day.totals)) {
+      out[currency] = (out[currency] ?? 0) + micros;
+    }
+  }
+  return out;
+};
+
 export const HelmPlan: React.FC = () => {
   const { organizationId, orgSlug, role, withBook } = useHelm();
   const book = useHelmBook();
@@ -74,59 +87,98 @@ export const HelmPlan: React.FC = () => {
   });
 
   return (
-    <div className="mx-auto max-w-5xl space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h1 className="text-xl font-semibold tracking-tight">Plan</h1>
-          <p className="helm-muted mt-1 text-sm">
-            The payment run: what to pay on each run day, after a person approved it. {run.data?.note}
-          </p>
-        </div>
-        {run.data && run.data.days.length > 0 ? (
-          <button type="button" className="helm-btn" onClick={() => downloadCsv(run.data)}>
-            <Download className="h-3.5 w-3.5" aria-hidden="true" />
-            Download the list
-          </button>
-        ) : null}
-      </div>
+    <div className="mx-auto max-w-6xl space-y-5">
+      <HelmPageHeader
+        eyebrow={book.name}
+        title="Plan"
+        description={<>The payment run: what to pay on each run day, after a person approved it. {run.data?.note}</>}
+        actions={
+          run.data && run.data.days.length > 0 ? (
+            <button type="button" className="helm-btn" onClick={() => downloadCsv(run.data)}>
+              <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              Download the list
+            </button>
+          ) : null
+        }
+      />
+      {run.data && run.data.days.length > 0 ? (
+        <ul className="grid gap-3 sm:grid-cols-3" aria-label="The payment run in figures">
+          <li className="helm-panel helm-enter p-4" style={{ ["--i" as string]: 1 }}>
+            <p className="helm-label">To pay</p>
+            <div className="helm-numeral mt-2 text-2xl">
+              <MoneyByCurrency totals={totalsOf(run.data)} />
+            </div>
+          </li>
+          <li className="helm-panel helm-enter p-4" style={{ ["--i" as string]: 2 }}>
+            <p className="helm-label">Run days</p>
+            <p className="helm-numeral mt-2 text-2xl">{formatNumber(run.data.days.filter((d) => d.run_date !== "unscheduled").length)}</p>
+          </li>
+          <li className="helm-panel helm-enter p-4" style={{ ["--i" as string]: 3 }}>
+            <p className="helm-label">Payments</p>
+            <p className="helm-numeral mt-2 text-2xl">{formatNumber(run.data.days.reduce((n, d) => n + d.lines.length, 0))}</p>
+          </li>
+        </ul>
+      ) : null}
       {run.isError ? (
         <LoadFailed what="the payment run" onRetry={() => void run.refetch()} />
       ) : run.isLoading ? (
-        <p className="helm-muted text-sm" role="status">
-          Loading…
-        </p>
+        <HelmSkeleton label="Loading…" />
       ) : (run.data?.days ?? []).length === 0 ? (
-        <p className="helm-panel p-4 text-sm">
-          Nothing scheduled. When you approve a payment in the cockpit it appears here, on its run day.
-        </p>
+        <div className="helm-panel helm-enter flex flex-col items-start gap-3 p-6 text-sm sm:flex-row sm:items-center">
+          <span className="helm-accent flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-[hsl(var(--helm-accent)/0.35)] bg-[hsl(var(--helm-accent)/0.1)]">
+            <CalendarCheck2 className="h-5 w-5" aria-hidden="true" />
+          </span>
+          <p className="flex-1">Nothing scheduled. When you approve a payment in the cockpit it appears here, on its run day.</p>
+          <Link to={withBook(helmPath(orgSlug))} className="helm-btn">
+            Open the cockpit
+          </Link>
+        </div>
       ) : (
-        (run.data?.days ?? []).map((day) => (
-          <section key={day.run_date} aria-labelledby={`run-${day.run_date}`} className="helm-panel p-4">
-            <div className="flex flex-wrap items-baseline justify-between gap-2">
-              <h2 id={`run-${day.run_date}`} className="text-sm font-semibold">
-                {day.run_date === "unscheduled" ? "No run day yet" : formatCalendarDate(day.run_date)}
-              </h2>
-              <div className="text-sm font-semibold">
+        (run.data?.days ?? []).map((day, dayIndex) => (
+          <section
+            key={day.run_date}
+            aria-labelledby={`run-${day.run_date}`}
+            className="helm-panel helm-enter p-5"
+            style={{ ["--i" as string]: dayIndex + 4 }}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                {day.run_date === "unscheduled" ? null : (
+                  <span className="helm-panel-raised flex h-14 w-14 shrink-0 flex-col items-center justify-center" aria-hidden="true">
+                    <span className="helm-label text-[10px] leading-none">
+                      {formatCalendarMonthShort(Number(day.run_date.slice(0, 4)), Number(day.run_date.slice(5, 7)))}
+                    </span>
+                    <span className="helm-numeral text-2xl">{Number(day.run_date.slice(8, 10))}</span>
+                  </span>
+                )}
+                <div>
+                  <h2 id={`run-${day.run_date}`} className="text-[15px] font-semibold">
+                    {day.run_date === "unscheduled" ? "No run day yet" : formatCalendarDate(day.run_date)}
+                  </h2>
+                  <p className="helm-muted text-xs">{formatNumber(day.lines.length)} {day.lines.length === 1 ? "payment" : "payments"}</p>
+                </div>
+              </div>
+              <div className="helm-numeral text-xl">
                 <MoneyByCurrency totals={day.totals} />
               </div>
             </div>
-            <div className="relative mt-2 overflow-x-auto">
-              <table className="w-full min-w-[620px] text-sm">
+            <div className="relative mt-3 overflow-x-auto">
+              <table className="helm-table w-full min-w-[620px] text-sm">
                 <thead>
-                  <tr className="helm-label text-left">
-                    <th scope="col" className="py-1 pr-3">Payee</th>
-                    <th scope="col" className="py-1 pr-3">Account</th>
-                    <th scope="col" className="py-1 pr-3">Invoice</th>
-                    <th scope="col" className="py-1 pr-3 text-right">Amount</th>
-                    <th scope="col" className="py-1 pr-3">State</th>
-                    <th scope="col" className="py-1"><span className="sr-only">Actions</span></th>
+                  <tr>
+                    <th scope="col">Payee</th>
+                    <th scope="col">Account</th>
+                    <th scope="col">Invoice</th>
+                    <th scope="col" className="text-right">Amount</th>
+                    <th scope="col">State</th>
+                    <th scope="col"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {day.lines.map((line, index) => (
                     <React.Fragment key={`${line.work_item_id ?? "hidden"}-${index}`}>
-                    <tr className="helm-hairline border-t" data-testid="helm-run-line">
-                      <td className="py-2 pr-3">
+                    <tr data-testid="helm-run-line">
+                      <td className="font-medium">
                         {line.readable ? (
                           line.payee
                         ) : (
@@ -136,13 +188,17 @@ export const HelmPlan: React.FC = () => {
                           </span>
                         )}
                       </td>
-                      <td className="helm-figure py-2 pr-3 text-xs">{line.readable ? line.bank_account ?? "—" : "—"}</td>
-                      <td className="py-2 pr-3 text-xs">{line.readable ? line.invoice ?? "—" : "—"}</td>
-                      <td className="py-2 pr-3 text-right">
+                      <td className="helm-id text-xs">{line.readable ? line.bank_account ?? "—" : "—"}</td>
+                      <td className="helm-id text-xs">{line.readable ? line.invoice ?? "—" : "—"}</td>
+                      <td className="text-right font-semibold">
                         {line.amount_micros !== null ? <Money micros={line.amount_micros} currency={line.currency} /> : "—"}
                       </td>
-                      <td className="py-2 pr-3 text-xs">{STATE_WORDS[line.state] ?? line.state}</td>
-                      <td className="py-2 text-right">
+                      <td>
+                        <span className={`helm-chip px-2 text-xs ${line.state === "APPROVED" ? "helm-state-holding" : "helm-state-sky"}`}>
+                          {STATE_WORDS[line.state] ?? line.state}
+                        </span>
+                      </td>
+                      <td className="text-right">
                         <div className="flex justify-end gap-2">
                           {line.certificate_id ? (
                             <Link

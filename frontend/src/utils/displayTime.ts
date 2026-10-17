@@ -174,6 +174,9 @@ export const formatCalendarMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat(current.locale, { month: "long", year: "numeric", timeZone: "UTC" })
     .format(Date.UTC(year, month - 1, 1));
 
+/** A calendar month's short name ("Oct"), in the profile's language, never zone-shifted. */
+export const formatCalendarMonthShort = (year: number, month: number): string =>
+  new Intl.DateTimeFormat(current.locale, { month: "short", timeZone: "UTC" }).format(Date.UTC(year, month - 1, 1));
 
 /**
  * Campaign session 3 (N-064). Numbers in the person's language ("1,234.5",
@@ -216,6 +219,24 @@ export const formatMoney = (
     }
   }
   return numberFormat({ minimumFractionDigits: 2, maximumFractionDigits: 2, ...options }).format(amount);
+};
+
+/**
+ * Helm visual session: money in a fixed locale's grouping, whatever the person's language. Helm
+ * prints rupees with Indian grouping (₹6,59,440.64) because its sentences say lakh and crore
+ * (components/helm/money.ts); nothing else should need it.
+ */
+export const formatMoneyInLocale = (
+  amount: number,
+  currency: string,
+  locale: string,
+  options: Intl.NumberFormatOptions = {},
+): string => {
+  try {
+    return new Intl.NumberFormat(locale, { style: "currency", currency, ...options }).format(amount);
+  } catch {
+    return formatMoney(amount, currency, options);
+  }
 };
 
 /**

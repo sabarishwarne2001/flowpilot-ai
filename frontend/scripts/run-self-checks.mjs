@@ -29,6 +29,7 @@ import { runTenantReconciliationSelfCheck } from "@/routes/tenantReconciliation"
 import { runPermissionSelfCheck } from "@/permissions/selfCheck";
 import { runDisplayFormatSelfCheck } from "@/utils/displayTime";
 import { runBrandColourSelfCheck } from "@/utils/brandTheme";
+import { runHelmMoneySelfCheck } from "@/components/helm/money";
 export const checks = {
   "tenant resolution": runTenantResolutionSelfCheck,
   "tenant paths": runTenantPathSelfCheck,
@@ -36,6 +37,7 @@ export const checks = {
   "permission parity": runPermissionSelfCheck,
   "display formatting": runDisplayFormatSelfCheck,
   "brand colours": runBrandColourSelfCheck,
+  "helm money": runHelmMoneySelfCheck,
 };
 `,
 );

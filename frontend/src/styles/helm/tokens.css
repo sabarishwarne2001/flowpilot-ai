@@ -1,0 +1,119 @@
+/*
+ * Night Bridge: Helm's tokens (docs/helm/VISUAL.md). Dark is the reference theme; light ("Day
+ * Bridge") is finished to the same standard. Everything is scoped to `.helm` (HelmLayout's root), so
+ * Documents mode is untouched; the mode switch and the view transition (switch.css) are the only
+ * Helm styles that also live outside it.
+ *
+ * Colour tokens are HSL channels without hsl(), like the app's own tokens, so a rule can add alpha:
+ * hsl(var(--helm-accent) / 0.3). Contrast: --helm-ink and --helm-ink-muted read at least 4.5:1 on
+ * the canvas, the deck and a glass panel in both themes; --helm-ink-faint is for large text and
+ * non-text only. Every state colour is paired with a word and an icon wherever it means something.
+ */
+
+.helm {
+  /* Day Bridge: a pale mint-grey canvas, white glass, deep accents that pass WCAG AA as text. */
+  --helm-bg: 150 22% 95%;
+  --helm-deck: 150 18% 92.5%;
+  --helm-panel: 0 0% 100%;
+  --helm-panel-raised: 150 26% 97.5%;
+  --helm-line: 155 14% 84%;
+  --helm-line-strong: 155 10% 68%;
+  --helm-ink: 165 32% 9%;
+  --helm-ink-muted: 162 9% 31%;
+  --helm-ink-faint: 160 6% 46%;
+
+  --helm-accent: 160 84% 28%;
+  --helm-accent-ink: 0 0% 100%;
+  --helm-accent-soft: 152 60% 91%;
+  --helm-accent-deep: 162 88% 20%;
+  --helm-aqua: 182 78% 29%;
+  --helm-sky: 206 84% 36%;
+
+  --helm-holding: 158 82% 26%;
+  --helm-drifting: 30 94% 32%;
+  --helm-breached: 350 74% 42%;
+  --helm-unknown: 160 6% 40%;
+  --helm-band: 166 70% 36%;
+  --helm-floor: 350 74% 42%;
+  --helm-focus: 160 84% 28%;
+
+  /* Glass: white at about 72% on the mint canvas, with a light rim and a soft green-grey shadow. */
+  --helm-glass-top: 0 0% 100% / 0.86;
+  --helm-glass-bottom: 0 0% 100% / 0.68;
+  --helm-glass-strong-top: 0 0% 100% / 0.94;
+  --helm-glass-strong-bottom: 0 0% 100% / 0.8;
+  --helm-rim: 160 20% 40% / 0.14;
+  --helm-rim-strong: 160 30% 30% / 0.26;
+  --helm-highlight: 0 0% 100% / 0.9;
+  --helm-shadow: 0 1px 2px hsl(165 30% 20% / 0.06), 0 12px 32px -16px hsl(165 40% 18% / 0.22);
+  --helm-glow: 0 0 0 1px hsl(var(--helm-accent) / 0.55), 0 8px 28px -10px hsl(var(--helm-accent) / 0.45);
+  --helm-spot: 152 70% 45% / 0.1;
+
+  /* Atmosphere. */
+  --helm-aurora-a: 152 72% 50% / 0.16;
+  --helm-aurora-b: 182 70% 45% / 0.11;
+  --helm-dot: 165 20% 20% / 0.09;
+  --helm-grain-opacity: 0.025;
+
+  /* Shape. */
+  --helm-r-panel: 20px;
+  --helm-r-tile: 14px;
+
+  /* Motion (VISUAL.md "Motion"). */
+  --helm-t-1: 120ms;
+  --helm-t-2: 220ms;
+  --helm-t-3: 420ms;
+  --helm-t-4: 650ms;
+  --helm-ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --helm-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  color-scheme: light;
+  background-color: hsl(var(--helm-bg));
+  color: hsl(var(--helm-ink));
+}
+
+/* Night Bridge proper: a near-black canvas with a green undertone, frosted dark glass, one signal green. */
+.dark .helm {
+  --helm-bg: 160 24% 3.5%;
+  --helm-deck: 160 18% 6%;
+  --helm-panel: 160 16% 7.5%;
+  --helm-panel-raised: 160 14% 10%;
+  --helm-line: 155 12% 16%;
+  --helm-line-strong: 155 10% 26%;
+  --helm-ink: 150 20% 94%;
+  --helm-ink-muted: 150 8% 68%;
+  --helm-ink-faint: 150 6% 50%;
+
+  --helm-accent: 152 72% 56%;
+  --helm-accent-ink: 160 40% 5%;
+  --helm-accent-soft: 152 45% 13%;
+  --helm-accent-deep: 156 70% 34%;
+  --helm-aqua: 172 70% 50%;
+  --helm-sky: 204 92% 70%;
+
+  --helm-holding: 152 72% 56%;
+  --helm-drifting: 38 94% 62%;
+  --helm-breached: 352 88% 71%;
+  --helm-unknown: 150 6% 62%;
+  --helm-band: 160 70% 50%;
+  --helm-floor: 352 88% 71%;
+  --helm-focus: 152 72% 56%;
+
+  --helm-glass-top: 150 30% 92% / 0.07;
+  --helm-glass-bottom: 150 30% 92% / 0.035;
+  --helm-glass-strong-top: 150 30% 92% / 0.11;
+  --helm-glass-strong-bottom: 150 30% 92% / 0.06;
+  --helm-rim: 150 40% 90% / 0.09;
+  --helm-rim-strong: 150 40% 90% / 0.17;
+  --helm-highlight: 150 40% 96% / 0.07;
+  --helm-shadow: 0 1px 1px rgb(0 0 0 / 0.3), 0 24px 48px -24px rgb(0 0 0 / 0.7);
+  --helm-glow: 0 0 0 1px hsl(var(--helm-accent) / 0.6), 0 0 32px -6px hsl(var(--helm-accent) / 0.45);
+  --helm-spot: 152 72% 56% / 0.09;
+
+  --helm-aurora-a: 152 72% 56% / 0.12;
+  --helm-aurora-b: 172 70% 50% / 0.08;
+  --helm-dot: 150 40% 90% / 0.07;
+  --helm-grain-opacity: 0.03;
+
+  color-scheme: dark;
+}
