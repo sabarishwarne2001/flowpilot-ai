@@ -101,6 +101,23 @@ def test_an_upgrade_shows_the_amount_and_takes_effect_at_once(dodo, client, db, 
     assert row(db, sub_id).quota_tier_key == "business"
 
 
+def test_an_upgrade_survives_dodos_webhooks_when_checkout_named_the_old_plan(dodo, client, db, org) -> None:
+    """Servabo's checkout puts `quota_tier_key` in the subscription's metadata, and Dodo keeps that
+    metadata after a plan change. The reconciler read the metadata before the product Dodo bills,
+    so the upgrade's own webhooks put the organization back on the old plan (found by the browser
+    journey 68). The product decides; the metadata is only a fallback for an unknown product."""
+    sub_id = subscribe(dodo, client, db, org, product="pdt_developer", seats=1, metadata={"quota_tier_key": "developer"})
+    dodo.clock = lambda: datetime.now(timezone.utc) + timedelta(days=15)
+    shown = client.post(_url(org, "/preview"), json={"quota_tier_key": "business", "seats": 1},
+                        headers=_owner(org)).json()
+    applied = client.post(_url(org), json={"quota_tier_key": "business", "seats": 1,
+                                           "expected_amount_micros": shown["amount_now_micros"]}, headers=_owner(org))
+    assert applied.status_code == 200, applied.text
+    assert row(db, sub_id).quota_tier_key == "business"
+    deliver(dodo, client, db)
+    assert row(db, sub_id).quota_tier_key == "business"
+
+
 def test_a_confirmation_at_a_different_amount_is_refused(dodo, client, db, org) -> None:
     sub_id = subscribe(dodo, client, db, org, product="pdt_developer", seats=1)
     answer = client.post(_url(org), json={"quota_tier_key": "business", "seats": 1, "expected_amount_micros": 1},

@@ -166,20 +166,24 @@ def _addon_key_for(snapshot: DodoSubscriptionSnapshot) -> Optional[str]:
 
 
 def _tier_key_for(db: Session, snapshot: DodoSubscriptionSnapshot) -> str:
+    """The plan a Dodo subscription is on: the product Dodo bills, else the checkout's metadata.
+
+    Website and payments session (C1). The metadata is what Servabo's checkout declared, and Dodo
+    keeps it after a plan change; reading it first put every upgraded organization back on the plan
+    it checked out with as soon as Dodo's own webhooks arrived. The product is what Dodo charges for
+    now, so it decides; the metadata only names a plan whose product is not configured here.
+    """
+    from app.services.revops import price_books
+
+    if snapshot.product_id:
+        # HM-S1: a gateway price identifies a PLAN, and every version of that plan may carry it
+        # (migration hm1_tier_price_per_key); plan price books (yearly prices, C11) are read first.
+        key = price_books.tier_for_gateway_price(db, snapshot.product_id)
+        if key:
+            return str(key)
     declared = (snapshot.metadata or {}).get(subscription_service.TIER_METADATA_KEY)
     if declared:
         return str(declared).strip()
-    if snapshot.product_id:
-        # HM-S1: a gateway price identifies a PLAN, and every version of that
-        # plan may carry it (migration hm1_tier_price_per_key); the trigger it
-        # installs keeps one price on one key, so DISTINCT is at most one row.
-        key = db.execute(
-            select(QuotaTier.key)
-            .where(QuotaTier.gateway_price_id == snapshot.product_id)
-            .distinct()
-        ).scalar_one_or_none()
-        if key:
-            return str(key)
     raise ReconcileRefused(
         f"Dodo subscription {snapshot.id} carries no "
         f"metadata.{subscription_service.TIER_METADATA_KEY} and its product "
