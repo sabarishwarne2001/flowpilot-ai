@@ -51,23 +51,32 @@ below. Never restart.**
   Checkpoint (2026-10-16): 18 pages build; 1,275 links resolve; HTML valid; axe clean in both themes
   at 360 and 1280 px; Lighthouse 97/100/100/100 on home, pricing and Helm; `npm audit` 0. Browser
   specs 70, 72, 74 (signed out), 30, 01, 60 pass against the new bundle.
-- [ ] C1. (stand-in done in e4fb2a1; browser journeys on Dodo still to do) `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
+- [x] C1. `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
   `scripts/e2e_stand_in.py --gateway dodo`; browser journeys on Dodo by default; Stripe journeys kept.
 - [x] C2. Default gateway DODO everywhere; production guard (key, secret, live/test agreement).
-- [ ] C3. (behaviour tests done, 98892f7; the live concurrency test still to do) Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
+- [x] C3. Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
   add-ons, customer adoption and racing checkouts; one live concurrency test.
 - [x] C4. Dodo payments as invoice rows, PDF download route, merchant-of-record note.
 - [x] C5. Refunds and disputes (record, notify, RevOps, lost dispute → read-only).
 - [x] C6. Plan changes with Dodo's preview (amount and date first), upgrades now, downgrades at
   renewal, downgrade checks first; portal for payment method.
-- [ ] C7. Seats on Dodo proven end to end (`DODO_PREVIEW`).
-- [ ] C8. Overage capability: `ALLOW_AND_BILL` published as `REFUSE` without usage billing; copy.
-- [ ] C9. Customer details reach Dodo (or the page says where); never Stripe on a Dodo account.
-- [ ] C10. No Stripe where a customer looks; worker loop `billing` (alias `stripe`).
-- [ ] C11. Yearly products on Dodo; switch only when configured; website reads the same data.
-- [ ] C12. Dodo fees in unit economics and the margin console; ≥ 55% at ceilings after fees.
-- [ ] C13. Checkout return waits for the webhook, with a timeout message.
-- [ ] C14. `backend/scripts/dodo_setup.py` (test mode only); `docs/billing/DODO.md`.
+- [x] C7. Seats on Dodo proven end to end (`DODO_PREVIEW`).
+- [x] C8. Overage capability: `ALLOW_AND_BILL` published as `REFUSE` without usage billing; copy.
+- [x] C9. Customer details reach Dodo (or the page says where); never Stripe on a Dodo account.
+- [x] C10. No Stripe where a customer looks; worker loop `billing` (alias `stripe`).
+- [x] C11. Yearly products on Dodo; switch only when configured; website reads the same data.
+- [x] C12. Dodo fees in unit economics and the margin console; ≥ 55% at ceilings after fees.
+- [x] C13. Checkout return waits for the webhook, with a timeout message.
+- [x] C14. `backend/scripts/dodo_setup.py` (test mode only); `docs/billing/DODO.md`.
+  Checkpoint (2026-10-17): Part C done. Browser journeys bill through the stand-in Dodo by default
+  (start-stack.sh; E2E_GATEWAY=stripe keeps the Stripe journeys, also run in CI): 60 pays on Dodo's
+  checkout page and the return page confirms it (C13 proven), 62 buys seats through Dodo's preview,
+  64 runs dunning on a held renewal and fixes the card in Dodo's portal, new 68 covers an upgrade at
+  Dodo's price, the Dodo invoice download, a scheduled downgrade withdrawn, a refund and a portal
+  cancellation; 60–67 also pass on Stripe. Found and fixed on the way: held Dodo renewals turned
+  read-only silently (billing.hold_notices, migration w1a4); an upgrade was undone by Dodo's own
+  webhooks (plan now from the billed product); two order-dependent tests. Live concurrency test
+  (c3174eb); dodo_setup.py and docs/billing/DODO.md (C14).
 - [ ] D1. RUNBOOK §9 rewritten; CONFIGURATION.md and TENANCY-AND-PLANS.md regenerated.
 - [ ] D2. HANDOFF: owner launch checklist rewritten; "Website and payments session → next sessions".
 - [ ] D3. Finish: full suites, logs clean, ledgers, PR ready, final message.
