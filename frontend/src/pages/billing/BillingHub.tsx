@@ -175,6 +175,16 @@ export const BillingHub: React.FC = () => {
                 hasSubscription
                 currentSeats={state.seats_purchased}
                 minimumSeats={state.seats_used}
+                gateway={state.subscription.gateway}
+                pendingChange={
+                  state.subscription.pending_quota_tier_key && state.subscription.pending_effective_at
+                    ? {
+                        tierKey: state.subscription.pending_quota_tier_key,
+                        seats: state.subscription.pending_seats ?? null,
+                        effectiveAt: state.subscription.pending_effective_at,
+                      }
+                    : null
+                }
               />
             )}
           </>

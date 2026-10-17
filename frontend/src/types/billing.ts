@@ -179,6 +179,23 @@ export interface SubscriptionBrief {
   readonly current_period_start: string;
   readonly current_period_end: string;
   readonly cancel_at_period_end: boolean;
+  /** Website and payments session (C6): a downgrade scheduled for the renewal. */
+  readonly pending_quota_tier_key?: string | null;
+  readonly pending_seats?: number | null;
+  readonly pending_effective_at?: string | null;
+}
+
+/** Website and payments session (C6): what a plan change costs now, and when it takes effect. */
+export interface PlanChangePreview {
+  readonly direction: "UPGRADE" | "DOWNGRADE";
+  readonly effective: "NOW" | "AT_RENEWAL";
+  readonly effective_at: string;
+  readonly amount_now_micros: number;
+  readonly currency: string;
+  readonly next_renewal_micros: number;
+  readonly plan_name: string;
+  readonly seats: number;
+  readonly blockers: readonly { readonly code: string; readonly message: string }[];
 }
 
 export interface SubscriptionStateResponse {

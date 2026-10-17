@@ -54,6 +54,10 @@ class SubscriptionBrief(BaseModel):
     current_period_start: datetime
     current_period_end: datetime
     cancel_at_period_end: bool
+    # Website and payments session (C6): a downgrade scheduled for the renewal.
+    pending_quota_tier_key: Optional[str] = None
+    pending_seats: Optional[int] = None
+    pending_effective_at: Optional[datetime] = None
 
 
 class InvoiceSummary(BaseModel):
@@ -113,6 +117,9 @@ class InvoiceSummary(BaseModel):
             current_period_start=subscription.current_period_start,
             current_period_end=subscription.current_period_end,
             cancel_at_period_end=bool(subscription.cancel_at_period_end),
+            pending_quota_tier_key=getattr(subscription, "pending_quota_tier_key", None),
+            pending_seats=getattr(subscription, "pending_seats", None),
+            pending_effective_at=getattr(subscription, "pending_effective_at", None),
         )
 
 

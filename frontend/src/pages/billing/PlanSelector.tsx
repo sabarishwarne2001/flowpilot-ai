@@ -20,6 +20,7 @@ import {
   isPlanFeatureKey,
 } from "@/constants/planFeatures";
 import { numberFormat } from "@/utils/displayTime";
+import { DodoPlanChange, ScheduledPlanChange } from "@/pages/billing/DodoPlanChange";
 
 interface PlanSelectorProps {
   readonly organizationId: string;
@@ -29,6 +30,10 @@ interface PlanSelectorProps {
   readonly currentSeats: number;
   /** Campaign session 1: members plus pending invitations; checkout cannot sell fewer. */
   readonly minimumSeats?: number;
+  /** Website and payments session (C6): the live subscription's gateway. On Dodo, plans change here. */
+  readonly gateway?: string | null;
+  /** A downgrade scheduled for the renewal. */
+  readonly pendingChange?: { readonly tierKey: string; readonly seats?: number | null; readonly effectiveAt: string } | null;
 }
 
 const isFreePlan = (plan: PlanOption): boolean => plan.is_priced && plan.unit_amount === 0;
@@ -60,7 +65,12 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
   hasSubscription,
   currentSeats,
   minimumSeats = 1,
+  gateway = null,
+  pendingChange = null,
 }) => {
+  // Website and payments session (C6): Dodo's portal does not change plans; the change is made
+  // here, through Dodo's change-plan API, with its amount shown first.
+  const onDodo = hasSubscription && gateway === "DODO";
   const queryClient = useQueryClient();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const floor = Math.max(1, minimumSeats);
@@ -241,11 +251,13 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
           )}
         </div>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {hasSubscription
-            ? "Plans are changed in the billing portal: it moves this subscription and prorates the difference, so nothing is charged twice. To move to Free, cancel there."
-            : "Free starts immediately. Paid plans open a secure checkout."}
+          {onDodo
+            ? "An upgrade takes effect now and you pay only for the days left in this period; a downgrade takes effect at your next renewal. You see the exact amount before you confirm. To move to Free, cancel in Manage payment method."
+            : hasSubscription
+              ? "Plans are changed in the billing portal: it moves this subscription and prorates the difference, so nothing is charged twice. To move to Free, cancel there."
+              : "Free starts immediately. Paid plans open a secure checkout."}
         </p>
-        {hasPriceBooks && (
+        {hasPriceBooks && !onDodo && (
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs" data-testid="plan-billing-options">
             <div className="inline-flex rounded-md border border-border" role="group" aria-label="Billing interval">
               {(["month", "year"] as const).map((value) => (
@@ -277,6 +289,15 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
           </p>
         )}
       </header>
+      {pendingChange && (
+        <ScheduledPlanChange
+          organizationId={organizationId}
+          planName={plans.find((plan) => plan.key === pendingChange.tierKey)?.display_name ?? pendingChange.tierKey}
+          seats={pendingChange.seats}
+          effectiveAt={pendingChange.effectiveAt}
+          canChange={canManageBilling}
+        />
+      )}
 
       {/* N-020 item 3: the promo code is part of the plan picker, visible before a plan is chosen.
           The quote is priced by the server for the chosen plan, interval, currency and seats, and the
@@ -398,7 +419,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       disabled={!checkoutAvailable || (hasSubscription && (!canManageBilling || portal.isPending))}
                       onClick={(event) => {
                         event.preventDefault();
-                        if (hasSubscription) {
+                        if (hasSubscription && !onDodo) {
                           portal.mutate(pickOf(plan, Math.max(currentSeats, floor)));
                           return;
                         }
@@ -415,7 +436,7 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
                       {(TIER_RANK[plan.key] ?? 0) > (TIER_RANK[currentKey ?? "free"] ?? 0)
                         ? `Upgrade to ${plan.display_name}`
                         : `Switch to ${plan.display_name}`}
-                      {hasSubscription ? " in the billing portal" : null}
+                      {hasSubscription && !onDodo ? " in the billing portal" : null}
                     </button>
                   ) : null}
                 </div>
@@ -447,7 +468,9 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
               />
               <span className="text-xs text-muted-foreground">
                 {floor > 1 ? `At least ${floor}: everyone in the organization and pending invitations hold a seat. ` : ""}
-                {hasSubscription
+                {onDodo
+                  ? "You see the exact amount before you confirm."
+                  : hasSubscription
                   ? "The billing portal shows the prorated total before you confirm."
                   : "You'll see the total at checkout, before you pay."}
               </span>
@@ -464,6 +487,17 @@ export const PlanSelector: React.FC<PlanSelectorProps> = ({
             <p className="text-sm text-muted-foreground">
               This plan can&apos;t be purchased here until paid checkout is configured.
             </p>
+          ) : onDodo && confirming && !selectedIsFree ? (
+            <DodoPlanChange
+              organizationId={organizationId}
+              tierKey={selected.key}
+              seats={seats}
+              canChange={canManageBilling}
+              onDone={() => {
+                setConfirming(false);
+                setSelectedKey(null);
+              }}
+            />
           ) : hasSubscription && confirming ? (
             // Campaign session 4 (N-050): a subscriber's change, picked from the list too, is made
             // on the live subscription in the portal. This path used to open a second checkout,

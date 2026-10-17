@@ -18,6 +18,7 @@ import type {
   UsagePeriod,
   UsageSeriesResponse,
   UsageSummaryResponse,
+  PlanChangePreview,
 } from "@/types/billing";
 import type { SpendLimit, SpendLimitUpdateRequest } from "@/types/usage";
 
@@ -302,6 +303,22 @@ export const createCheckoutSession = async (
   );
   return response.data;
 };
+
+/** Website and payments session (C6): Dodo plan changes (owners). */
+export const previewPlanChange = async (
+  organizationId: string,
+  body: { readonly quota_tier_key: string; readonly seats: number },
+): Promise<PlanChangePreview> =>
+  (await apiClient.post<PlanChangePreview>(`/organizations/${org(organizationId)}/billing/plan-change/preview`, body)).data;
+
+export const confirmPlanChange = async (
+  organizationId: string,
+  body: { readonly quota_tier_key: string; readonly seats: number; readonly expected_amount_micros: number },
+): Promise<PlanChangePreview> =>
+  (await apiClient.post<PlanChangePreview>(`/organizations/${org(organizationId)}/billing/plan-change`, body)).data;
+
+export const withdrawPlanChange = async (organizationId: string): Promise<{ readonly withdrawn: boolean }> =>
+  (await apiClient.delete<{ withdrawn: boolean }>(`/organizations/${org(organizationId)}/billing/plan-change`)).data;
 
 export const createPortalSession = async (
   organizationId: string,
