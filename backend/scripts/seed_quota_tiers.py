@@ -446,11 +446,13 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
-            # Per seat: ten seats hold the 1,000,000 pages a month the card used
-            # to promise per organization, at a margin that holds for one seat.
+            # Per seat. Website and payments session (C12): 95,000 pages, down from
+            # 100,000, so a seat used to every ceiling keeps 55% after Dodo Payments'
+            # fees (6% + 40 cents on an international subscription); at 100,000 it kept
+            # 54.7%. The allowance moved, never the price (NEEDS-OWNER, C12).
             {
                 "limit_key": "ocr.page",
-                "max_quantity": "100000",
+                "max_quantity": "95000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },

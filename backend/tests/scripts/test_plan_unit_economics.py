@@ -126,3 +126,70 @@ def test_a_paid_seat_on_the_dearest_platform_model_still_keeps_half(plan: str) -
 def test_free_costs_little_even_used_to_its_limits() -> None:
     cost = cost_at_ceilings_usd("free")
     assert cost <= MAX_FREE_MONTHLY_COST_USD, f"Free costs ${cost:.2f} a month at its limits"
+
+
+# ---------------------------------------------------------------------------
+# Website and payments session (C12): after Dodo Payments' fees.
+# ---------------------------------------------------------------------------
+
+#: Every paid plan keeps at least this gross margin at its ceilings after Dodo's fees, for an
+#: international subscription payment of one seat (the dearest case: the fixed 40 cents weighs most
+#: on a single seat). If a plan does not, trim its allowance (never the price) and record why.
+MIN_PAID_GROSS_MARGIN_AFTER_FEES = Decimal("0.55")
+#: Typical use, for the report in docs/hardening/COSTS.md: a fifth of each allowance.
+TYPICAL_SHARE = Decimal("0.2")
+
+
+@pytest.mark.parametrize("plan", ["developer", "business", "enterprise"])
+def test_a_paid_seat_keeps_55_percent_at_its_ceilings_after_dodo_fees(plan: str) -> None:
+    from app.core.payment_fees import dodo_fee_micros
+
+    price_micros = int(_seed().COMMERCIALS[plan]["unit_amount_micros"])
+    price = Decimal(price_micros) / Decimal(1_000_000)
+    fee = Decimal(dodo_fee_micros(price_micros, international=True, subscription=True)) / Decimal(1_000_000)
+    cost = cost_at_ceilings_usd(plan)
+    margin = (price - cost - fee) / price
+    assert margin >= MIN_PAID_GROSS_MARGIN_AFTER_FEES, (
+        f"{plan}: ${cost:.2f} of cost at the ceilings and ${fee:.2f} of Dodo fees against ${price:.2f} per seat "
+        f"is a {margin:.0%} gross margin (under {MIN_PAID_GROSS_MARGIN_AFTER_FEES:.0%})"
+    )
+
+
+def test_dodo_fees_are_the_published_schedule() -> None:
+    from app.core.payment_fees import dodo_fee_micros
+
+    # $49: 4% + 1.5% + 0.5% = $2.94, plus $0.40.
+    assert dodo_fee_micros(49_000_000) == 3_340_000
+    # A domestic one-off payment: 4% + $0.40.
+    assert dodo_fee_micros(100_000_000, international=False, subscription=False) == 4_400_000
+    assert dodo_fee_micros(0) == 0
+
+
+def unit_economics_report() -> list[dict]:
+    """Per plan: price, Dodo's fee, cost and margin at the ceilings and at typical use (COSTS.md §5)."""
+    from app.core.payment_fees import dodo_fee_micros
+
+    rows = []
+    for plan in ("developer", "business", "enterprise"):
+        price_micros = int(_seed().COMMERCIALS[plan]["unit_amount_micros"])
+        price = Decimal(price_micros) / Decimal(1_000_000)
+        fee = Decimal(dodo_fee_micros(price_micros)) / Decimal(1_000_000)
+        ceiling = cost_at_ceilings_usd(plan)
+        typical = ceiling * TYPICAL_SHARE
+        rows.append({
+            "plan": plan, "price": price, "fee": fee, "cost_at_ceilings": ceiling,
+            "margin_at_ceilings": (price - ceiling - fee) / price,
+            "margin_typical": (price - typical - fee) / price,
+        })
+    return rows
+
+
+def test_the_report_in_costs_md_is_current() -> None:
+    """docs/hardening/COSTS.md §5 shows these figures; regenerate them when a price, limit or fee moves."""
+    from pathlib import Path
+
+    costs = (Path(__file__).resolve().parents[3] / "docs/hardening/COSTS.md").read_text(encoding="utf-8")
+    for row in unit_economics_report():
+        line = (f"| {row['plan'].title()} | ${row['price']:,.0f} | ${row['fee']:.2f} | ${row['cost_at_ceilings']:.2f} | "
+                f"{row['margin_at_ceilings']:.0%} | {row['margin_typical']:.0%} |")
+        assert line in costs, line

@@ -102,9 +102,27 @@ it, and the trial can be shortened with one setting (`FREE_TRIAL_DAYS` in `.env.
 | Business | $299 | 100M input + 20M output = $15 + $12 = **$27** | input overage billed above |
 | Enterprise | $799 | 300M input + 75M output = $45 + $45 = **$90** | overage billed above |
 
-So even a seat that uses every token keeps more than 85% of its price before the server, Stripe's
-fee and support. Most seats use a small part of their allowance (N-054 sized them so a seat at its
-ceilings still keeps 60% or more).
+So even a seat that uses every token keeps more than 85% of its price before the server, the
+payment provider's fee and support. Most seats use a small part of their allowance.
+
+### After Dodo Payments' fees (website and payments session, C12)
+
+Dodo Payments keeps 4% + 40 cents of each payment, plus 1.5% for an international card and 0.5% for
+a subscription (`backend/app/core/payment_fees.py`; Dodo's pricing page, read 2026-10-16). The
+figures below take the dearest usual case, an international subscription of one seat, and every
+cost at its ceiling (OCR pages, tokens on the default model, storage, embeddings;
+`tests/scripts/test_plan_unit_economics.py`, which fails if these rows go stale). Typical use is a
+fifth of each allowance.
+
+| Plan | Price per seat | Dodo fee | Cost at the ceilings | Margin at the ceilings | Margin at typical use |
+|---|---|---|---|---|---|
+| Developer | $49 | $3.34 | $14.05 | 65% | 87% |
+| Business | $299 | $18.34 | $112.95 | 56% | 86% |
+| Enterprise | $799 | $48.34 | $303.48 | 56% | 86% |
+
+The rule: every paid plan keeps **at least 55%** at its ceilings after the fee. Enterprise kept 54.7%
+with 100,000 OCR pages a seat, so its allowance became 95,000 pages a seat (the price did not move;
+NEEDS-OWNER, C12). A chargeback costs a further $30.
 
 ## 6. Keep these numbers true
 

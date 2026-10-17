@@ -292,7 +292,7 @@
         },
         {
           "key": "ocr.page",
-          "limit_quantity": 100000,
+          "limit_quantity": 95000,
           "period": "MONTH",
           "overage_policy": "REFUSE"
         },

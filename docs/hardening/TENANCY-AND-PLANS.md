@@ -103,7 +103,7 @@ Free is per organization, and **one Free allowance is shared by every Free organ
 | Per month | Free | Developer | Business | Enterprise |
 |---|---|---|---|---|
 | Document uploads | 25 (refuse) | 500 / seat (refuse) | 5,000 / seat (warn) | 10,000 / seat (warn) |
-| OCR pages | 50 (refuse) | 5,000 / seat (bill overage) | 40,000 / seat (bill overage) | 100,000 / seat (bill overage) |
+| OCR pages | 50 (refuse) | 5,000 / seat (bill overage) | 40,000 / seat (bill overage) | 95,000 / seat (bill overage) |
 | Assistant messages | 30 (refuse) | 1,000 / seat (refuse) | 10,000 / seat (warn) | no ceiling |
 | Storage (GB, a hard ceiling only where REFUSE) | 0.25 (refuse) | 25 / seat (bill overage) | 250 / seat (bill overage) | 1,000 / seat (bill overage) |
 | AI input tokens (safety net) | 300,000 (refuse) | 15,000,000 / seat (refuse) | 100,000,000 / seat (bill overage) | 300,000,000 / seat (bill overage) |
