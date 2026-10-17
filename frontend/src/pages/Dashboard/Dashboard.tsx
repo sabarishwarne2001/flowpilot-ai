@@ -273,7 +273,7 @@ export const Dashboard: React.FC = () => {
       {/* The hero: the total, the last 14 days, and how many finished well. */}
       <section aria-labelledby="overview-hero" className="fp-card fp-hero grid gap-6 overflow-hidden p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)_auto] lg:items-center">
         <div className="min-w-0" data-testid="kpi-total">
-          <h2 id="overview-hero" className="fp-eyebrow">Total documents</h2>
+          <h2 id="overview-hero" className="fp-eyebrow">Total Documents</h2>
           <CountUp value={metrics.total_work_items} className="fp-num fp-hero-numeral mt-3 block text-foreground" />
           <p className="mt-3 text-[13px] text-muted-foreground">
             {metrics.total_work_items === 0 ? "Upload a document to begin" : `${formatNumber(classified)} classified by type`}
