@@ -317,9 +317,7 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
     was never renewed here: its statement is assembled and its overage goes on the subscription's
     next invoice. Before, nothing queued this job and it assembled without billing overage.
     """
-    from sqlalchemy import select
-
-    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+    from app.models.subscription import Subscription
     from app.services.billing import invoice_service, period_close_service
 
     limit = _int(payload, "limit", 100)
@@ -344,21 +342,7 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
                 targets = [subscription_id]
             else:
                 cutoff = datetime.now(timezone.utc) - ASSEMBLE_BACKSTOP_GRACE
-                targets = list(
-                    db.execute(
-                        select(Subscription.id)
-                        .where(
-                            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
-                            Subscription.current_period_end <= cutoff,
-                            # One set to end does not renew: its period closes with no invoice.
-                            Subscription.cancel_at_period_end.is_(False),
-                        )
-                        .order_by(Subscription.current_period_end.asc())
-                        .limit(limit)
-                    )
-                    .scalars()
-                    .all()
-                )
+                targets = period_close_service.backstop_targets(db, cutoff=cutoff, limit=limit)
 
     assembled: list[dict[str, Any]] = []
     skipped = 0

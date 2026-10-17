@@ -107,13 +107,23 @@ export const DunningBanner: React.FC<DunningBannerProps> = ({
 
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-destructive">
-            {access.writes_allowed
-              ? "There's a problem with your payment method"
-              : "Your account is read-only until payment is resolved"}
+            {access.reason === "PAYMENT_REVERSED"
+              ? "Payment reversed by your bank: the account is read-only"
+              : access.writes_allowed
+                ? "There's a problem with your payment method"
+                : "Your account is read-only until payment is resolved"}
           </p>
 
           <p className="mt-1 text-sm text-foreground/80">
-            {access.writes_allowed ? (
+            {access.reason === "PAYMENT_REVERSED" ? (
+              <>
+                Your bank reversed a payment to Servabo (a chargeback). You can
+                still read, search, and export everything; new uploads, AI
+                generation, and edits are paused until the next payment succeeds.
+                If the reversal was a mistake, reply to our email or contact
+                support.
+              </>
+            ) : access.writes_allowed ? (
               <>
                 A payment attempt failed. Update your billing details to avoid
                 interruption.

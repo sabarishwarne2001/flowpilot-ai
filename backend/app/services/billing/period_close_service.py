@@ -149,4 +149,33 @@ def close_for_gateway_invoice(
                         gateway_invoice_is_draft=snapshot.status == "draft")
 
 
-__all__ = ["NEXT_INVOICE", "NOT_SUPPORTED", "ON_INVOICE", "close_for_gateway_invoice", "close_period"]
+def backstop_targets(db: Session, *, cutoff: datetime, limit: int) -> list[Any]:
+    """Subscriptions whose period ended before `cutoff` with no statement closing it: the backstop's work.
+
+    Stripe subscriptions only (website and payments session, C4). A Dodo customer's invoices are
+    its payments (`dodo_invoice_service`), and its delinquency is the subscription's own state
+    (D-11). A statement assembled here for a Dodo subscription whose renewal webhook was late stayed
+    OPEN, and the dunning sweep chases OPEN invoices, so a paying customer could be made read-only.
+    """
+    from sqlalchemy import select
+
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES
+
+    return list(
+        db.execute(
+            select(Subscription.id)
+            .where(
+                Subscription.gateway == "STRIPE",
+                Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
+                Subscription.current_period_end <= cutoff,
+                # One set to end does not renew: its period closes with no invoice.
+                Subscription.cancel_at_period_end.is_(False),
+            )
+            .order_by(Subscription.current_period_end.asc())
+            .limit(limit)
+        ).scalars().all()
+    )
+
+
+__all__ = ["NEXT_INVOICE", "NOT_SUPPORTED", "ON_INVOICE", "backstop_targets", "close_for_gateway_invoice",
+           "close_period"]

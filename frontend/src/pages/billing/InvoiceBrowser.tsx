@@ -4,12 +4,14 @@ import { useQuery } from "@tanstack/react-query";
 import {
   CheckCircle2,
   ChevronRight,
+  Download,
   Loader2,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
 
 import {
+  downloadInvoice,
   getInvoice,
   getInvoiceReproduction,
   getInvoices,
@@ -62,8 +64,8 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
       <section className="rounded-lg border border-border bg-card p-4">
         <h2 className="text-sm font-medium">Invoices</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          No invoices yet. The first one is issued at the end of your current
-          billing period.
+          No invoices yet. Each payment&apos;s invoice appears here once it is
+          paid.
         </p>
       </section>
     );
@@ -119,6 +121,9 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
               </span>
             </button>
 
+            {/* Website and payments session (C4): the gateway's tax invoice, and who issued it. */}
+            {invoice.downloadable && <InvoiceDocument organizationId={organizationId} invoice={invoice} />}
+
             {selectedId === invoice.id && (
               <InvoiceDetail
                 organizationId={organizationId}
@@ -129,6 +134,41 @@ export const InvoiceBrowser: React.FC<InvoiceBrowserProps> = ({
         ))}
       </ul>
     </section>
+  );
+};
+
+const InvoiceDocument: React.FC<{
+  readonly organizationId: string;
+  readonly invoice: { readonly id: string; readonly number: string; readonly issued_by?: string | null };
+}> = ({ organizationId, invoice }) => {
+  const [state, setState] = useState<"idle" | "busy" | "failed">("idle");
+  const download = async () => {
+    setState("busy");
+    try {
+      await downloadInvoice(organizationId, invoice.id, invoice.number);
+      setState("idle");
+    } catch {
+      setState("failed");
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 pb-3 pl-11 text-xs text-muted-foreground">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={state === "busy"}
+        className="fp-btn fp-btn-secondary h-7 px-2.5 text-xs"
+      >
+        {state === "busy" ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" /> : <Download className="h-3.5 w-3.5" aria-hidden="true" />}
+        Download invoice
+      </button>
+      {invoice.issued_by && <span>Tax invoice issued by {invoice.issued_by}.</span>}
+      {state === "failed" && (
+        <span role="alert" className="text-destructive">
+          The invoice could not be downloaded. Try again in a minute.
+        </span>
+      )}
+    </div>
   );
 };
 

@@ -86,9 +86,11 @@ export const MemberAccessNotice: React.FC<MemberAccessNoticeProps> = ({
               restricted ? "text-destructive" : "text-foreground"
             }`}
           >
-            {restricted
-              ? "This workspace is read-only right now"
-              : "This workspace has a billing issue"}
+            {restricted && summary.reason === "PAYMENT_REVERSED"
+              ? "Read-only: a payment was reversed by the bank"
+              : restricted
+                ? "This workspace is read-only right now"
+                : "This workspace has a billing issue"}
           </p>
           <p className="mt-1 text-sm text-foreground/80">
             {restricted ? (

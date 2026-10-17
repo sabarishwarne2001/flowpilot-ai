@@ -118,6 +118,12 @@ export interface InvoiceSummary {
   readonly seats_billed: number;
   readonly finalized_at: string | null;
   readonly stripe_invoice_id: string | null;
+  /** Website and payments session (C4): the gateway that took the payment. */
+  readonly gateway?: "STRIPE" | "DODO";
+  /** Who issued the tax invoice ("Dodo Payments (merchant of record)"), when not Servabo. */
+  readonly issued_by?: string | null;
+  /** Whether "Download invoice" fetches the gateway's PDF. */
+  readonly downloadable?: boolean;
 }
 
 export interface InvoiceListResponse {
@@ -217,6 +223,8 @@ export interface BillingAccessResponse {
   /** ARCH-30 Tranche 3 (D-11). */
   readonly subscription_status: string | null;
   readonly grace_ends_at: string | null;
+  /** Website and payments session (C5): the bank reversed a payment (a lost dispute). */
+  readonly reason?: "PAYMENT_REVERSED" | null;
 }
 
 export interface CheckoutSessionRequest {

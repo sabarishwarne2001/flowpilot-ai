@@ -263,3 +263,21 @@ export const REVOPS_MESSAGES: Partial<Record<RevOpsCode, string>> = {
   SUBSCRIPTION_ACTIVE: "The organization has a live card subscription; cancel it before activating a contract.",
   CONTRACT_ACTIVE_EXISTS: "The organization already has an active contract.",
 };
+
+/** Website and payments session (C5): a dispute on a payment, as the operator console lists it. */
+export interface BillingDispute {
+  readonly id: string;
+  readonly organization_id: string;
+  readonly organization_name: string | null;
+  readonly gateway: string;
+  readonly gateway_dispute_id: string;
+  readonly gateway_payment_id: string;
+  readonly status: string;
+  readonly amount_micros: number | null;
+  readonly currency: string | null;
+  readonly opened_at: string;
+  readonly reversed_at: string | null;
+  readonly cleared_at: string | null;
+  readonly cleared_reason: string | null;
+  readonly holding_read_only: boolean;
+}

@@ -25,6 +25,9 @@ OPERATOR_ALERT_KINDS: tuple[str, ...] = (
     "DEAD_GATEWAY_EVENTS",
     "SERVER_ERRORS",
     "DUPLICATE_SUBSCRIPTION",
+    # Website and payments session (C5): a chargeback, and a payment the bank reversed.
+    "PAYMENT_DISPUTED",
+    "PAYMENT_REVERSED",
 )
 
 

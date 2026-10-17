@@ -10,7 +10,7 @@
 import { LoadFailed } from "@/components/common/LoadFailed";
 import React, { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Banknote, BookOpen, FileSignature, Loader2, RefreshCw, TicketPercent, TrendingUp } from "lucide-react";
+import { Banknote, BookOpen, FileSignature, Loader2, RefreshCw, ShieldAlert, TicketPercent, TrendingUp } from "lucide-react";
 import { toast } from "sonner";
 
 import {
@@ -20,7 +20,8 @@ import {
 import { ApiError, errorMessage } from "@/services/api/errors";
 import {
   activateContract, createContract, createPriceBook, createPromoCode, deletePriceEntry, endContract, getContract, getPriceBook,
-  getRevenueMetrics, issueContractInvoices, listContracts, listPriceBooks, listPromoCodes, listRevOpsOrganizations,
+  getRevenueMetrics, issueContractInvoices, liftDispute, listContracts, listDisputes, listPriceBooks, listPromoCodes,
+  listRevOpsOrganizations,
   payInvoice,
   publishPriceBook, revopsKeys, runRevOpsSweep, setPriceEntry, setPromoActive, voidInvoice,
 } from "@/services/api/revops";
@@ -33,12 +34,13 @@ import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { TabList, TabPanel, useUrlTab, type TabDefinition } from "@/components/ui/Tabs";
 
-type Tab = "revenue" | "books" | "promos" | "contracts";
+type Tab = "revenue" | "books" | "promos" | "contracts" | "disputes";
 const TABS: readonly TabDefinition<Tab>[] = [
   { id: "revenue", label: "Revenue", icon: TrendingUp },
   { id: "books", label: "Price books", icon: BookOpen },
   { id: "promos", label: "Promo codes", icon: TicketPercent },
   { id: "contracts", label: "Contracts", icon: FileSignature },
+  { id: "disputes", label: "Disputes", icon: ShieldAlert },
 ];
 const TAB_IDS = TABS.map((tab) => tab.id);
 // N-064: the person's language, read at use (not at import, before preferences load).
@@ -533,8 +535,100 @@ const RevOpsConsole: React.FC = () => {
         {tab === "books" ? <BooksTab /> : null}
         {tab === "promos" ? <PromosTab /> : null}
         {tab === "contracts" ? <ContractsTab /> : null}
+        {tab === "disputes" ? <DisputesTab /> : null}
       </TabPanel>
     </div>
+  );
+};
+
+/**
+ * Website and payments session (C5). Chargebacks Dodo Payments reported. A reversed payment (a lost
+ * dispute) holds the organization read-only until its next payment succeeds; the operator can lift
+ * it sooner, with a reason, here.
+ */
+const DisputesTab: React.FC = () => {
+  const queryClient = useQueryClient();
+  const disputes = useQuery({ queryKey: revopsKeys.disputes(), queryFn: listDisputes });
+  const [reasons, setReasons] = useState<Record<string, string>>({});
+  const lift = useMutation({
+    mutationFn: ({ id, reason }: { id: string; reason: string }) => liftDispute(id, reason),
+    onSuccess: () => {
+      toast.success("Read-only hold lifted.");
+      void queryClient.invalidateQueries({ queryKey: revopsKeys.disputes() });
+    },
+    onError: (error) => toast.error(failure(error, "The hold could not be lifted.")),
+  });
+  if (disputes.isError) {
+    return <LoadFailed what="Disputes" onRetry={() => void disputes.refetch()} />;
+  }
+  if (disputes.isLoading) {
+    return <Loader2 className="h-4 w-4 animate-spin" aria-label="Loading disputes" />;
+  }
+  const rows = disputes.data ?? [];
+  return (
+    <section className={`${SURFACE} ${SCROLL_X} p-4`} data-testid="revops-disputes">
+      <h2 className={SECTION_TITLE}>Payment disputes</h2>
+      <p className={HINT}>
+        Dodo Payments answers the bank as merchant of record; add evidence in its dashboard. A lost dispute makes
+        the organization read-only until its next payment succeeds.
+      </p>
+      {rows.length === 0 ? (
+        <p className="mt-3 text-sm text-muted-foreground">No disputes.</p>
+      ) : (
+        <table className="mt-3 w-full min-w-[44rem] text-sm">
+          <thead className={TABLE_HEAD}>
+            <tr>
+              <th className="py-2 text-left">Organization</th>
+              <th className="py-2 text-left">Dispute</th>
+              <th className="py-2 text-left">Status</th>
+              <th className="py-2 text-right">Amount</th>
+              <th className="py-2 text-left">Opened</th>
+              <th className="py-2 text-left">Read-only hold</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((d) => (
+              <tr key={d.id} className={TABLE_ROW}>
+                <td className="py-2">{d.organization_name ?? d.organization_id}</td>
+                <td className="py-2 font-mono text-xs">{d.gateway_dispute_id}</td>
+                <td className="py-2">{d.status.replace("dispute_", "").replace("_", " ")}</td>
+                <td className="py-2 text-right tabular-nums">{money(d.amount_micros, d.currency)}</td>
+                <td className="py-2">{formatTimestamp(d.opened_at)}</td>
+                <td className="py-2">
+                  {d.holding_read_only ? (
+                    <form
+                      className="flex items-center gap-2"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        lift.mutate({ id: d.id, reason: reasons[d.id] ?? "" });
+                      }}
+                    >
+                      <label className="sr-only" htmlFor={`lift-${d.id}`}>Why lift the hold</label>
+                      <input
+                        id={`lift-${d.id}`}
+                        className={`${INPUT} h-8 w-56`}
+                        placeholder="Why (e.g. paid by transfer)"
+                        value={reasons[d.id] ?? ""}
+                        onChange={(event) => setReasons((all) => ({ ...all, [d.id]: event.target.value }))}
+                        minLength={3}
+                        required
+                      />
+                      <button type="submit" className={BUTTON_SECONDARY} disabled={lift.isPending}>
+                        Lift
+                      </button>
+                    </form>
+                  ) : d.cleared_at ? (
+                    <span className="text-muted-foreground">Lifted: {d.cleared_reason}</span>
+                  ) : (
+                    <span className="text-muted-foreground">None</span>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 };
 

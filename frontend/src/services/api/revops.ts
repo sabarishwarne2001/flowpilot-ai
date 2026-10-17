@@ -5,7 +5,8 @@
 import { apiClient } from "@/services/api/client";
 import type {
   Contract, ContractEndReason, ContractInput, ContractSummary, PriceBook, PriceBookSummary, PriceEntryInput,
-  PromoCode, PromoCodeInput, PromoQuote, RevenueMetrics, RevOpsOrganization, SweepResult, TenantContract,
+  BillingDispute, PromoCode, PromoCodeInput, PromoQuote, RevenueMetrics, RevOpsOrganization, SweepResult,
+  TenantContract,
 } from "@/types/revops";
 
 const ADMIN = "/admin/revops";
@@ -21,7 +22,14 @@ export const revopsKeys = {
   contracts: () => ["revops", "contracts"] as const,
   contract: (id: string) => ["revops", "contracts", id] as const,
   tenantContract: (organizationId: string) => ["billing", organizationId, "contract"] as const,
+  disputes: () => ["revops", "disputes"] as const,
 };
+
+/** Website and payments session (C5): payment disputes, and lifting a reversal's read-only hold. */
+export const listDisputes = async (): Promise<readonly BillingDispute[]> =>
+  (await apiClient.get<BillingDispute[]>(`${ADMIN}/disputes`)).data;
+export const liftDispute = async (id: string, reason: string): Promise<BillingDispute> =>
+  (await apiClient.post<BillingDispute>(`${ADMIN}/disputes/${seg(id)}/lift`, { reason })).data;
 
 export const getRevenueMetrics = async (): Promise<RevenueMetrics> =>
   (await apiClient.get<RevenueMetrics>(`${ADMIN}/metrics`)).data;

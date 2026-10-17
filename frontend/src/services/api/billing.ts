@@ -64,6 +64,8 @@ export const BILLING_ENDPOINTS = {
     `/organizations/${org(organizationId)}/invoices`,
   invoice: (organizationId: string, invoiceId: string) =>
     `/organizations/${org(organizationId)}/invoices/${seg(invoiceId)}`,
+  invoiceDownload: (organizationId: string, invoiceId: string) =>
+    `/organizations/${org(organizationId)}/invoices/${seg(invoiceId)}/download`,
   invoiceReproduction: (organizationId: string, invoiceId: string) =>
     `/organizations/${org(organizationId)}/invoices/${seg(invoiceId)}/reproduction`,
 
@@ -142,6 +144,8 @@ export interface BillingAccessSummary {
   readonly plan_contacts?: readonly string[];
   /** Campaign session 2 (N-052). */
   readonly trial?: TrialStatus;
+  /** Website and payments session (C5): the bank reversed a payment (a lost dispute). */
+  readonly reason?: "PAYMENT_REVERSED" | null;
 }
 
 export const getBillingAccessSummary = async (
@@ -256,6 +260,26 @@ export const getInvoice = async (
     BILLING_ENDPOINTS.invoice(organizationId, invoiceId),
   );
   return response.data;
+};
+
+/**
+ * Website and payments session (C4). The tax invoice for a Dodo payment, fetched from Dodo by the
+ * server and saved by the browser as `<number>.pdf`.
+ */
+export const downloadInvoice = async (
+  organizationId: string,
+  invoiceId: string,
+  number: string,
+): Promise<void> => {
+  const response = await apiClient.get<Blob>(BILLING_ENDPOINTS.invoiceDownload(organizationId, invoiceId), {
+    responseType: "blob",
+  });
+  const url = URL.createObjectURL(response.data);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = `${number}.pdf`;
+  anchor.click();
+  URL.revokeObjectURL(url);
 };
 
 export const getInvoiceReproduction = async (

@@ -74,11 +74,25 @@ class InvoiceSummary(BaseModel):
     seats_billed: int
     finalized_at: Optional[datetime] = None
     stripe_invoice_id: Optional[str] = None
+    # Website and payments session (C4). Which gateway took the payment, who issued the tax
+    # invoice (Dodo Payments, as merchant of record), and whether it can be downloaded here.
+    gateway: str = "STRIPE"
+    issued_by: Optional[str] = None
+    downloadable: bool = False
 
     @field_validator("status", mode="before")
     @classmethod
     def _status_value(cls, v: Any) -> str:
         return v.value if hasattr(v, "value") else str(v)
+
+    @classmethod
+    def model_validate(cls, obj: Any, *args: Any, **kwargs: Any) -> "InvoiceSummary":  # type: ignore[override]
+        summary = super().model_validate(obj, *args, **kwargs)
+        notes = getattr(obj, "assembly_notes", None) or {}
+        if isinstance(notes, dict) and notes.get("issued_by"):
+            summary.issued_by = str(notes["issued_by"])
+        summary.downloadable = summary.gateway == "DODO" and bool(getattr(obj, "gateway_invoice_id", None))
+        return summary
 
     @staticmethod
     def subscription_view(subscription: Any) -> "SubscriptionBrief":
@@ -237,6 +251,9 @@ class BillingAccessResponse(BaseModel):
     subscription_status: Optional[str] = None
     grace_ends_at: Optional[datetime] = None
     trial: Optional[TrialStatusResponse] = None
+    # Website and payments session (C5): PAYMENT_REVERSED when a reversed payment (a lost
+    # dispute) is what holds the organization read-only.
+    reason: Optional[Literal["PAYMENT_REVERSED"]] = None
 
 
 # ARCH30-T4F:access-summary-schema — A5.
@@ -273,6 +290,9 @@ class BillingAccessSummaryResponse(BaseModel):
         description="Who can change the plan, by name: the organization owners (at most three).",
     )
     trial: TrialStatusResponse = Field(default_factory=TrialStatusResponse)
+    # Website and payments session (C5): why it is read-only, when the reason is not the plan or
+    # a missed renewal. PAYMENT_REVERSED: the bank reversed a payment (a lost dispute).
+    reason: Optional[Literal["PAYMENT_REVERSED"]] = None
 
 
 class CheckoutSessionRequest(BaseModel):
