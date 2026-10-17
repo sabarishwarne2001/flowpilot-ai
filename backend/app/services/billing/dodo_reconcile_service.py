@@ -337,6 +337,20 @@ def reconcile_subscription_event(db: Session, row: StripeInboundEvent) -> Reconc
     return outcome
 
 
+def apply_snapshot(
+    db: Session, *, snapshot: DodoSubscriptionSnapshot, organization_id: uuid.UUID, source: str
+) -> ReconcileOutcome:
+    """Apply a subscription Servabo just changed at Dodo (a plan change), as a webhook would.
+
+    The same guarded upsert as an event (D-9: `state_version` orders it against webhooks), so the
+    change shows at once and a later event for the same state changes nothing.
+    """
+    from types import SimpleNamespace
+
+    origin = SimpleNamespace(gateway_event_id=f"app:{source}", event_type=source)
+    return _reconcile_plan(db, row=origin, snapshot=snapshot, organization_id=organization_id)  # type: ignore[arg-type]
+
+
 def _record_invoice(
     db: Session,
     *,

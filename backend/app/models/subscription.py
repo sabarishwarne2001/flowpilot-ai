@@ -232,6 +232,17 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
             "ix_subscriptions_stale_reconcile",
             "last_reconciled_at",
         ),
+        # Website and payments session (C6): a scheduled downgrade names its plan and its date together.
+        CheckConstraint(
+            "(pending_quota_tier_key IS NULL) = (pending_effective_at IS NULL) "
+            "AND (pending_seats IS NULL OR pending_seats >= 1)",
+            name="pending_change_complete",
+        ),
+        Index(
+            "ix_subscriptions_pending_due",
+            "pending_effective_at",
+            postgresql_where=text("pending_quota_tier_key IS NOT NULL"),
+        ),
         Index(
             "uq_subscriptions_gateway_subscription",
             "gateway",
@@ -257,6 +268,15 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
     )
     gateway_subscription_id: Mapped[Optional[str]] = mapped_column(
         String(255), nullable=True
+    )
+
+    # ---- Website and payments session (C6): a downgrade waiting for the renewal
+    pending_quota_tier_key: Mapped[Optional[str]] = mapped_column(String(32), nullable=True)
+    pending_seats: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pending_effective_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pending_requested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    pending_requested_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
     # ---- ARCH-30 Tranche 2 (D-11): end of full access after a failed renewal

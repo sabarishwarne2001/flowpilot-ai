@@ -227,6 +227,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Advance dunning state for past-due subscriptions (ARCH-15).",
     ),
     ScheduledJob(
+        job_type="billing.plan_changes",
+        interval_seconds=900,
+        description=(
+            "Make at Dodo the downgrades scheduled for a renewal due within the hour, so the "
+            "renewal is billed at the new price (website and payments session, C6)."
+        ),
+    ),
+    ScheduledJob(
         job_type="billing.addon_grace_sweep",
         interval_seconds=900,
         description=(

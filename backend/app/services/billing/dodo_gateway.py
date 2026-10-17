@@ -432,6 +432,9 @@ class DodoGateway:
                 f"{response.text[:500]}"
             )
 
+        if not response.content.strip():
+            # Some calls answer 200 with no body (change-plan); the caller re-fetches what it needs.
+            return {}
         try:
             payload = response.json()
         except Exception as exc:  # noqa: BLE001
@@ -545,6 +548,38 @@ class DodoGateway:
                 "product_id": product_id,
                 "quantity": int(seats),
                 "proration_billing_mode": proration_mode,
+            },
+        )
+        return self.fetch_subscription(subscription_id)
+
+    def change_plan(
+        self,
+        *,
+        subscription_id: str,
+        product_id: str,
+        quantity: int,
+        proration_mode: str,
+        on_payment_failure: str = "prevent_change",
+    ) -> DodoSubscriptionSnapshot:
+        """`POST /subscriptions/{id}/change-plan` — another product (plan), then re-fetch (D-9).
+
+        Website and payments session (C6). `on_payment_failure: prevent_change` keeps the old
+        plan when the immediate charge fails, so an upgrade is never granted unpaid.
+        """
+        if int(quantity) < 1:
+            raise DodoGatewayError("Dodo subscriptions need at least one unit.")
+        if proration_mode not in {"prorated_immediately", "full_immediately", "difference_immediately", "do_not_bill"}:
+            raise DodoGatewayError(f"Unknown Dodo proration mode {proration_mode!r}.")
+        if on_payment_failure not in {"prevent_change", "apply_change"}:
+            raise DodoGatewayError(f"Unknown on_payment_failure {on_payment_failure!r}.")
+        self._request(
+            "POST",
+            f"/subscriptions/{quote(str(subscription_id), safe='')}/change-plan",
+            {
+                "product_id": product_id,
+                "quantity": int(quantity),
+                "proration_billing_mode": proration_mode,
+                "on_payment_failure": on_payment_failure,
             },
         )
         return self.fetch_subscription(subscription_id)

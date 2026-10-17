@@ -46,6 +46,8 @@ LIGHT = WorkerProfile(
             "billing.seat_drift",
             "billing.assemble_invoice",
             "billing.dunning_sweep",
+            # Website and payments session (C6): scheduled downgrades, one Dodo call each.
+            "billing.plan_changes",
             # ARCH-30 Tranche 2 (D-6). Row updates and existing domain
             # revocation only; no heavy imports.
             "billing.addon_grace_sweep",

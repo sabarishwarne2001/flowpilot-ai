@@ -424,6 +424,25 @@ def handle_billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================================
+# billing.plan_changes (website and payments session, C6)
+# ============================================================================
+
+
+def handle_billing_plan_changes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Make at Dodo the downgrades whose renewal is within the hour (`plan_change_service.apply_due`)."""
+    from app.services.billing import plan_change_service
+
+    limit = _int(payload, "limit", 100)
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.plan_changes"):
+            with db.begin():
+                applied = plan_change_service.apply_due(db, limit=limit)
+    outcome = {"applied": len(applied), "detail": [{k: str(v) for k, v in a.items()} for a in applied[:50]]}
+    logger.info("billing.plan_changes_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
 # billing.addon_grace_sweep (ARCH-30 Tranche 2, D-6)
 # ============================================================================
 
