@@ -57,9 +57,10 @@ def _gateway_from_argv(argv: list[str]) -> str:
 
 
 #: Where start-stack.sh serves the stand-in Dodo, and the test-mode key and webhook secret the API
-#: and worker were started with. Set before the settings load, so Servabo's own code reaches it.
+#: and worker were started with. Set before the settings load, so Servabo's own code reaches it;
+#: only when run as a script (a test that imports this module keeps its own environment).
 DODO_URL = os.environ.get("E2E_DODO_URL", "http://127.0.0.1:8790")
-if _gateway_from_argv(sys.argv[1:]) == "dodo":
+if __name__ == "__main__" and _gateway_from_argv(sys.argv[1:]) == "dodo":
     from tests.fakes.fake_dodo import DEFAULT_SECRET as _DODO_SECRET
 
     os.environ.update(BILLING_GATEWAY="DODO", DODO_API_BASE=DODO_URL, DODO_LIVEMODE="false",

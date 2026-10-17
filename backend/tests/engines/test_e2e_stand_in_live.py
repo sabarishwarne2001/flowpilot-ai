@@ -36,7 +36,9 @@ def stand_in(engines: Engines, tmp_path, monkeypatch: pytest.MonkeyPatch):
     def run(*args: str) -> dict:
         captured = io.StringIO()
         with redirect_stdout(captured):
-            assert module.main([*args, "--org", slug]) == 0
+            # Stripe's side: these tests were written for it (the Dodo side is the browser journeys'
+            # default, through the stand-in Dodo and the real worker).
+            assert module.main([*args, "--org", slug, "--gateway", "stripe"]) == 0
         engines.refresh()
         return json.loads(captured.getvalue().strip().splitlines()[-1])
 
