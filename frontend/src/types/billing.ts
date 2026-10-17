@@ -366,7 +366,8 @@ export const limitUtilisation = (limit: UsageLimit): number | null => {
  * customer reading their invoice, not by us.
  */
 export type SeatPriceSource = "PRICE_BOOK" | "UNPRICED";
-export type SeatProrationSource = "STRIPE_PREVIEW" | "UNAVAILABLE";
+/** Website and payments session (C10): Dodo's change-plan preview quotes seats too. */
+export type SeatProrationSource = "STRIPE_PREVIEW" | "DODO_PREVIEW" | "UNAVAILABLE";
 
 export interface SeatPriceBookResponse {
   readonly organization_id: string;
