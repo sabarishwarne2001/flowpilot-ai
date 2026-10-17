@@ -91,7 +91,7 @@ export const useTourPath = (): ((step: number) => string) => {
 export const StartTour: React.FC = () => {
   const path = useTourPath();
   return (
-    <Link to={path(0)} className="helm-btn helm-btn-primary" data-testid="helm-tour-start">
+    <Link to={path(0)} className="helm-btn helm-btn-hero" data-testid="helm-tour-start">
       <Compass className="h-3.5 w-3.5" aria-hidden="true" />
       Take the guided tour
     </Link>

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { FileText, Lock } from "lucide-react";
+import { CalendarDays, FileText, Lock, X } from "lucide-react";
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money, MoneyByCurrency } from "@/components/helm/HelmBits";
@@ -98,10 +98,21 @@ const PromiseRow: React.FC<{ readonly promise: HelmPromise; readonly slugs: Map<
 export const HelmLedger: React.FC = () => {
   const { organizationId, overview } = useHelm();
   const book = useHelmBook();
-  const [view, setView] = useState<ViewId>("owe");
+  const [params, setParams] = useSearchParams();
+  // The cockpit's Promise calendar opens one day here: ?view=owe|owed&due=YYYY-MM-DD.
+  const asked = params.get("view");
+  const [view, setView] = useState<ViewId>(VIEWS.some((v) => v.id === asked) ? (asked as ViewId) : "owe");
   const [counterparty, setCounterparty] = useState("");
+  const dueParam = params.get("due");
+  const due = dueParam && /^\d{4}-\d{2}-\d{2}$/.test(dueParam) ? dueParam : undefined;
   const filter = VIEWS.find((v) => v.id === view)?.filter ?? {};
-  const filters = { ...filter, counterparty: counterparty || undefined };
+  const filters = { ...filter, counterparty: counterparty || undefined, due_on: due };
+  const clearDay = (): void =>
+    setParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete("due");
+      return next;
+    });
   const ledger = useQuery({
     queryKey: helmKeys.ledger(organizationId, book.id, filters as Record<string, string | boolean | undefined>),
     queryFn: () => getHelmLedger(organizationId, book.id, filters),
@@ -157,6 +168,15 @@ export const HelmLedger: React.FC = () => {
             </button>
           ))}
         </div>
+        {due ? (
+          <span className="helm-chip helm-chip-accent gap-1.5 px-3 py-1 text-[13px]" data-testid="helm-ledger-day">
+            <CalendarDays className="h-3.5 w-3.5" aria-hidden="true" />
+            Due on {formatCalendarDate(due)}
+            <button type="button" className="-mr-1 rounded-full p-0.5" onClick={clearDay} aria-label="Show every day">
+              <X className="h-3.5 w-3.5" aria-hidden="true" />
+            </button>
+          </span>
+        ) : null}
         <label className="text-xs">
           <span className="helm-label">Counterparty</span>
           <select className="helm-input mt-1 h-8 min-h-0 w-56 py-0 text-xs" value={counterparty} onChange={(e) => setCounterparty(e.target.value)}>
