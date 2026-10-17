@@ -275,6 +275,9 @@ def stripe_settings(monkeypatch):
     monkeypatch.setattr(
         settings, "STRIPE_SECRET_KEY", SecretStr("sk_test_gate15"), raising=False
     )
+    # These gates test the Stripe adapter; Dodo has been the default gateway since the website
+    # and payments session (C2), so they name Stripe rather than relying on the default.
+    monkeypatch.setattr(settings, "BILLING_GATEWAY", "STRIPE", raising=False)
     quota_service.clear_cache()
     yield
     quota_service.clear_cache()
