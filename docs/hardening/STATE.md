@@ -9,7 +9,7 @@ Branch `claude/beautiful-dijkstra-yvlspo` (the session's assigned branch), based
 (PR #25 merged). PR sabarishwarne2001/servabo#26. Founder authority on design: decisions in NEEDS-OWNER.md as
 `DECIDED (Helm visual session)` (N-111 to N-116). The owner also asked for Documents to be upgraded in
 its own style (Lumen, N-113). **If cut off, paste the prompt again: continue on this branch and PR from
-the first unticked box. Never restart.**
+the first unticked box. Never restart.** All boxes are ticked: the session is done; next is the owner's review of PR #26.
 
 - [x] 0. Start-up: docs read; stack up (Postgres 16 + pgvector 0.8.0 on :5433 e2e and :5434 backend
   tests, Redis, API, worker, model stand-in); `seed_website_demo.py`; "before" shots of every Helm page
@@ -32,7 +32,7 @@ the first unticked box. Never restart.**
   overview fields (documents read, the last 14 days; test failed first).
 - [x] 13. The Overview's specs re-run (10, 21, 22, 72, 74, 80, 85: 335 passed, 2 failed; spec 10's
   label fixed and re-run green; spec 22's is the pre-existing order dependence in HANDOFF).
-- [ ] 14. Finish: CI green on the head, PR ready.
+- [x] 14. Finish: CI green on 0da2906 (all 11 checks, browser suite included), PR marked ready for review.
 
 **Checkpoint (2026-10-17).** Helm specs 78–85 pass on the new look (axe in both themes; no sideways
 scroll at 1440, 1024, 768, 375). Spec 85: six tests, including the cockpit ready within 1.5 s and no
