@@ -77,9 +77,19 @@ below. Never restart.**
   read-only silently (billing.hold_notices, migration w1a4); an upgrade was undone by Dodo's own
   webhooks (plan now from the billed product); two order-dependent tests. Live concurrency test
   (c3174eb); dodo_setup.py and docs/billing/DODO.md (C14).
-- [ ] D1. RUNBOOK §9 rewritten; CONFIGURATION.md and TENANCY-AND-PLANS.md regenerated.
-- [ ] D2. HANDOFF: owner launch checklist rewritten; "Website and payments session → next sessions".
-- [ ] D3. Finish: full suites, logs clean, ledgers, PR ready, final message.
+- [x] D1. RUNBOOK §9 rewritten; CONFIGURATION.md and TENANCY-AND-PLANS.md regenerated (both were
+  already current).
+- [x] D2. HANDOFF: owner launch checklist rewritten (12 steps); "Website and payments session → next sessions".
+- [x] D3. Finish: full suites, logs clean, ledgers, PR ready, final message.
+  Checkpoint (2026-10-17): backend 5,162 passed, 11 skipped, 1 failed in four local shards (the
+  stand-in test since fixed in 23b63dd, 3/3 passing); browser 802 passed, 2 skipped on a fresh e2e
+  database, billing through the stand-in Dodo, production bundle, CSP enforced; Stripe journeys
+  60–67 and spec 20's Billing group pass with E2E_GATEWAY=stripe. Logs: 0 tracebacks, 0 ERROR, one
+  5xx (spec 31's expected 503); 1,465 jobs SUCCEEDED; 62 Dodo events PROCESSED. tsc, e2e typecheck,
+  lint, check:self, build, no source maps; website typecheck, build, links, HTML, axe, Lighthouse
+  97/97/96; export_public_pricing --check current; Alembic one head (w1a4_hold_notices), up / down
+  to base / up; pip-audit no known vulnerabilities; npm audit --omit=dev 0 (app and website).
+  Ledgers: F-444–F-461, N-103–N-110, COVERAGE rows.
 
 ## Previous phase — Flagship session: Helm, the flagship engine
 Branch `claude/new-session-yviysi` (the session's assigned branch), based on `main` at `5e27687`
@@ -607,6 +617,11 @@ launch, Dodo selectable; **N-027** Postmark before the first paying customer; **
 plan card price; **N-031** local model at a declared zero.
 
 ## Next action (exact)
+_Updated 2026-10-17 (website and payments session close):_ once CI is green on pull request #25,
+merge it. Then the owner works through HANDOFF.md "Owner launch checklist" (12 steps; step 9 is the
+first run against a real Dodo test account, checking docs/billing/DODO.md §6). The next session
+removes the one-release aliases for the old name and takes up anything step 9 finds.
+
 _Updated 2026-10-14 (session 4 close):_ merge pull request #23 once CI is green, then start a new
 session with `docs/hardening/NEXT-SESSION-PROMPT.md`; the owner works through HANDOFF.md
 "Owner launch checklist". The list below is the earlier (session 3) text, kept for history.
