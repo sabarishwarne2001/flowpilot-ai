@@ -55,6 +55,7 @@ One file or one test: `npx playwright test -c e2e tests/30-auth.spec.ts -g "pass
 | `E2E_MODE` | `preview` | `preview` tests the production bundle (same-origin `/api`, as behind Caddy); `dev` tests the Vite dev server |
 | `E2E_WORKERS` | `2` | parallel browsers |
 | `E2E_LLM` | unset | `1` starts `support/llm-mock.mjs`, a deterministic local model stand-in, and points the API and worker at it (`LOCAL_LLM_MODE=exclusive`, the sovereign edition's local-model path). Extraction, verification, the review queue, tables, three-way matching and the assistant then run end to end; CI sets it. Unset: no model, and the tests that need model output are skipped |
+| `E2E_GATEWAY` | `dodo` | The payment gateway the journeys bill through. `dodo` (the production gateway): `start-stack.sh` starts the stand-in Dodo (`backend/tests/fakes/fake_dodo.py`) on `E2E_DODO_PORT` (8790) and points the API and worker at it; the journeys pay on its checkout page, fix cards and cancel in its portal, and its signed webhooks reach the real endpoint. `stripe`: the Stripe journeys, with `backend/scripts/e2e_stand_in.py` playing Stripe's side. Set the same value for `start-stack.sh` and for Playwright; CI runs both |
 | `E2E_STRICT_KNOWN` | unset | `1` also fails tests on known issues (see below) |
 | `E2E_API_ORIGIN` | `http://127.0.0.1:8000` | where the API runs |
 | `E2E_PYTHON` | `backend/.venv` python | the Python that runs the seed |
