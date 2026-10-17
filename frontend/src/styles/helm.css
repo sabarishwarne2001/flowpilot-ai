@@ -48,6 +48,46 @@
   font-weight: 600;
 }
 
+/* The mandate composer: a command bar. Its input is large, and glows while it has focus. */
+.helm-command-input {
+  min-height: 3rem;
+  border-radius: 999px;
+  padding-left: 1.15rem;
+  padding-right: 1.15rem;
+  font-size: 1rem;
+}
+
+.helm-command:focus-within {
+  border-color: hsl(var(--helm-accent) / 0.55);
+  box-shadow: inset 0 1px 0 hsl(var(--helm-highlight)), var(--helm-glow), var(--helm-shadow);
+}
+
+/* A read-back's chips light up one after another as the sentence is read back. */
+.helm-readback .helm-chip-accent {
+  animation: helm-chip-fill var(--helm-t-4) var(--helm-ease-pop) both;
+  animation-delay: calc(min(var(--i, 0), 12) * 60ms + 80ms);
+}
+
+@keyframes helm-chip-fill {
+  from {
+    transform: scale(0.86);
+    filter: brightness(1.6);
+  }
+  60% {
+    filter: brightness(1.35);
+  }
+  to {
+    transform: none;
+    filter: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-readback .helm-chip-accent {
+    animation: none;
+  }
+}
+
 /* The motion of a page change: a row the plan adds rises in, a row it removes fades out. */
 .helm-row-in {
   animation: helm-rise var(--helm-t-3) var(--helm-ease) both;

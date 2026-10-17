@@ -222,6 +222,21 @@ button.helm-chip:hover {
 .helm-chip.helm-state-sky,
 .helm-tone-sky { border-color: hsl(var(--helm-sky) / 0.45); background-color: hsl(var(--helm-sky) / 0.1); }
 
+/* A chip that wraps a checkbox or radio (weekdays, date order): it lights up when chosen. */
+label.helm-chip {
+  transition: border-color var(--helm-t-1) var(--helm-ease), background-color var(--helm-t-1) var(--helm-ease);
+}
+
+label.helm-chip:has(input:checked) {
+  border-color: hsl(var(--helm-accent) / 0.7);
+  background-color: hsl(var(--helm-accent) / 0.14);
+}
+
+label.helm-chip:has(input:focus-visible) {
+  outline: 3px solid hsl(var(--helm-focus));
+  outline-offset: 2px;
+}
+
 /* ---- Buttons ----------------------------------------------------------------------------------- */
 :where(.helm-btn) {
   position: relative;

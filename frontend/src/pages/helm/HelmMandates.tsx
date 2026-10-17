@@ -8,6 +8,7 @@ import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { MandateComposer } from "@/components/helm/MandateComposer";
 import { MandateEditor, type EditorStart } from "@/components/helm/MandateEditor";
 import { ReadbackSentence } from "@/components/helm/ReadbackSentence";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { errorMessage } from "@/services/api/errors";
 import {
@@ -114,20 +115,27 @@ export const HelmMandates: React.FC = () => {
 
   const limit = overview.limits.mandates;
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Mandates</h1>
-        <p className="helm-muted mt-1 text-sm">
-          A mandate is something that must always be true. Helm watches each one, proposes what keeps it true and checks
-          every action against all of them. New mandates start in Propose mode.
-        </p>
+    <div className="mx-auto max-w-6xl space-y-6">
+      <HelmPageHeader
+        eyebrow={book.name}
+        title="Mandates"
+        description="A mandate is something that must always be true. Helm watches each one, proposes what keeps it true and checks every action against all of them. New mandates start in Propose mode."
+      >
         {limit !== null ? (
-          <p className="helm-muted mt-1 text-xs">
-            <span className="helm-figure">{overview.limits.active_mandates}</span> of{" "}
-            <span className="helm-figure">{limit}</span> active mandates on your plan.
-          </p>
+          <div className="mt-3 flex max-w-sm items-center gap-3">
+            <div className="helm-meter-track h-1.5 flex-1 overflow-hidden rounded-full" aria-hidden="true">
+              <div
+                className="helm-meter-fill h-full rounded-full"
+                style={{ width: `${Math.min(100, Math.round((overview.limits.active_mandates / Math.max(1, limit)) * 100))}%` }}
+              />
+            </div>
+            <p className="helm-muted shrink-0 text-xs">
+              <span className="helm-figure">{overview.limits.active_mandates}</span> of{" "}
+              <span className="helm-figure">{limit}</span> active mandates on your plan.
+            </p>
+          </div>
         ) : null}
-      </div>
+      </HelmPageHeader>
 
       {writable ? (
         <MandateComposer
@@ -172,7 +180,7 @@ export const HelmMandates: React.FC = () => {
                   />
                 </li>
               ) : (
-              <li key={mandate.id} className="helm-panel p-4" data-testid="helm-mandate">
+              <li key={mandate.id} className="helm-panel p-4" data-testid="helm-mandate" data-status={mandate.status}>
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
@@ -285,7 +293,7 @@ export const HelmMandates: React.FC = () => {
                       const another = template.repeatable && inUse.has(template.key);
                       const used = inUse.has(template.key) && !template.repeatable;
                       return (
-                        <li key={template.key} className="helm-panel flex flex-col p-4" data-testid="helm-template">
+                        <li key={template.key} className="helm-panel helm-panel-lift flex flex-col p-4" data-testid="helm-template">
                           <p className="flex flex-wrap items-center gap-2 text-sm font-semibold">
                             {template.title}
                             {template.plan === "enterprise" ? (

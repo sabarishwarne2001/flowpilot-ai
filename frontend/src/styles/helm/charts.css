@@ -122,7 +122,8 @@
 /* ---- The calendar heatmap -------------------------------------------------------------------- */
 .helm-heat {
   display: grid;
-  grid-template-columns: auto repeat(var(--weeks, 12), minmax(0, 1fr));
+  grid-template-columns: 1rem repeat(var(--weeks, 12), minmax(0, 1.9rem));
+  justify-content: space-between;
   gap: 4px;
 }
 

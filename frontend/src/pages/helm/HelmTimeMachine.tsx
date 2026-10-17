@@ -2,10 +2,16 @@ import React, { useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Download, FileText, History, Lock } from "lucide-react";
+import { CircleCheck, CircleHelp, Download, FileText, History, Lock, TrendingUp } from "lucide-react";
 
 import { useHelm, useHelmBook } from "@/components/helm/HelmContext";
 import { Money, MoneyByCurrency } from "@/components/helm/HelmBits";
+import { formatHelmMoney, formatHelmMoneyCompact } from "@/components/helm/money";
+import { HelmPageHeader } from "@/components/helm/ui/HelmPageHeader";
+import { HelmSkeleton } from "@/components/helm/ui/HelmSkeleton";
+import { KpiTile } from "@/components/helm/ui/KpiTile";
+import { PillBars, type PillBar } from "@/components/helm/ui/PillBars";
+import { RingGauge } from "@/components/helm/ui/RingGauge";
 import { LoadFailed } from "@/components/common/LoadFailed";
 import { workItemDetailsPath } from "@/routes/tenantPaths";
 import { downloadBlob } from "@/services/api/audit";
@@ -17,7 +23,8 @@ import {
   listHelmBacktests,
   requestHelmBacktest,
 } from "@/services/api/helm";
-import { formatCalendarDate } from "@/utils/displayTime";
+import { formatCalendarDate, formatCalendarMonthShort, formatNumber } from "@/utils/displayTime";
+import { formatRelativeTime } from "@/utils/formatters";
 import type { BacktestFinding, BacktestMandateResult, HelmBacktest, Honesty } from "@/types/helm";
 
 /**
@@ -27,11 +34,39 @@ import type { BacktestFinding, BacktestMandateResult, HelmBacktest, Honesty } fr
  * and potential (facts are missing). The summary sentence is written by code, not a model.
  */
 
-const HONESTY: { key: Honesty; label: string; help: string }[] = [
-  { key: "confirmed", label: "Confirmed", help: "Evidence shows it happened: a credit note, a reviewer, a payment date." },
-  { key: "likely", label: "Likely", help: "The rule fired and the facts are there, but nothing confirms the loss." },
-  { key: "potential", label: "Potential", help: "Facts are missing; Helm would have asked." },
+const HONESTY: { key: Honesty; label: string; help: string; tone: "holding" | "sky" | "drifting" }[] = [
+  { key: "confirmed", label: "Confirmed", help: "Evidence shows it happened: a credit note, a reviewer, a payment date.", tone: "holding" },
+  { key: "likely", label: "Likely", help: "The rule fired and the facts are there, but nothing confirms the loss.", tone: "sky" },
+  { key: "potential", label: "Potential", help: "Facts are missing; Helm would have asked.", tone: "drifting" },
 ];
+
+const HONESTY_ICONS = { confirmed: CircleCheck, likely: TrendingUp, potential: CircleHelp } as const;
+
+/** What Helm would have done, month by month: the replay's timeline counted per month. */
+const monthsOf = (row: HelmBacktest): PillBar[] => {
+  const counts = new Map<string, number>();
+  for (const day of row.result?.timeline ?? []) {
+    const month = day.on.slice(0, 7);
+    counts.set(month, (counts.get(month) ?? 0) + day.events.length);
+  }
+  const out: PillBar[] = [];
+  const [y0, m0] = row.period_start.slice(0, 7).split("-").map(Number) as [number, number];
+  const last = row.period_end.slice(0, 7);
+  for (let year = y0, month = m0; out.length < 36; month === 12 ? ((year += 1), (month = 1)) : (month += 1)) {
+    const key = `${year}-${String(month).padStart(2, "0")}`;
+    const value = counts.get(key) ?? 0;
+    out.push({
+      key,
+      label: formatCalendarMonthShort(year, month),
+      value,
+      words: value === 0 ? "nothing" : `${formatNumber(value)} ${value === 1 ? "thing" : "things"} Helm would have done`,
+    });
+    if (key >= last) {
+      break;
+    }
+  }
+  return out;
+};
 
 const STATUS_WORDS: Record<HelmBacktest["status"], string> = {
   QUEUED: "Waiting to start",
@@ -51,7 +86,7 @@ const Findings: React.FC<{ readonly result: BacktestMandateResult; readonly work
     return <p className="helm-muted text-sm">Nothing to show in this period.</p>;
   }
   return (
-    <ul className="divide-y divide-[var(--helm-line)] text-sm">
+    <ul className="helm-divide text-sm">
       {result.findings.map((finding: BacktestFinding, index) => (
         <li key={`${finding.on}-${index}`} className="flex flex-col gap-1 py-2 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
@@ -81,7 +116,9 @@ const Findings: React.FC<{ readonly result: BacktestMandateResult; readonly work
             ) : null}
           </div>
           <div className="flex shrink-0 items-center gap-2 text-xs">
-            <span className="helm-chip">{HONESTY.find((h) => h.key === finding.honesty)?.label ?? finding.honesty}</span>
+            <span className={`helm-chip helm-state-${HONESTY.find((h) => h.key === finding.honesty)?.tone ?? "unknown"}`}>
+              {HONESTY.find((h) => h.key === finding.honesty)?.label ?? finding.honesty}
+            </span>
             {finding.value_micros ? <Money micros={finding.value_micros} currency={finding.currency} /> : null}
           </div>
         </li>
@@ -128,28 +165,70 @@ export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly wor
   const [open, setOpen] = useState<string | null>(mandates.find((m) => m.count > 0)?.template ?? null);
   return (
     <div className="space-y-4" data-testid="helm-backtest-report">
-      <div className="helm-panel p-4">
+      <div className="helm-panel helm-panel-strong helm-enter p-5 sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-2">
-          <p className="helm-label min-w-0">
-            {formatCalendarDate(row.period_start)} to {formatCalendarDate(row.period_end)} · {row.months} months
-          </p>
+          <div className="min-w-0">
+            <p className="helm-chip helm-chip-accent gap-1.5 px-3 py-1 text-[13px]" data-testid="helm-tm-showing">
+              <History className="h-3.5 w-3.5" aria-hidden="true" />
+              Showing the {formatNumber(row.months)}-month replay
+            </p>
+            <p className="helm-label mt-2">
+              {formatCalendarDate(row.period_start)} to {formatCalendarDate(row.period_end)} · {row.months} months
+              {row.finished_at ? ` · replayed ${formatRelativeTime(row.finished_at)}` : ""}
+            </p>
+          </div>
           {row.status === "DONE" ? <ReplayPdf row={row} /> : null}
         </div>
-        <p className="mt-1.5 text-base leading-relaxed" data-testid="helm-backtest-summary">
+        <p className="mt-2 max-w-4xl text-lg leading-relaxed tracking-tight" data-testid="helm-backtest-summary">
           {row.summary}
         </p>
-        <dl className="mt-4 grid gap-3 sm:grid-cols-3">
-          {HONESTY.map((h) => (
-            <div key={h.key} className="rounded-lg border border-[var(--helm-line)] p-3">
-              <dt className="helm-label">{h.label}</dt>
-              <dd className="helm-figure mt-1 text-lg">
-                <MoneyByCurrency totals={result.totals?.[h.key]} empty="Nothing" />
-              </dd>
-              <dd className="helm-muted mt-1 text-xs">{h.help}</dd>
-            </div>
-          ))}
-        </dl>
+        <ul className="mt-5 grid gap-3 lg:grid-cols-3" aria-label="Value, in three classes never added together">
+          {HONESTY.map((h, index) => {
+            const totals = Object.entries(result.totals?.[h.key] ?? {}).filter(([, micros]) => micros !== 0);
+            const [first, ...others] = totals;
+            const Icon = HONESTY_ICONS[h.key];
+            return (
+              <KpiTile
+                key={h.key}
+                index={index + 1}
+                testId={`helm-tm-${h.key}`}
+                label={h.label}
+                value={first ? first[1] : 0}
+                format={(n) => (first ? formatHelmMoneyCompact(n, first[0]) : "Nothing")}
+                visual={
+                  <RingGauge value={null} tone={h.tone} size={40} thickness={3.5} ticks={false}>
+                    <Icon className={`helm-state-${h.tone} h-4 w-4`} aria-hidden="true" />
+                  </RingGauge>
+                }
+                detail={
+                  <>
+                    {first ? <span className="helm-figure block font-semibold text-[hsl(var(--helm-ink))]">{formatHelmMoney(first[1], first[0])}</span> : null}
+                    {others.length > 0 ? (
+                      <span className="block">
+                        and <MoneyByCurrency totals={Object.fromEntries(others)} />
+                      </span>
+                    ) : null}
+                    <span className="block">{h.help}</span>
+                  </>
+                }
+              />
+            );
+          })}
+        </ul>
         <p className="helm-muted mt-3 text-xs">{result.honesty_rule ?? "The three classes are never added together."}</p>
+        {(result.timeline ?? []).length > 0 ? (
+          <div className="mt-5">
+            <p className="helm-label mb-2">What Helm would have done, month by month</p>
+            <PillBars
+              bars={monthsOf(row)}
+              height={96}
+              caption="How many things Helm would have done in each month of the replay."
+              periodHeader="Month"
+              valueHeader="Things Helm would have done"
+              testId="helm-tm-months"
+            />
+          </div>
+        ) : null}
         {row.report ? (
           <p id="helm-tm-fingerprint" className="helm-muted mt-2 text-xs">
             The PDF&apos;s footer carries this replay&apos;s fingerprint (SHA-256 of its stored result):{" "}
@@ -167,7 +246,7 @@ export const BacktestReport: React.FC<{ readonly row: HelmBacktest; readonly wor
             const expanded = open === m.template;
             const panel = `helm-tm-${m.template}`;
             return (
-              <li key={m.template} className="helm-panel p-4">
+              <li key={m.template} className="helm-panel p-4" data-open={expanded ? "true" : undefined}>
                 <button
                   type="button"
                   className="flex w-full flex-col gap-1 text-left sm:flex-row sm:items-center sm:justify-between"
@@ -258,18 +337,16 @@ export const HelmTimeMachine: React.FC = () => {
   }
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6" data-tour="time-machine">
-      <div>
-        <h1 className="text-xl font-semibold tracking-tight">Time machine</h1>
-        <p className="helm-muted mt-1 text-sm">
-          What Helm would have done over a past period, replayed from your own documents: the day each one arrived is the
-          day Helm would have seen it. Nothing is executed.
-        </p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-6" data-tour="time-machine">
+      <HelmPageHeader
+        eyebrow={book.name}
+        title="Time machine"
+        description="What Helm would have done over a past period, replayed from your own documents: the day each one arrived is the day Helm would have seen it. Nothing is executed."
+      />
 
       {canDecide ? (
         <form
-          className="helm-panel flex flex-col gap-3 p-4 sm:flex-row sm:items-end"
+          className="helm-panel helm-enter flex flex-col gap-3 p-4 sm:flex-row sm:items-end"
           onSubmit={(event) => {
             event.preventDefault();
             run.mutate();
@@ -309,16 +386,15 @@ export const HelmTimeMachine: React.FC = () => {
 
       {chosenId === null ? (
         history.isLoading ? (
-          <p className="helm-muted text-sm" role="status">
-            Loading…
-          </p>
+          <HelmSkeleton label="Loading…" />
         ) : (
           <p className="helm-panel p-4 text-sm">No replays yet. Choose a period and replay it.</p>
         )
       ) : chosen.isError ? (
         <LoadFailed what="this replay" onRetry={() => void chosen.refetch()} />
       ) : !chosen.data || running(chosen.data) ? (
-        <p className="helm-panel p-4 text-sm" role="status" aria-live="polite">
+        <p className="helm-panel flex items-center gap-3 p-5 text-sm" role="status" aria-live="polite">
+          <span className="helm-radar helm-accent" aria-hidden="true" />
           {chosen.data ? STATUS_WORDS[chosen.data.status] : "Loading…"}
         </p>
       ) : chosen.data.status === "FAILED" ? (
@@ -334,12 +410,12 @@ export const HelmTimeMachine: React.FC = () => {
           <h2 id="helm-tm-history" className="helm-label mb-2">
             Earlier replays
           </h2>
-          <ul className="helm-panel divide-y divide-[var(--helm-line)] text-sm">
+          <ul className="helm-panel helm-divide overflow-hidden text-sm">
             {(history.data ?? []).map((row) => (
               <li key={row.id}>
                 <button
                   type="button"
-                  className="flex w-full flex-col gap-0.5 px-4 py-2 text-left hover:bg-[var(--helm-panel-raised)] sm:flex-row sm:justify-between"
+                  className="flex w-full flex-col gap-0.5 px-4 py-2.5 text-left hover:bg-[hsl(var(--helm-glass-top))] aria-[current=true]:bg-[hsl(var(--helm-accent)/0.1)] sm:flex-row sm:justify-between"
                   aria-current={row.id === chosenId ? "true" : undefined}
                   onClick={() =>
                     setParams((current) => {

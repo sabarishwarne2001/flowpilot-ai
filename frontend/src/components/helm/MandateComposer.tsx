@@ -91,7 +91,7 @@ export const MandateComposer: React.FC<{
   return (
     <section aria-labelledby={`${fieldId}-title`} className="space-y-3">
       <form
-        className="helm-panel p-4"
+        className="helm-panel helm-panel-strong helm-command helm-enter p-5"
         onSubmit={(event) => {
           event.preventDefault();
           if (sentence.trim()) {
@@ -105,16 +105,16 @@ export const MandateComposer: React.FC<{
         <label htmlFor={fieldId} className="mt-1 block text-sm">
           What should always be true in your business?
         </label>
-        <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+        <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input
             id={fieldId}
-            className="helm-input min-w-0 flex-1"
+            className="helm-input helm-command-input min-w-0 flex-1"
             maxLength={500}
             value={sentence}
             placeholder={EXAMPLES[0]}
             onChange={(event) => setSentence(event.target.value)}
           />
-          <button type="submit" className="helm-btn helm-btn-primary shrink-0" disabled={draft.isPending || !sentence.trim()}>
+          <button type="submit" className="helm-btn helm-btn-primary helm-btn-hero shrink-0" disabled={draft.isPending || !sentence.trim()}>
             <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
             {draft.isPending ? "Reading…" : "Draft it"}
           </button>
