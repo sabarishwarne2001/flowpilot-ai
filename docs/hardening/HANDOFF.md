@@ -492,6 +492,11 @@ switch. Try both themes (the sun/moon button) and a phone width.
 - Bundle: Helm's lazy chunks grew from 58.2 kB to the figure in STATE.md (gzipped), inside the 35 kB
   allowance; no new runtime dependency.
 
+**Seen, not fixed (pre-existing).** Spec 34 leaves a rescanned copy of Tenant C's INV-E2E-1001 in
+the workspace, so spec 22's "a filtered list pages over the matches only" finds 3 rows instead of 2
+when it runs after 34 on the same database (a partial re-run). In a full run 22 comes first and
+passes; a fresh database also passes. Spec 34 should delete its copy at the end.
+
 **Not done / for later.** The Plan page's what-if is still the cockpit's panel (not a drawer of its
 own); the template gallery's sheen is the shared panel hover. Findings F-465 to F-468 are fixed but proven
 by screenshots only.

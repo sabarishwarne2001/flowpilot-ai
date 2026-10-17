@@ -30,7 +30,9 @@ the first unticked box. Never restart.**
 - [x] 11. Full browser suite (808 passed, 2 skipped, 0 failed, on 17f3896) and website checks.
 - [x] 12. Owner's added task: the Documents Overview redesigned in Lumen (N-117), with two read-only
   overview fields (documents read, the last 14 days; test failed first).
-- [ ] 13. Finish: the Overview's specs re-run, CI green, PR ready.
+- [x] 13. The Overview's specs re-run (10, 21, 22, 72, 74, 80, 85: 335 passed, 2 failed; spec 10's
+  label fixed and re-run green; spec 22's is the pre-existing order dependence in HANDOFF).
+- [ ] 14. Finish: CI green on the head, PR ready.
 
 **Checkpoint (2026-10-17).** Helm specs 78–85 pass on the new look (axe in both themes; no sideways
 scroll at 1440, 1024, 768, 375). Spec 85: six tests, including the cockpit ready within 1.5 s and no
