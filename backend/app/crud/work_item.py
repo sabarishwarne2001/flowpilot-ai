@@ -14,7 +14,7 @@ uploader leaves.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import Select, func, select
@@ -228,6 +228,26 @@ def count_completed_today(db: Session, *, workspace_id: uuid.UUID) -> int:
         )
     )
     return db.scalar(statement) or 0
+
+
+def count_completed_by_day(db: Session, *, workspace_id: uuid.UUID, days: int = 14) -> list[tuple[date, int]]:
+    """Documents completed on each of the last `days` days, oldest first, today last; a day with
+    none is 0. The same day boundary as count_completed_today (see its note)."""
+    today = datetime.now(timezone.utc).date()
+    first = today - timedelta(days=days - 1)
+    day = func.date(WorkItem.updated_at)
+    rows = db.execute(
+        select(day, func.count())
+        .where(
+            WorkItem.workspace_id == workspace_id,
+            WorkItem.status == WorkItemStatus.COMPLETED,
+            day >= first,
+            day <= today,
+        )
+        .group_by(day)
+    ).all()
+    counts = {on: int(count) for on, count in rows}
+    return [(first + timedelta(days=offset), counts.get(first + timedelta(days=offset), 0)) for offset in range(days)]
 
 
 def get_document_type_distribution(

@@ -45,6 +45,13 @@ class DashboardActivity(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class DailyCount(BaseModel):
+    """Documents completed on one day (YYYY-MM-DD, the same day boundary as processed_today)."""
+
+    on: str
+    count: int
+
+
 class DashboardOverviewResponse(BaseModel):
     """
     Complete dashboard overview response.
@@ -68,5 +75,9 @@ class DashboardOverviewResponse(BaseModel):
     classification_distribution: list[DocumentTypeDistribution] = []
 
     recent_activity: list[DashboardActivity]
+
+    # Helm visual session: the Overview's pipeline and its 14-day chart.
+    completed_count: int = 0
+    daily_completed: list[DailyCount] = []
 
     model_config = ConfigDict(from_attributes=True)

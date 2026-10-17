@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.crud.work_item import (
     count_work_items,
+    count_completed_by_day,
     count_completed_today,
     get_classification_distribution,
     get_document_type_distribution,
@@ -22,6 +23,7 @@ from app.crud.work_item import (
     get_completion_statistics,
 )
 from app.schemas.dashboard import (
+    DailyCount,
     DashboardActivity,
     DashboardOverviewResponse,
     DocumentTypeDistribution,
@@ -106,4 +108,7 @@ def get_dashboard_overview(
         document_type_distribution=document_distribution,
         classification_distribution=classification_distribution,
         recent_activity=recent_activity,
+        completed_count=completed,
+        daily_completed=[DailyCount(on=on.isoformat(), count=count)
+                         for on, count in count_completed_by_day(db, workspace_id=workspace_id)],
     )
