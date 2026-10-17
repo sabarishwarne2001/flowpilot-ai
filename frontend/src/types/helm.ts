@@ -536,6 +536,15 @@ export interface HelmLedger {
   open_totals: Record<string, Record<string, number>>;
 }
 
+/** GET …/books/{id}/calendar: money due per day, per direction and currency (readable workspaces only). */
+export interface HelmCalendar {
+  start: string;
+  days: number;
+  entries: { direction: "WE_OWE" | "OWED_TO_US"; on: string; currency: string; amount_micros: number; count: number }[];
+  /** Promises in workspaces the viewer cannot read: counted, never summed. */
+  hidden: { direction: "WE_OWE" | "OWED_TO_US"; on: string; count: number }[];
+}
+
 export interface PaymentRunLine {
   work_item_id: string | null;
   payee: string;

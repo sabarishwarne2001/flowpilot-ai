@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import uuid
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Optional
 
 from sqlalchemy import func, select
@@ -1003,9 +1003,12 @@ def promise_json(who: Viewer, promise: HelmPromise, names: dict) -> dict[str, An
 
 def ledger_view(db: Session, who: Viewer, book: HelmBook, *, kind: Optional[str] = None,
                 direction: Optional[str] = None, status: Optional[str] = None, counterparty: Optional[str] = None,
-                at_risk: bool = False, limit: int = 200, offset: int = 0) -> dict[str, Any]:
+                at_risk: bool = False, due_on: Optional[date] = None, limit: int = 200,
+                offset: int = 0) -> dict[str, Any]:
     workspace_ids = ledger_store.book_workspace_ids(db, book)
     query = select(HelmPromise).where(HelmPromise.workspace_id.in_(workspace_ids or [uuid.uuid4()]))
+    if due_on is not None:
+        query = query.where(HelmPromise.due_date == due_on)
     if kind:
         query = query.where(HelmPromise.kind == kind)
     if direction:
@@ -1035,6 +1038,41 @@ def ledger_view(db: Session, who: Viewer, book: HelmBook, *, kind: Optional[str]
         owed.setdefault(direction_key, {})[currency or "?"] = int(amount or 0)
     return {"total": total, "promises": [promise_json(who, p, names) for p in rows], "counts": counts,
             "open_totals": owed}
+
+
+def promise_calendar(db: Session, who: Viewer, book: HelmBook, *, start: date, days: int) -> dict[str, Any]:
+    """The cockpit's Promise calendar: money due per day, from `start` for `days` days, per direction
+    and currency (open, partly kept and broken payment promises, like the ledger's open totals).
+    Only workspaces the viewer can read give amounts; promises in others are counted per day, never
+    summed, so the calendar shows that something is due without saying how much."""
+    workspace_ids = ledger_store.book_workspace_ids(db, book)
+    end = start + timedelta(days=max(1, days) - 1)
+    rows = db.execute(
+        select(HelmPromise.workspace_id, HelmPromise.direction, HelmPromise.due_date, HelmPromise.currency,
+               func.sum(HelmPromise.amount_micros), func.count())
+        .where(HelmPromise.workspace_id.in_(workspace_ids or [uuid.uuid4()]),
+               ((HelmPromise.direction == v.DIRECTION_WE_OWE) & (HelmPromise.kind == v.KIND_PAYMENT_DUE))
+               | ((HelmPromise.direction == v.DIRECTION_OWED_TO_US) & (HelmPromise.kind == v.KIND_PAYMENT_EXPECTED)),
+               HelmPromise.status.in_((v.STATUS_OPEN, v.STATUS_PARTIAL, v.STATUS_BROKEN)),
+               HelmPromise.due_date >= start, HelmPromise.due_date <= end)
+        .group_by(HelmPromise.workspace_id, HelmPromise.direction, HelmPromise.due_date, HelmPromise.currency)).all()
+    shown: dict[tuple[str, date, str], list[int]] = {}
+    hidden: dict[tuple[str, date], int] = {}
+    for workspace_id, direction, due, currency, amount, count in rows:
+        if who.can_read(workspace_id):
+            entry = shown.setdefault((direction, due, currency or "?"), [0, 0])
+            entry[0] += int(amount or 0)
+            entry[1] += int(count)
+        else:
+            hidden[(direction, due)] = hidden.get((direction, due), 0) + int(count)
+    return {
+        "start": start.isoformat(), "days": max(1, days),
+        "entries": [{"direction": direction, "on": due.isoformat(), "currency": currency, "amount_micros": amount,
+                     "count": count}
+                    for (direction, due, currency), (amount, count) in sorted(shown.items())],
+        "hidden": [{"direction": direction, "on": due.isoformat(), "count": count}
+                   for (direction, due), count in sorted(hidden.items())],
+    }
 
 
 def payment_run(db: Session, who: Viewer, book: HelmBook, *, on: Optional[date] = None) -> dict[str, Any]:

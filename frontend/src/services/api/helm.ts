@@ -12,6 +12,7 @@ import type {
   HelmCertificateRow,
   HelmCockpit,
   HelmCounterparty,
+  HelmCalendar,
   HelmLedger,
   HelmLibrary,
   HelmMandate,
@@ -50,6 +51,7 @@ export const helmKeys = {
     ["helm", organizationId, "book", bookId, "ledger", filters] as const,
   paymentRun: (organizationId: string, bookId: string) =>
     ["helm", organizationId, "book", bookId, "payment-run"] as const,
+  calendar: (organizationId: string, bookId: string) => ["helm", organizationId, "book", bookId, "calendar"] as const,
   certificates: (organizationId: string, bookId: string) =>
     ["helm", organizationId, "book", bookId, "certificates"] as const,
   certificate: (organizationId: string, certificateId: string) =>
@@ -214,6 +216,7 @@ export const getHelmLedger = async (
     status?: string | undefined;
     counterparty?: string | undefined;
     at_risk?: boolean | undefined;
+    due_on?: string | undefined;
   } = {},
 ): Promise<HelmLedger> =>
   (
@@ -221,6 +224,10 @@ export const getHelmLedger = async (
       params: Object.fromEntries(Object.entries(filters).filter(([, value]) => value !== undefined && value !== "")),
     })
   ).data;
+
+/** The cockpit's Promise calendar: money due per day for the coming weeks (read-only). */
+export const getHelmCalendar = async (organizationId: string, bookId: string, days = 84): Promise<HelmCalendar> =>
+  (await apiClient.get<HelmCalendar>(`${book(organizationId, bookId)}/calendar`, { params: { days } })).data;
 
 export const getHelmPaymentRun = async (organizationId: string, bookId: string): Promise<PaymentRun> =>
   (await apiClient.get<PaymentRun>(`${book(organizationId, bookId)}/payment-run`)).data;
