@@ -74,3 +74,6 @@ docs/hardening/tools/openapi.json
 .servabo_basebackups/
 .flowpilot_wal_archive/
 .flowpilot_basebackups/
+
+# A local Redis snapshot (redis-server started from the repository folder)
+dump.rdb
