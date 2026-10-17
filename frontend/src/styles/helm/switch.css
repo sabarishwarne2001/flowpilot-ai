@@ -1,0 +1,260 @@
+/*
+ * The Documents | Helm switch and the transition between the two modes (VISUAL.md "The switch").
+ * These rules live outside `.helm`: the switch also sits in Documents' header, and the view
+ * transition's pseudo-elements hang off <html>.
+ *
+ * The switch: a glass pill track with a sliding thumb. ModeSwitch measures the options with a
+ * ResizeObserver and sets --thumb-x and --thumb-w; the thumb glides there over 420 ms with a gentle
+ * overshoot. In Helm the thumb is the signal gradient with a soft glow, the Helm mark inside turns
+ * 180° as it arrives and one light sweep crosses it; in Documents it is neutral ink.
+ */
+
+.helm-mode-switch {
+  --mode-ease: cubic-bezier(0.34, 1.56, 0.64, 1);
+  position: relative;
+  display: inline-flex;
+  align-items: stretch;
+  isolation: isolate;
+  border: 1px solid hsl(var(--border-strong) / 0.8);
+  border-radius: 999px;
+  padding: 3px;
+  background-image: linear-gradient(180deg, hsl(var(--card) / 0.85), hsl(var(--muted) / 0.7));
+  box-shadow: inset 0 1px 2px hsl(var(--shadow-color) / 0.12), 0 1px 0 hsl(var(--highlight) / 0.06);
+  backdrop-filter: blur(12px) saturate(140%);
+  -webkit-backdrop-filter: blur(12px) saturate(140%);
+  view-transition-name: helm-mode-switch;
+}
+
+.helm .helm-mode-switch {
+  border-color: hsl(var(--helm-rim-strong));
+  background-image: linear-gradient(180deg, hsl(var(--helm-glass-strong-top)), hsl(var(--helm-glass-bottom)));
+  box-shadow: inset 0 1px 2px hsl(0 0% 0% / 0.25), 0 0 0 1px hsl(var(--helm-accent) / 0.06);
+}
+
+.helm-mode-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 3px;
+  bottom: 3px;
+  left: 0;
+  width: var(--thumb-w, 0px);
+  transform: translateX(var(--thumb-x, 0px));
+  border-radius: 999px;
+  overflow: hidden;
+  background-color: hsl(var(--foreground));
+  box-shadow: 0 1px 2px hsl(var(--shadow-color) / 0.25), inset 0 1px 0 hsl(var(--highlight) / 0.18);
+  opacity: 0;
+}
+
+.helm-mode-switch[data-ready="true"] .helm-mode-thumb {
+  opacity: 1;
+}
+
+.helm-mode-switch[data-animate="true"] .helm-mode-thumb {
+  transition:
+    transform 420ms var(--mode-ease),
+    width 420ms var(--mode-ease),
+    background-color 220ms ease,
+    box-shadow 420ms ease;
+}
+
+.helm-mode-switch[data-mode="helm"] .helm-mode-thumb {
+  background-color: hsl(156 70% 46%);
+  background-image: linear-gradient(135deg, hsl(150 80% 64%), hsl(160 74% 44%) 55%, hsl(172 72% 40%));
+  box-shadow: 0 0 0 1px hsl(152 72% 56% / 0.5), 0 0 22px -2px hsl(152 72% 56% / 0.65), inset 0 1px 0 hsl(0 0% 100% / 0.4);
+}
+
+/* One light sweep across the thumb as Helm arrives. */
+.helm-mode-thumb::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, hsl(0 0% 100% / 0.65) 50%, transparent 70%);
+  transform: translateX(-130%);
+}
+
+.helm-mode-switch[data-mode="helm"] .helm-mode-thumb::after {
+  animation: helm-thumb-sweep 900ms 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes helm-thumb-sweep {
+  to { transform: translateX(130%); }
+}
+
+.helm-mode-option {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.3rem 0.8rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  color: hsl(var(--muted-foreground));
+  cursor: pointer;
+  transition: color 220ms ease;
+}
+
+.helm-mode-option:hover {
+  color: hsl(var(--foreground));
+}
+
+.helm .helm-mode-option {
+  color: hsl(var(--helm-ink-muted));
+}
+
+.helm .helm-mode-option:hover {
+  color: hsl(var(--helm-ink));
+}
+
+/* The checked option reads on the thumb: background ink on Documents' neutral thumb, deep green ink
+   on Helm's signal thumb (both above 4.5:1). Before the thumb is measured, the option draws its own. */
+.helm-mode-option[aria-checked="true"] {
+  color: hsl(var(--background));
+}
+
+.helm-mode-switch:not([data-ready="true"]) .helm-mode-option[aria-checked="true"] {
+  background-color: hsl(var(--foreground));
+}
+
+.helm-mode-switch[data-mode="helm"] .helm-mode-option[aria-checked="true"],
+.helm .helm-mode-switch[data-mode="helm"] .helm-mode-option[aria-checked="true"] {
+  color: hsl(162 60% 7%);
+}
+
+.helm-mode-switch[data-mode="helm"]:not([data-ready="true"]) .helm-mode-option[aria-checked="true"] {
+  background-color: hsl(156 70% 50%);
+}
+
+.helm-mode-option:focus-visible {
+  outline: 3px solid hsl(var(--ring));
+  outline-offset: 2px;
+}
+
+.helm .helm-mode-option:focus-visible {
+  outline-color: hsl(var(--helm-focus));
+}
+
+/* The Helm mark inside the Helm option turns 180° as Helm arrives. */
+.helm-mode-mark {
+  width: 0.95rem;
+  height: 0.95rem;
+  flex: none;
+}
+
+.helm-mode-switch[data-mode="helm"] .helm-mode-mark {
+  animation: helm-mark-arrive 650ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes helm-mark-arrive {
+  from { transform: rotate(-180deg); }
+  to { transform: rotate(0deg); }
+}
+
+/* First-time discovery: until a person has opened Helm once, its label carries a slow shimmer. */
+.helm-mode-discover {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px;
+}
+
+.helm-mode-discover::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 25%, hsl(152 80% 60% / 0.55) 50%, transparent 75%);
+  mix-blend-mode: screen;
+  transform: translateX(-140%);
+  animation: helm-discover 3.6s 1.2s cubic-bezier(0.16, 1, 0.3, 1) infinite;
+}
+
+:root:not(.dark) .helm-mode-discover::after {
+  background: linear-gradient(100deg, transparent 25%, hsl(158 84% 32% / 0.35) 50%, transparent 75%);
+  mix-blend-mode: multiply;
+}
+
+@keyframes helm-discover {
+  0% { transform: translateX(-140%); }
+  45%, 100% { transform: translateX(140%); }
+}
+
+/* ---- The transition between the modes (View Transitions API) ----------------------------------
+   ModeSwitch sets --helm-vt-x / --helm-vt-y on <html> to the switch's centre and
+   data-helm-transition="enter" | "leave", then navigates with React Router's viewTransition.
+   Entering: the Helm view is revealed by a circle growing from the switch while Documents recedes
+   (scale .96, dimmed, a little blur). Leaving: the reverse; Helm collapses into the switch while
+   Documents fades up. The switch has the same view-transition-name in both headers, so it morphs
+   between their positions and stays crisp. */
+
+::view-transition-group(helm-mode-switch) {
+  animation-duration: 650ms;
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  z-index: 10;
+}
+
+html[data-helm-transition]::view-transition-group(root) {
+  animation-duration: 650ms;
+}
+
+html[data-helm-transition="enter"]::view-transition-old(root) {
+  animation: helm-vt-recede 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-helm-transition="enter"]::view-transition-new(root) {
+  animation: helm-vt-reveal 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+html[data-helm-transition="leave"]::view-transition-old(root) {
+  z-index: 2;
+  animation: helm-vt-collapse 560ms cubic-bezier(0.7, 0, 0.84, 0) both;
+}
+
+html[data-helm-transition="leave"]::view-transition-new(root) {
+  z-index: 1;
+  animation: helm-vt-rise 650ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes helm-vt-reveal {
+  from { clip-path: circle(0px at var(--helm-vt-x, 50%) var(--helm-vt-y, 0px)); }
+  to { clip-path: circle(150vmax at var(--helm-vt-x, 50%) var(--helm-vt-y, 0px)); }
+}
+
+@keyframes helm-vt-collapse {
+  from { clip-path: circle(150vmax at var(--helm-vt-x, 50%) var(--helm-vt-y, 0px)); }
+  to { clip-path: circle(0px at var(--helm-vt-x, 50%) var(--helm-vt-y, 0px)); }
+}
+
+@keyframes helm-vt-recede {
+  to {
+    transform: scale(0.96);
+    filter: brightness(0.55) blur(2px);
+  }
+}
+
+@keyframes helm-vt-rise {
+  from {
+    transform: scale(0.97);
+    opacity: 0.4;
+    filter: blur(2px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .helm-mode-switch[data-animate="true"] .helm-mode-thumb {
+    transition: none;
+  }
+
+  .helm-mode-switch[data-mode="helm"] .helm-mode-thumb::after,
+  .helm-mode-switch[data-mode="helm"] .helm-mode-mark,
+  .helm-mode-discover::after {
+    animation: none;
+  }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}

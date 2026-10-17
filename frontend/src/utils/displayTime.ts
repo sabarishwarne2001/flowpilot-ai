@@ -174,6 +174,9 @@ export const formatCalendarMonth = (year: number, month: number): string =>
   new Intl.DateTimeFormat(current.locale, { month: "long", year: "numeric", timeZone: "UTC" })
     .format(Date.UTC(year, month - 1, 1));
 
+/** A calendar month's short name ("Oct"), in the profile's language, never zone-shifted. */
+export const formatCalendarMonthShort = (year: number, month: number): string =>
+  new Intl.DateTimeFormat(current.locale, { month: "short", timeZone: "UTC" }).format(Date.UTC(year, month - 1, 1));
 
 /**
  * Campaign session 3 (N-064). Numbers in the person's language ("1,234.5",
