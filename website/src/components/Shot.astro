@@ -15,9 +15,11 @@ interface Props {
   eager?: boolean;
   sizes?: string;
   frame?: boolean;
+  /** "helm": Night Bridge's glass frame with a soft signal glow (the Helm page and Helm sections). */
+  tone?: "default" | "helm";
 }
 
-const { name, alt, class: className = "", eager = false, sizes = "(min-width: 1280px) 1100px, 100vw", frame = true } = Astro.props;
+const { name, alt, class: className = "", eager = false, sizes = "(min-width: 1280px) 1100px, 100vw", frame = true, tone = "default" } = Astro.props;
 const files = import.meta.glob<{ default: ImageMetadata }>("../assets/screenshots/*.png", { eager: true });
 const pick = (theme: "light" | "dark") => {
   const file = files[`../assets/screenshots/${name}-${theme}.png`];
@@ -28,8 +30,11 @@ const light = pick("light");
 const dark = pick("dark");
 const widths = [640, 960, 1280, 1600].filter((w) => w <= light.width);
 ---
-<figure class={`${frame ? "overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3" : ""} ${className}`}>
-  {frame && (
+<figure class={`${frame ? (tone === "helm" ? "helm-shot" : "overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3") : ""} ${className}`}>
+  {frame && tone === "helm" && (
+    <div class="helm-shot-bar" aria-hidden="true"><span></span><span></span><span></span></div>
+  )}
+  {frame && tone !== "helm" && (
     <div class="flex h-8 items-center gap-1.5 border-b border-border bg-muted/60 px-3" aria-hidden="true">
       <span class="h-2.5 w-2.5 rounded-full bg-border-strong"></span>
       <span class="h-2.5 w-2.5 rounded-full bg-border-strong"></span>
