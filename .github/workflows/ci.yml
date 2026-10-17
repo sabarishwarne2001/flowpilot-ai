@@ -462,7 +462,8 @@ jobs:
         run: npx playwright test -c e2e
 
       # Website and payments session (C1): the journeys above bill through the stand-in Dodo, the
-      # production gateway. The Stripe journeys are kept: the same journeys again on Stripe's side.
+      # production gateway. The Stripe journeys are kept: the same journeys again on Stripe's side,
+      # and the billing page with no gateway configured (no Stripe key here).
       - name: Run the customer journeys on Stripe
         working-directory: frontend
         env:
@@ -471,6 +472,7 @@ jobs:
         run: |
           ../frontend/e2e/scripts/start-stack.sh
           npx playwright test -c e2e tests/6
+          npx playwright test -c e2e tests/20-organization.spec.ts -g "Billing"
 
       - name: Name the failing browser tests
         # Same reason as in the pytest job: annotations are readable where the raw log is not.

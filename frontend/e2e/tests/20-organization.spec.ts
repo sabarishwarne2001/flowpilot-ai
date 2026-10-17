@@ -8,7 +8,7 @@
  */
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, apiLogin, loginAs, resolveWorkspaceId } from "../support/api";
-import { PASSWORD, TENANTS, USERS, org, runId, ws } from "../support/env";
+import { GATEWAY, PASSWORD, TENANTS, USERS, org, runId, ws } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
 import { samplePath } from "../support/sample-docs";
 
@@ -373,7 +373,10 @@ test.describe("Billing", () => {
   });
 
   test("without a Stripe test key, plan switches are disabled with the reason shown", async ({ page }) => {
-    // The sandbox has no STRIPE_SECRET_KEY, so checkout cannot start; the page must say why.
+    // The sandbox has no STRIPE_SECRET_KEY, so checkout cannot start; the page must say why. Only the
+    // Stripe pass has no gateway configured: the default pass bills through the stand-in Dodo, and
+    // CI runs this test in its Stripe pass (E2E_GATEWAY=stripe).
+    test.skip(GATEWAY !== "stripe", "needs a deployment with no payment gateway configured (the Stripe pass)");
     await page.goto(org("C", "billing"));
     await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Switch to Business" })).toBeDisabled();
@@ -395,8 +398,11 @@ test.describe("Billing", () => {
     const seats = page.getByRole("spinbutton", { name: /Seats/ });
     await expect(seats).toHaveValue(String(state.body.seats_purchased));
     await seats.fill("6");
-    // Applying a seat change goes through the gateway; with no Stripe key here it stays disabled.
-    await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
+    // Applying a seat change goes through the gateway; with no Stripe key (the Stripe pass) it stays
+    // disabled. The Dodo pass's seat and plan changes are journeys 62 and 68.
+    if (GATEWAY === "stripe") {
+      await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
+    }
     await seats.fill(String(state.body.seats_purchased));
   });
 
