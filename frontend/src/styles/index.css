@@ -498,17 +498,35 @@
 @layer components {
   /* The canvas behind every page: a soft light from the top, blue on the left, violet on the right. */
   .fp-canvas {
+    position: relative;
+    isolation: isolate;
     background-color: hsl(var(--background));
     background-image:
-      radial-gradient(64rem 24rem at 22% -6rem, hsl(var(--primary) / 0.09), transparent 70%),
-      radial-gradient(46rem 20rem at 100% -4rem, hsl(var(--brand-accent) / 0.07), transparent 70%);
+      radial-gradient(60rem 26rem at 18% -8rem, hsl(var(--primary) / 0.14), transparent 70%),
+      radial-gradient(44rem 22rem at 96% -6rem, hsl(var(--brand-accent) / 0.12), transparent 70%);
     background-repeat: no-repeat;
   }
 
   .dark .fp-canvas {
     background-image:
-      radial-gradient(64rem 24rem at 22% -6rem, hsl(var(--primary) / 0.13), transparent 70%),
-      radial-gradient(46rem 20rem at 100% -4rem, hsl(var(--brand-accent) / 0.1), transparent 70%);
+      radial-gradient(60rem 26rem at 18% -8rem, hsl(var(--primary) / 0.2), transparent 70%),
+      radial-gradient(44rem 22rem at 96% -6rem, hsl(var(--brand-accent) / 0.16), transparent 70%);
+  }
+
+  /* A fine grid under the light, fading out a little way down the page. */
+  .fp-canvas::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 auto 0;
+    height: 30rem;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      linear-gradient(hsl(var(--foreground) / 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--foreground) / 0.035) 1px, transparent 1px);
+    background-size: 28px 28px;
+    -webkit-mask-image: linear-gradient(180deg, #000, transparent);
+    mask-image: linear-gradient(180deg, #000, transparent);
   }
 
   /* The header floats over the canvas as frosted glass. */
