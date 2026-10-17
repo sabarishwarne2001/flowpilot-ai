@@ -25,11 +25,20 @@ export const formatHelmMoney = (
   });
 };
 
-/** A short axis or tile figure: "₹6.6L" and "₹1.2Cr" for rupees, "$1.2M" or "1,2 Mio. €" otherwise. */
-export const formatHelmMoneyCompact = (micros: number, currency: string): string =>
-  isInr(currency)
-    ? formatMoneyInLocale(micros / 1_000_000, "INR", "en-IN", { notation: "compact", maximumFractionDigits: 1 })
-    : formatMoney(micros / 1_000_000, currency, { notation: "compact", maximumFractionDigits: 1 });
+/**
+ * A short axis or tile figure: "₹6.6L" and "₹1.2Cr" for rupees, "$1.2M" or "1,2 Mio. €" otherwise.
+ * Rupees below a lakh are written out ("₹1,453"): Indian English's compact form for thousands is
+ * "₹1.5T", which reads as trillions.
+ */
+export const formatHelmMoneyCompact = (micros: number, currency: string): string => {
+  const amount = micros / 1_000_000;
+  if (!isInr(currency)) {
+    return formatMoney(amount, currency, { notation: "compact", maximumFractionDigits: 1 });
+  }
+  return Math.abs(amount) < 100_000
+    ? formatMoneyInLocale(amount, "INR", "en-IN", { maximumFractionDigits: 0 })
+    : formatMoneyInLocale(amount, "INR", "en-IN", { notation: "compact", maximumFractionDigits: 1 });
+};
 
 export const runHelmMoneySelfCheck = (): string[] => {
   const failures: string[] = [];
@@ -51,6 +60,7 @@ export const runHelmMoneySelfCheck = (): string[] => {
     expect("euros keep the reader's language", formatHelmMoney(1_234_500_000, "EUR"), /^1\.234,50\s€$/);
     expect("nothing stays a dash", formatHelmMoney(null, "INR"), "—");
     expect("a compact rupee figure", formatHelmMoneyCompact(659_440_640_000, "INR"), /^₹6\.6\s?L/);
+    expect("a compact rupee figure below a lakh is written out", formatHelmMoneyCompact(1_453_050_000, "INR"), "₹1,453");
   } finally {
     applyDisplayPreferences(saved.timeZone, saved.locale);
   }

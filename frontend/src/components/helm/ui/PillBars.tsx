@@ -27,7 +27,7 @@ export const PillBars: React.FC<{
       <div className="helm-pillbars" style={{ height }} aria-hidden="true">
         {bars.map((bar, index) => (
           <div key={bar.key} className="flex h-full min-w-0 flex-col items-stretch gap-1.5" title={`${bar.label}: ${bar.words}`}>
-            <div className="helm-pillbar-track flex-1">
+            <div className="helm-pillbar-track mx-auto w-full max-w-[2.5rem] flex-1">
               {bar.value > 0 ? (
                 <div
                   className={`helm-pillbar ${bar.value === max ? "" : "helm-pillbar-quiet"}`}
