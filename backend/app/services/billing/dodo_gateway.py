@@ -6,16 +6,18 @@ signature specification.
 WHY DODO AND NOT STRIPE
 =======================
 
-Not because Stripe India is closed — it is not. Stripe's own RBI compliance
-documentation describes an onboarding path for sole proprietorships that are not
-registered, and the original premise that it is invite-only was inaccurate.
+Two reasons, recorded so the next reader does not re-litigate them.
 
-The reason is tax. Under Stripe, Servabo is the seller of record and the
-operator personally owes GST registration in India, VAT registration across the
-EU past threshold, and US state sales-tax nexus analysis — a recurring
-compliance job for a solo founder. Under a Merchant of Record, Dodo is the legal
-seller and remits on our behalf. For a one-person company selling B2B SaaS
-internationally, that difference is worth considerably more than the fee delta.
+Access: Stripe India has accepted new accounts by invitation only since 2024, so a sole
+proprietor in India cannot count on opening one. (An earlier version of this comment said the
+opposite; it was out of date.)
+
+Tax: even with a Stripe account, Servabo would be the seller of record and the operator would
+personally owe GST registration in India, VAT registration across the EU past threshold, and US
+state sales-tax nexus analysis, a recurring compliance job for a solo founder. Under a Merchant of
+Record, Dodo is the legal seller, issues the tax invoice and remits on our behalf. For a
+one-person company selling B2B SaaS internationally, that is worth more than the fee difference.
+The Stripe adapter stays in the code, switched off (BILLING_GATEWAY=DODO is the default).
 
 THE SIGNATURE SCHEME — READ THIS BEFORE CHANGING `verify_webhook_signature`
 ==========================================================================
@@ -66,19 +68,14 @@ later than that arrive as gateway-side replays with fresh signatures.
 WHAT THIS ADAPTER DELIBERATELY DOES NOT DO
 ==========================================
 
-No seat proration. `GatewayCapabilities.supports_seat_proration` is False
-because Stripe's subscription-item proration is not a universal concept and I
-have not verified Dodo's equivalent semantics. A stub that guessed would
-type-check clean and mis-bill.
+No usage billing. `GatewayCapabilities.supports_usage_billing` is False, and that is the owner's
+decision (website and payments session, NEEDS-OWNER): on Dodo every plan has hard monthly limits
+instead of billed overage, and `scripts/seed_quota_tiers.py` publishes each ALLOW_AND_BILL limit as
+REFUSE when the gateway cannot bill usage. Flipping the flag would let the overage path run and
+produce invoices that silently omit consumption.
 
-`supports_usage_billing` is likewise False PENDING VERIFICATION. Servabo
-prices seats plus metered consumption; if Dodo's usage API cannot accept
-`usage_rollups` as reported quantities at the granularity the overage model
-needs, the metered half of the pricing model does not survive this migration.
-That is a commercial question to settle with Dodo before switching
-`BILLING_GATEWAY` in production, not something to assert here. Flipping this
-flag without checking would let the overage path run and produce invoices that
-silently omit consumption.
+Seat and plan changes go through `POST /subscriptions/{id}/change-plan` (with its preview first):
+`set_subscription_seats`, `change_plan`, `preview_change_plan`.
 """
 
 from __future__ import annotations
