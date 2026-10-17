@@ -51,14 +51,14 @@ below. Never restart.**
   Checkpoint (2026-10-16): 18 pages build; 1,275 links resolve; HTML valid; axe clean in both themes
   at 360 and 1280 px; Lighthouse 97/100/100/100 on home, pricing and Helm; `npm audit` 0. Browser
   specs 70, 72, 74 (signed out), 30, 01, 60 pass against the new bundle.
-- [ ] C1. `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
+- [ ] C1. (stand-in done in e4fb2a1; browser journeys on Dodo still to do) `backend/tests/fakes/fake_dodo.py` (HTTP stand-in + Standard Webhooks signer);
   `scripts/e2e_stand_in.py --gateway dodo`; browser journeys on Dodo by default; Stripe journeys kept.
 - [x] C2. Default gateway DODO everywhere; production guard (key, secret, live/test agreement).
-- [ ] C3. Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
+- [ ] C3. (behaviour tests done, 98892f7; the live concurrency test still to do) Reconciliation behaviour tests for every handled Dodo event, ordering, replay, grace,
   add-ons, customer adoption and racing checkouts; one live concurrency test.
-- [ ] C4. Dodo payments as invoice rows, PDF download route, merchant-of-record note.
-- [ ] C5. Refunds and disputes (record, notify, RevOps, lost dispute → read-only).
-- [ ] C6. Plan changes with Dodo's preview (amount and date first), upgrades now, downgrades at
+- [x] C4. Dodo payments as invoice rows, PDF download route, merchant-of-record note.
+- [x] C5. Refunds and disputes (record, notify, RevOps, lost dispute → read-only).
+- [x] C6. Plan changes with Dodo's preview (amount and date first), upgrades now, downgrades at
   renewal, downgrade checks first; portal for payment method.
 - [ ] C7. Seats on Dodo proven end to end (`DODO_PREVIEW`).
 - [ ] C8. Overage capability: `ALLOW_AND_BILL` published as `REFUSE` without usage billing; copy.
