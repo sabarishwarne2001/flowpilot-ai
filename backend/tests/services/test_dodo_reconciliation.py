@@ -106,6 +106,11 @@ def org(db):
     _tier(db, "developer", "Developer", "pdt_developer", at, DEVELOPER_PRICE)
     _tier(db, "free", "Free", None, at)
     db.flush()
+    from app.services import pricing_service, quota_service
+
+    # Plans and prices are cached per process: a tier an earlier test read must not stand in for these.
+    quota_service.clear_cache()
+    pricing_service.clear_cache()
     return {"organization": organization, "owner": owner}
 
 
