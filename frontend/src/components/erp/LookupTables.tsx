@@ -99,7 +99,7 @@ export const LookupTables: React.FC<{ readonly workspaceId: string; readonly isA
   return (
     <div className="space-y-3">
       <p className={HINT}>
-        Mappings translate FlowPilot&apos;s values into your ERP&apos;s codes through these tables: vendors to ERP vendor ids,
+        Mappings translate Servabo&apos;s values into your ERP&apos;s codes through these tables: vendors to ERP vendor ids,
         product codes and roles (AP, TAX, CONTRA) to GL accounts, item codes to ERP items or materials. A value missing from a table stops the posting with the
         line and field named — it is never posted to a default account you did not choose.
       </p>

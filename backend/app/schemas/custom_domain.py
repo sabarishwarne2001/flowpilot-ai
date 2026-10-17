@@ -110,7 +110,7 @@ def normalise_hostname(raw: str) -> str:
 
     if ":" in value:
         raise ValueError(
-            "A custom domain cannot include a port. FlowPilot serves vanity "
+            "A custom domain cannot include a port. Servabo serves vanity "
             "domains on 443 only."
         )
     if value.startswith("*"):

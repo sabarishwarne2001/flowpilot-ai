@@ -1,5 +1,5 @@
 """
-Authentication and session lifecycle router for FlowPilot AI.
+Authentication and session lifecycle router for Servabo.
 """
 
 from __future__ import annotations

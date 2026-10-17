@@ -54,7 +54,7 @@ def test_registration_issues_no_session(client):
     )
 
     assert "access_token" not in response.json()
-    assert not client.cookies.get("flowpilot_refresh")
+    assert not client.cookies.get("servabo_refresh")
 
 
 def test_an_unverified_user_can_still_sign_in(client, unverified):
@@ -151,7 +151,7 @@ def test_verify_email_marks_the_account(client, unverified, db):
 
 def test_verify_email_is_unauthenticated(client, unverified, db):
     plaintext = _issue_verification(db, unverified)
-    assert not client.cookies.get("flowpilot_refresh")
+    assert not client.cookies.get("servabo_refresh")
 
     assert client.post(
         "/api/v1/auth/verify-email", json={"token": plaintext}

@@ -97,7 +97,7 @@ def record_failure(
     if ssrf_refused and SSRF_IMMEDIATE_DISABLE:
         reason = (
             f"{BREAKER_REASON_PREFIX}the endpoint URL resolved to an address "
-            "FlowPilot will never deliver to (loopback, private, link-local, "
+            "Servabo will never deliver to (loopback, private, link-local, "
             "or cloud metadata). This is a configuration error and will not "
             "resolve on retry. Correct the DNS record or the URL, then "
             "re-enable."

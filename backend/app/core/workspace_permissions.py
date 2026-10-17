@@ -1,5 +1,5 @@
 """
-Workspace-level authorization logic for FlowPilot AI.
+Workspace-level authorization logic for Servabo.
 
 Governs operational access: documents, conversations, the AI assistant,
 automation, and workspace settings. Commercial and identity concerns are
@@ -76,7 +76,7 @@ def resolve_effective_workspace_role(
     """
     Resolves the role an actor effectively holds in a workspace.
 
-    This is the single authority on workspace access in FlowPilot AI. Every
+    This is the single authority on workspace access in Servabo. Every
     authorization decision downstream consumes its result.
 
     Resolution:

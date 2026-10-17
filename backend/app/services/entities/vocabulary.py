@@ -220,4 +220,4 @@ OBLIGATIONS_MILESTONE: Final = "ARCH-46"
 
 #: Domain separation for identifier HMACs. Changing it orphans every stored
 #: digest, which is a migration, not a tweak.
-HMAC_INFO: Final = b"flowpilot/arch42/entity-identifier/v1"
+HMAC_INFO: Final = b"servabo/arch42/entity-identifier/v1"

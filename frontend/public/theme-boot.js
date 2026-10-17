@@ -5,7 +5,7 @@
  */
 (function () {
   try {
-    var saved = JSON.parse(window.localStorage.getItem("flowpilot_ui_preferences") || "{}");
+    var saved = JSON.parse(window.localStorage.getItem("servabo_ui_preferences") || "{}");
     var theme = (saved && saved.state && saved.state.theme) || "system";
     var dark =
       theme === "dark" ||

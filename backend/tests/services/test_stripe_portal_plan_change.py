@@ -4,8 +4,8 @@
 
 Stripe's `flow_data.subscription_update_confirm` opens the customer portal on one change of a
 subscription item (its price and quantity), shows the prorated amount, and returns the customer to
-FlowPilot when they confirm. The gateway names the subscription's licensed item, which it reads
-from Stripe, since an item id FlowPilot does not hold cannot be guessed.
+Servabo when they confirm. The gateway names the subscription's licensed item, which it reads
+from Stripe, since an item id Servabo does not hold cannot be guessed.
 """
 
 from __future__ import annotations

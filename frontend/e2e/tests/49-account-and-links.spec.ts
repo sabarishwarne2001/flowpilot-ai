@@ -97,7 +97,7 @@ async function cookieOnly(browser: Browser, session: ApiSession | null): Promise
   const context = await browser.newContext();
   if (session) {
     await context.addCookies([{
-      name: "flowpilot_refresh", value: session.refreshToken, domain: new URL(BROWSER_API_ORIGIN).hostname,
+      name: "servabo_refresh", value: session.refreshToken, domain: new URL(BROWSER_API_ORIGIN).hostname,
       path: "/api/v1/auth", httpOnly: true, secure: false, sameSite: "Lax",
     }]);
   }

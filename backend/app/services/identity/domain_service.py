@@ -117,7 +117,7 @@ def _issue_token() -> str:
 def expected_record(token: str) -> str:
     settings = get_settings()
     prefix = getattr(settings, "DOMAIN_VERIFICATION_TXT_PREFIX",
-                     "flowpilot-site-verification")
+                     "servabo-site-verification")
     return f"{prefix}={token}"
 
 
@@ -173,12 +173,12 @@ def verify_domain(db, *, domain_row: VerifiedDomain,
     expected = expected_record(domain_row.challenge_token)
     settings = get_settings()
     prefix = getattr(settings, "DOMAIN_VERIFICATION_TXT_PREFIX",
-                     "flowpilot-site-verification")
+                     "servabo-site-verification")
 
     apex = dns_service.lookup_txt(domain_row.domain)
     found = apex.contains(expected)
     if not found:
-        sub = dns_service.lookup_txt(domain_row.domain, subdomain="_flowpilot")
+        sub = dns_service.lookup_txt(domain_row.domain, subdomain="_servabo")
         found = sub.contains(expected)
         if not (apex.resolved or sub.resolved):
             raise DomainVerificationFailed(
@@ -276,7 +276,7 @@ def recheck_domains(db, *, limit: int = 200) -> list[DomainCheckOutcome]:
         found = apex.contains(expected)
         resolved = apex.resolved
         if not found:
-            sub = dns_service.lookup_txt(row.domain, subdomain="_flowpilot")
+            sub = dns_service.lookup_txt(row.domain, subdomain="_servabo")
             found = sub.contains(expected)
             resolved = resolved or sub.resolved
 

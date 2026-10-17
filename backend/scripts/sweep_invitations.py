@@ -1,5 +1,5 @@
 """
-Invitation lifecycle sweeper for FlowPilot AI (ARCH-04 §B.7).
+Invitation lifecycle sweeper for Servabo (ARCH-04 §B.7).
 
 Two jobs, in this order:
 

@@ -1,0 +1,210 @@
+---
+import "../../../frontend/src/styles/helm.css";
+import Base from "../layouts/Base.astro";
+import Shot from "../components/Shot.astro";
+import { APP, SITE, absolute } from "../config/site";
+import { PLANS, TRIAL_DAYS } from "../lib/pricing";
+
+const does = [
+  { title: "It reads your promises", body: "Every invoice, purchase order, goods receipt, credit note, contract, certificate and statement your team already uploads becomes a promise: what is owed, by whom, by when, at what price. The Promise ledger shows each one with the document it came from." },
+  { title: "You state the outcomes, in a sentence", body: "Thirteen ready mandates, or type a sentence and Helm reads it back as a mandate you confirm. The AI only drafts the sentence; deterministic code decides everything else, and Helm works with AI switched off." },
+  { title: "The cockpit", body: "One instrument per mandate (holding, drifting, breached, or unknown when Helm cannot see enough), the cash flight path for the coming weeks with your floor, and the plan: pay this on Tuesday, hold that, chase this customer, reconcile that supplier." },
+  { title: "The Guard", body: "Every action is checked before you see it and again before it runs: your limits, the facts checked, no open fraud or duplicate flag, cash above the floor, the act cap. Each action gets a certificate with every check and its evidence, sealed so it can never change." },
+  { title: "You stay in charge", body: "Everything starts in Propose mode: Helm proposes, a person approves. Act mode runs actions by itself only up to an amount the owner sets (zero by default). Holds, schedules and payments recorded can be undone." },
+  { title: "Bank statements close the loop", body: "Import your bank's CSV or Excel export. Helm reads it with the column mapping you confirm once per account, takes the closing balance as cash, and matches payments to the invoices it scheduled. Anything uncertain waits for a person, with the reasons in words." },
+  { title: "Supplier statements reconciled every month", body: "Each supplier's statement of account is compared with your books: invoices you never received, amounts that differ, payments they have not applied. Helm drafts the reconciliation email for you to send." },
+  { title: "The Time machine", body: "Replay your last months of your own documents as if Helm had been on: what it would have held, each amount marked confirmed, likely or potential, never added up as if certain. Download it as a PDF with a fingerprint on every page." },
+  { title: "What if…", body: "Beside the flight path: what if customers pay 30 days later, what if we hold these invoices, what if a large receipt comes in. Helm plans both and shows the difference, and saves nothing." },
+];
+
+const never = [
+  "Helm never pays: it plans, and a person pays from your bank.",
+  "“Value held” is only what happened, with its evidence; replays and forecasts are labelled as such.",
+  "Helm gives recommendations, not financial or tax advice; the MSME mandate links to the law itself.",
+  "Helm does not guess: where it cannot see enough it says so, and a visibility meter shows how much of the business it sees.",
+];
+
+const mandates = [
+  "Never pay above the agreed price",
+  "Never pay a duplicate",
+  "Never pay a changed bank account until verified",
+  "Keep cash above a floor",
+  "Pay micro and small suppliers within the legal limit",
+  "Decide every renewal before its notice deadline",
+];
+
+const helmPlans = PLANS.map((p) => ({
+  key: p.key,
+  name: p.name,
+  edition: p.helm.edition === "full" ? "Helm" : "Helm preview",
+  mandates: p.helm.edition === "preview" ? "Sample company and guided tour" : p.helm.active_mandates === null ? "Unlimited mandates" : `Up to ${p.helm.active_mandates} active mandates`,
+  replay: p.helm.backtest_months ? `${p.helm.backtest_months}-month replay${p.helm.edition === "preview" ? ", once a week" : ""}` : "",
+  extras: [
+    p.helm.custom_conditions && "Custom condition mandates",
+    p.helm.approval_chains && "Approval chains",
+    p.helm.all_workspaces && "One plan across every workspace",
+    p.helm.api_and_webhooks && "Helm through API keys and webhooks",
+  ].filter(Boolean) as string[],
+}));
+
+const product = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "Helm by Servabo",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web browser",
+  url: absolute("/helm"),
+  description: "Helm keeps your business promises: it reads every promise in your documents, plans what to pay, hold and chase, and checks every step against your rules.",
+  isPartOf: { "@type": "SoftwareApplication", name: SITE.name, url: SITE.url },
+};
+---
+<Base title="Helm — keep your business promises" description="Helm reads every promise in your invoices, orders and contracts, plans what to pay, hold and chase, checks every step against your rules, and never moves money by itself." structuredData={[product]}>
+  <div class="helm">
+    <section class="relative overflow-hidden border-b helm-hairline" aria-labelledby="helm-title">
+      <div class="page pb-16 pt-16 sm:pt-24">
+        <div class="grid items-center gap-12 lg:grid-cols-[1fr_1.2fr]">
+          <div>
+            <p class="helm-label">Helm · the flagship engine of Servabo</p>
+            <h1 id="helm-title" class="display helm-ink mt-5">Helm keeps your business promises.</h1>
+            <p class="lede mt-6 helm-muted">
+              You write the outcomes and the limits once. Helm reads every promise in your documents,
+              plans what to pay, hold and chase, checks every step against your rules, and shows you
+              what it held, with the evidence.
+            </p>
+            <div class="mt-9 flex flex-col gap-3 sm:flex-row">
+              <a href={APP.register} class="btn helm-btn helm-btn-primary">Start free trial</a>
+              <a href="#plans" class="btn helm-btn">Where Helm is included</a>
+            </div>
+            <p class="mt-4 text-sm helm-muted">Every account can open the sample company and take the guided tour during the {TRIAL_DAYS}-day trial.</p>
+          </div>
+          <Shot name="helm-cockpit" eager alt="The Helm cockpit: one instrument per mandate, the cash flight path with its floor, and the plan." />
+        </div>
+      </div>
+    </section>
+
+    <section class="page mt-20" aria-labelledby="who">
+      <div class="grid gap-10 lg:grid-cols-[1fr_1.4fr]">
+        <div>
+          <p class="helm-label">Who it is for</p>
+          <h2 id="who" class="h2 mt-3 helm-ink">Companies that buy from many suppliers.</h2>
+        </div>
+        <p class="lede helm-muted">
+          Distributors and wholesalers, manufacturers, logistics and construction firms, multi-branch
+          retail, restaurants and clinics: 50 to 1,000 people with a small finance team, and the
+          accounting firms that run payables for them, one workspace per client. India first, with
+          rupees, GST invoices, the MSMED Act and income-tax section 43B(h); any currency works.
+        </p>
+      </div>
+    </section>
+
+    <section class="page mt-20" aria-labelledby="mandates">
+      <div class="helm-panel p-6 sm:p-10">
+        <p class="helm-label">Mandates, in your words</p>
+        <h2 id="mandates" class="h2 mt-3 helm-ink">State the outcome once. Helm keeps it true.</h2>
+        <ul class="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {mandates.map((m) => (
+            <li class="helm-panel-raised flex items-center gap-3 px-4 py-3 text-[0.95rem]">
+              <span class="helm-state-holding helm-figure" aria-hidden="true">●</span>
+              <span>{m}</span>
+            </li>
+          ))}
+        </ul>
+        <p class="mt-6 text-sm helm-muted">Six of the thirteen mandates in the library. Or type your own sentence: Helm reads it back as a mandate you confirm before it is active.</p>
+      </div>
+    </section>
+
+    <section class="page mt-20" aria-labelledby="does">
+      <p class="helm-label">What it does</p>
+      <h2 id="does" class="h2 mt-3 helm-ink">From promise to plan to proof.</h2>
+      <ol class="mt-10 grid gap-x-10 gap-y-8 md:grid-cols-2 lg:grid-cols-3">
+        {does.map((d, i) => (
+          <li class="border-t helm-hairline pt-5">
+            <span class="helm-figure helm-accent text-sm">{String(i + 1).padStart(2, "0")}</span>
+            <h3 class="h3 mt-2 helm-ink">{d.title}</h3>
+            <p class="mt-2 leading-relaxed helm-muted">{d.body}</p>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <section class="page mt-24 grid items-center gap-12 lg:grid-cols-2" aria-labelledby="guard">
+      <div>
+        <p class="helm-label">The Guard</p>
+        <h2 id="guard" class="h2 mt-3 helm-ink">Every action carries its certificate.</h2>
+        <p class="lede mt-5 helm-muted">Before you see an action, and again before it runs, the Guard checks it against your mandates, the facts behind it, open fraud and duplicate flags, your cash floor and your cap. The certificate lists each check and its evidence, and it is sealed so it can never change.</p>
+      </div>
+      <Shot name="helm-plan" alt="The Guard certificate for one payment in Helm's plan: every check, its result and its evidence, sealed with a fingerprint." />
+    </section>
+
+    <section class="page mt-24 grid items-center gap-12 lg:grid-cols-2" aria-labelledby="replay">
+      <Shot name="helm-time-machine" alt="Helm's Time machine replaying past months of the sample company, each amount marked confirmed, likely or potential." class="lg:order-1" />
+      <div class="lg:order-2">
+        <p class="helm-label">The Time machine</p>
+        <h2 id="replay" class="h2 mt-3 helm-ink">See what Helm would have held, on your own past.</h2>
+        <p class="lede mt-5 helm-muted">Replay months of your own documents as if Helm had been on. Each amount is marked confirmed, likely or potential, and they are never added up as if certain. Download it as a PDF for your accountant or board, with a fingerprint on every page that matches the one on screen.</p>
+      </div>
+    </section>
+
+    <section class="page mt-24 grid gap-8 lg:grid-cols-2" aria-label="Bank and supplier statements">
+      <div class="helm-panel overflow-hidden">
+        <div class="p-6 sm:p-8">
+          <p class="helm-label">Bank statements</p>
+          <h3 class="h3 mt-2 helm-ink">"Paid" rests on the bank line.</h3>
+          <p class="mt-2 helm-muted">Import a CSV or Excel export; payments are matched to the invoices Helm scheduled by amount, date and reference or payee.</p>
+        </div>
+        <Shot name="helm-bank" frame={false} alt="Helm's bank statements page after an import: one payment matched by Helm, one suggested for a person to confirm." />
+      </div>
+      <div class="helm-panel overflow-hidden">
+        <div class="p-6 sm:p-8">
+          <p class="helm-label">Supplier statements</p>
+          <h3 class="h3 mt-2 helm-ink">Reconciled every month, to the paisa.</h3>
+          <p class="mt-2 helm-muted">Each difference is explained with its evidence, and Helm drafts the email for you to send.</p>
+        </div>
+        <Shot name="helm-reconciliation" frame={false} alt="Helm's proposed reconciliation of a supplier statement: each difference with its evidence, and every check the Guard ran." />
+      </div>
+    </section>
+
+    <section id="plans" class="page mt-24 scroll-mt-24" aria-labelledby="plans-title">
+      <p class="helm-label">Where Helm is included</p>
+      <h2 id="plans-title" class="h2 mt-3 helm-ink">A preview on every plan; all of Helm on Business and Enterprise.</h2>
+      <div class="mt-8 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {helmPlans.map((p) => (
+          <div class={`helm-panel p-6 ${p.key === "business" ? "helm-accent-ring" : ""}`}>
+            <p class="font-semibold helm-ink">{p.name}</p>
+            <p class={`helm-chip mt-3 ${p.edition === "Helm" ? "helm-chip-accent" : ""}`}>{p.edition}</p>
+            <ul class="mt-4 space-y-2 text-sm helm-muted">
+              <li>{p.mandates}</li>
+              {p.replay && <li>{p.replay}</li>}
+              {p.extras.map((x) => <li>{x}</li>)}
+            </ul>
+          </div>
+        ))}
+      </div>
+      <p class="mt-4 text-sm helm-muted">From the same price list as the <a class="link" href="/pricing">pricing page</a>.</p>
+    </section>
+
+    <section class="page mt-24" aria-labelledby="never">
+      <div class="helm-panel p-6 sm:p-10">
+        <p class="helm-label">What we never claim</p>
+        <h2 id="never" class="h2 mt-3 helm-ink">Honest by design.</h2>
+        <ul class="mt-6 grid gap-4 md:grid-cols-2">
+          {never.map((n) => <li class="helm-accent-rule border-l-2 pl-4 helm-muted">{n}</li>)}
+        </ul>
+      </div>
+    </section>
+
+    <section class="page mt-24" aria-labelledby="proof">
+      <div class="grid gap-10 lg:grid-cols-[1fr_1.3fr]">
+        <div>
+          <p class="helm-label">Try it on the sample company</p>
+          <h2 id="proof" class="h2 mt-3 helm-ink">Meridian Wholesale, an invented Pune distributor.</h2>
+        </div>
+        <div class="helm-muted leading-relaxed">
+          <p>Nine months of documents, read by the same engines as yours. Its replay finds exactly what was planted: overcharges above purchase-order prices, a duplicate invoice paid twice, a supplier's changed bank account, MSME payments made late, missed early-payment discounts, a late-fee invoice, a missed contract renewal, an expired insurance certificate, customers who paid late, and a month when cash dipped below the floor.</p>
+          <p class="mt-4">It is labelled "sample" everywhere, and you can delete it whenever you like.</p>
+          <a href={APP.register} class="btn helm-btn helm-btn-primary mt-6">Open the sample company</a>
+        </div>
+      </div>
+    </section>
+  </div>
+</Base>

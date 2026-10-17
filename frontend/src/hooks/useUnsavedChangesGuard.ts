@@ -4,7 +4,7 @@
  * Two layers:
  *   * react-router's `useBlocker` for in-app navigation (sidebar, links,
  *     back/forward). A blocked navigation is published to a small store and
- *     answered by FlowPilot's own dialog (`UnsavedChangesDialogHost`, mounted
+ *     answered by Servabo's own dialog (`UnsavedChangesDialogHost`, mounted
  *     once in App.tsx), never by the browser's unstyled native confirm box.
  *   * `beforeunload` for reload, tab close and external navigation. Browsers
  *     show their own prompt there and allow no custom UI, by design: a page

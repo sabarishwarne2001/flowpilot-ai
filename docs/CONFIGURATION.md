@@ -14,15 +14,15 @@ in the containers unless you add it to the service's `environment:` in `docker-c
 is not read by any code, is missing from this page, or is one production cannot run without and
 is missing from `.env.production.template` (or does not stop the app from starting when unset).
 
-293 settings. Columns: name, type, default, where it appears (`example` =
+295 settings. Columns: name, type, default, where it appears (`example` =
 `.env.example`, `production` = `.env.production.template`, `guard` = checked by the production
 guard), and the comment written above it in the code.
 
 | Setting | Type | Default | In | Notes |
 |---|---|---|---|---|
-| `PROJECT_NAME` | `str` | `'FlowPilot AI'` | example |  |
+| `PROJECT_NAME` | `str` | `'Servabo'` | example |  |
 | `APP_VERSION` | `str` | `APP_VERSION` | example |  |
-| `API_TITLE` | `str` | `'FlowPilot AI Core API'` | example |  |
+| `API_TITLE` | `str` | `'Servabo Core API'` | example |  |
 | `ENVIRONMENT` | `str` | `'development'` | example, production, guard |  |
 | `API_V1_STR` | `str` | `'/api/v1'` | example |  |
 | `LOG_LEVEL` | `str` | `'INFO'` | example, production, guard |  |
@@ -30,7 +30,7 @@ guard), and the comment written above it in the code.
 | `CORS_ORIGINS` | `str` | `'http://localhost:3000'` | example, production, guard |  |
 | `POSTGRES_USER` | `str` | `'postgres'` | example, production |  |
 | `POSTGRES_PASSWORD` | `str` | `'postgres'` | example, production, guard |  |
-| `POSTGRES_DB` | `str` | `'flowpilot'` | example, production |  |
+| `POSTGRES_DB` | `str` | `'servabo'` | example, production |  |
 | `POSTGRES_HOST` | `str` | `'localhost'` | example |  |
 | `POSTGRES_PORT` | `int` | `5432` | example |  |
 | `JWT_SECRET_KEY` | `SecretStr` | `required` | example, production, guard |  |
@@ -71,12 +71,13 @@ guard), and the comment written above it in the code.
 | `PLATFORM_SMTP_USERNAME` | `str` | `''` | example, production |  |
 | `PLATFORM_SMTP_PASSWORD` | `SecretStr \| None` | `None` | example, production |  |
 | `PLATFORM_SMTP_ENCRYPTION` | `str` | `'TLS'` | example, production |  |
-| `PLATFORM_SMTP_FROM_EMAIL` | `str` | `'noreply@flowpilot.ai'` | example, production |  |
-| `PLATFORM_SMTP_FROM_NAME` | `str` | `'FlowPilot AI'` | example, production |  |
+| `PLATFORM_SMTP_FROM_EMAIL` | `str` | `'noreply@servabo.app'` | example, production |  |
+| `PLATFORM_SMTP_FROM_NAME` | `str` | `'Servabo'` | example, production |  |
 | `OPERATOR_ALERT_EMAILS` | `str` | `''` | example, production, guard | Who is emailed (through the platform relay) about dead background jobs, gateway events that will never be applied, bursts of server errors and duplicate gateway subscriptions. Comma-separated addresses. Required in prod… |
 | `OPERATOR_ALERT_5XX_THRESHOLD` | `int` | `20` | production | Server errors (5xx answers, all API processes together) in five minutes that count as a burst worth an alert. |
 | `OPERATOR_ALERT_REPEAT_MINUTES` | `int` | `60` | production | The same alert is emailed again at most this often while it keeps happening. |
 | `FRONTEND_URL` | `str` | `'http://localhost:3000'` | example, production, guard |  |
+| `WEBSITE_URL` | `str` | `'https://servabo.app'` | production | Website session (B7): the public website (pricing, terms, privacy, refunds). Emails link its legal pages; the fallback domain is https://getservabo.com. |
 | `EMAIL_ENCRYPTION_KEYS` | `Optional[SecretStr]` | `None` | example, production, guard |  |
 | `RATE_LIMIT_ENABLED` | `bool` | `True` | example, guard |  |
 | `RATE_LIMIT_BACKEND` | `str` | `'redis'` | example, guard |  |
@@ -157,7 +158,7 @@ guard), and the comment written above it in the code.
 | `SAML_XSW_DEFENCE_ENABLED` | `bool` | `True` | guard | The ARCH-28 XSW kill switch. Defaults to on and FAILS to on: if settings cannot be read at all, hardening_policy_from_settings() returns the hardened policy. A GA platform needs a switch for the night a real IdP turns o… |
 | `DNS_RESOLVERS` | `str` | `'1.1.1.1,8.8.8.8'` | — | The DNS servers asked when a customer verifies a domain: comma-separated, each `address` (port 53) or `address:port` / `[ipv6]:port` (for a resolver on another port, such as a local caching resolver). |
 | `DNS_TIMEOUT_S` | `float` | `5.0` | — |  |
-| `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'flowpilot-site-verification'` | example |  |
+| `DOMAIN_VERIFICATION_TXT_PREFIX` | `str` | `'servabo-site-verification'` | example |  |
 | `DOMAIN_VERIFICATION_TOKEN_TTL_DAYS` | `int` | `30` | example |  |
 | `CUSTOM_DOMAINS_ENABLED` | `bool` | `False` | example, production | OFF by default. A deployment that has not configured an ACME agent and a wildcard-capable ingress cannot serve a vanity host, and letting a tenant claim one on such a deployment produces a VERIFIED domain that 404s fore… |
 | `PLATFORM_RESERVED_HOSTS` | `list[str]` | `[]` | example, production | Hostnames a tenant may never claim, JSON list, matched case-insensitively against the hostname AND against every parent suffix of it. This is what stops a tenant claiming the platform's own origin and having every sessi… |
@@ -204,7 +205,8 @@ guard), and the comment written above it in the code.
 | `RERANKER_CONNECT_TIMEOUT` | `float` | `0.5` | — |  |
 | `RERANKER_BREAKER_THRESHOLD` | `int` | `5` | — |  |
 | `RERANKER_BREAKER_RESET_SECONDS` | `float` | `30.0` | — |  |
-| `FLOWPILOT_EDITION` | `str` | `'saas'` | — | ARCH50-S1:settings. The sovereign edition. Every value here is the OPERATOR's: environment only, never a database column and never an API field, so no tenant can widen egress or point the local model elsewhere. FLOWPILO… |
+| `SERVABO_EDITION` | `str` | `Field(default='saas', validation_alias=AliasChoices('SERVAB…` | — | ARCH50-S1:settings. The sovereign edition. Every value here is the OPERATOR's: environment only, never a database column and never an API field, so no tenant can widen egress or point the local model elsewhere. SERVABO_… |
+| `SERVABO_DEPLOYMENT_ID` | `str` | `Field(default='', validation_alias=AliasChoices('SERVABO_DE…` | — | A sovereign licence may be bound to one deployment: this deployment's id (any string the operator chooses, written into the licence when it is issued). Renamed with the product. |
 | `EGRESS_MODE` | `str` | `'open'` | — |  |
 | `EGRESS_OPERATOR_HOSTS` | `str` | `''` | — |  |
 | `LOCAL_LLM_MODE` | `str` | `'off'` | production, guard |  |
@@ -217,7 +219,7 @@ guard), and the comment written above it in the code.
 | `LLM_METERING_ENABLED` | `bool` | `True` | example, production, guard |  |
 | `LLM_REQUEST_DEADLINE_SECONDS` | `float` | `25.0` | — |  |
 | `AI_CONNECTION_TEST_DEADLINE_SECONDS` | `float` | `20.0` | — | HARDENING-T1:D1. Short and single-attempt: a connection test that takes the full extraction deadline reads to an admin as a hang. |
-| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts FlowPilot next to an internal relay lists that relay here (hostna… |
+| `SMTP_PRIVATE_HOST_ALLOWLIST` | `list[str]` | `[]` | — | HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private, loopback, link-local, CGNAT or metadata addresses. An enterprise that self-hosts Servabo next to an internal relay lists that relay here (hostname… |
 | `SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT` | `bool` | `True` | — | Development only: local catchers (Mailpit, MailHog) run on localhost. |
 | `PIPELINE_STUCK_AFTER_MINUTES` | `int` | `90` | — | HARDENING-T1:D25. How long a document may sit in a working stage with no live job before the sweep fails it. Longer than the slowest legitimate OCR run plus retry backoff. |
 | `BILLING_PORTAL_ALLOW_LEGACY_GATEWAY` | `bool` | `False` | — | HARDENING-FINAL:billing-B. Off: the customer portal follows BILLING_GATEWAY strictly. On only during a planned gateway migration. |
@@ -284,7 +286,7 @@ guard), and the comment written above it in the code.
 | `STRIPE_INBOUND_BATCH_SIZE` | `int` | `25` | — |  |
 | `STRIPE_INBOUND_LEASE_SECONDS` | `int` | `60` | — |  |
 | `STRIPE_INBOUND_MAX_ATTEMPTS` | `int` | `8` | — |  |
-| `BILLING_GATEWAY` | `str` | `'STRIPE'` | example, production, guard | ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carrying both Stripe and Dodo keys during migration must not have its payment … |
+| `BILLING_GATEWAY` | `str` | `'DODO'` | example, production, guard | ARCH-29 Tranche 3. Which gateway is live. Declared explicitly rather than inferred from which credentials happen to be present: a deployment carrying both Stripe and Dodo keys during migration must not have its payment … |
 | `DODO_API_KEY` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_WEBHOOK_SECRET` | `SecretStr \| None` | `None` | example, production, guard |  |
 | `DODO_API_BASE` | `str` | `''` | example, production | HARDENING-T1:D16. Empty means "derive from DODO_LIVEMODE". The default was the live host while DODO_LIVEMODE defaulted to false, so a test key was sent to the live API (401) with nothing saying why. |

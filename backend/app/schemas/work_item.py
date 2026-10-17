@@ -2,7 +2,7 @@
 Data validation and serialization schemas (Pydantic v2) for Work Items.
 
 Enforces parameter boundaries on file registrations, status updates, 
-and maps standardized responses returned by the FlowPilot AI document queue.
+and maps standardized responses returned by the Servabo document queue.
 """
 
 import uuid

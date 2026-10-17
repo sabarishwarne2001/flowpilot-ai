@@ -2,10 +2,10 @@
 
     pytest tests/infra/test_compose_backup_scripts.py -q
 
-These run `deploy/bin/flowpilot-compose-backup` and `flowpilot-compose-restore-drill`
+These run `deploy/bin/servabo-compose-backup` and `servabo-compose-restore-drill`
 against a real PostgreSQL (the test database server) with a throwaway database, the
 real `pg_dump`, `pg_restore` and `openssl`. On the production host the same scripts
-run those programs inside the `db` container (`FLOWPILOT_PG_EXEC`); here the prefix
+run those programs inside the `db` container (`SERVABO_PG_EXEC`); here the prefix
 is empty and the local client tools talk to the server directly. What is proven:
 
 * the backup is encrypted (a secret in the data is not in the file), readable with
@@ -35,8 +35,8 @@ from sqlalchemy import create_engine, text
 from app.core.config import settings
 
 BIN = Path(__file__).resolve().parents[2] / "deploy" / "bin"
-BACKUP = BIN / "flowpilot-compose-backup"
-DRILL = BIN / "flowpilot-compose-restore-drill"
+BACKUP = BIN / "servabo-compose-backup"
+DRILL = BIN / "servabo-compose-restore-drill"
 SECRET = "TOP-SECRET-MARKER-" + uuid.uuid4().hex
 
 pytestmark = pytest.mark.no_db
@@ -97,15 +97,15 @@ def env(tmp_path: Path, live_database: str) -> dict[str, str]:
     key.chmod(0o600)
     return {
         **os.environ,
-        "FLOWPILOT_PG_EXEC": "",
+        "SERVABO_PG_EXEC": "",
         "PGHOST": str(settings.POSTGRES_HOST),
         "PGPORT": str(settings.POSTGRES_PORT),
         "PGUSER": settings.POSTGRES_USER,
         "PGPASSWORD": settings.POSTGRES_PASSWORD,
         "POSTGRES_USER": settings.POSTGRES_USER,
         "POSTGRES_DB": live_database,
-        "FLOWPILOT_BACKUP_DIR": str(tmp_path / "backups"),
-        "FLOWPILOT_BACKUP_KEY_FILE": str(key),
+        "SERVABO_BACKUP_DIR": str(tmp_path / "backups"),
+        "SERVABO_BACKUP_KEY_FILE": str(key),
     }
 
 
@@ -117,7 +117,7 @@ def run(script: Path, env: dict[str, str], *args: str, check: bool = False) -> s
 
 
 def backups(env: dict[str, str]) -> list[Path]:
-    return sorted(Path(env["FLOWPILOT_BACKUP_DIR"]).glob("flowpilot-*.dump.enc"))
+    return sorted(Path(env["SERVABO_BACKUP_DIR"]).glob("servabo-*.dump.enc"))
 
 
 def test_a_backup_is_encrypted_checksummed_and_readable_only_with_the_key(env) -> None:
@@ -125,10 +125,10 @@ def test_a_backup_is_encrypted_checksummed_and_readable_only_with_the_key(env) -
     (dump,) = backups(env)
     assert "backup ok" in result.stdout
     assert Path(str(dump) + ".sha256").exists()
-    assert not list(Path(env["FLOWPILOT_BACKUP_DIR"]).glob("*.partial"))
+    assert not list(Path(env["SERVABO_BACKUP_DIR"]).glob("*.partial"))
     assert SECRET.encode() not in dump.read_bytes(), "the data is not encrypted"
 
-    key = env["FLOWPILOT_BACKUP_KEY_FILE"]
+    key = env["SERVABO_BACKUP_KEY_FILE"]
     decrypt = ["openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000", "-in", str(dump)]
     plain = subprocess.run([*decrypt, "-pass", f"file:{key}"], capture_output=True)
     listing = subprocess.run(["pg_restore", "--list"], input=plain.stdout, capture_output=True)
@@ -142,18 +142,18 @@ def test_a_backup_is_encrypted_checksummed_and_readable_only_with_the_key(env) -
 
 def test_a_missing_or_empty_key_stops_the_backup_and_writes_nothing(env, tmp_path: Path) -> None:
     for key in ("", str(tmp_path / "nope.key")):
-        result = run(BACKUP, {**env, "FLOWPILOT_BACKUP_KEY_FILE": key})
+        result = run(BACKUP, {**env, "SERVABO_BACKUP_KEY_FILE": key})
         assert result.returncode == 64, (key, result.returncode)
     empty = tmp_path / "empty.key"
     empty.write_text("", encoding="utf-8")
-    assert run(BACKUP, {**env, "FLOWPILOT_BACKUP_KEY_FILE": str(empty)}).returncode == 64
+    assert run(BACKUP, {**env, "SERVABO_BACKUP_KEY_FILE": str(empty)}).returncode == 64
     assert backups(env) == []
 
 
 def test_a_failing_dump_keeps_nothing(env) -> None:
     result = run(BACKUP, {**env, "POSTGRES_DB": "this_database_does_not_exist"})
     assert result.returncode != 0
-    assert backups(env) == [] and not list(Path(env["FLOWPILOT_BACKUP_DIR"]).glob("*.partial"))
+    assert backups(env) == [] and not list(Path(env["SERVABO_BACKUP_DIR"]).glob("*.partial"))
 
 
 def test_the_restore_drill_restores_into_a_scratch_database_and_drops_it(env) -> None:
@@ -187,12 +187,12 @@ def test_the_drill_fails_when_a_core_table_comes_back_empty(env, live_database: 
         conn.execute(text("INSERT INTO organizations VALUES (3, 'Later')"))
     engine.dispose()
     # A backup older than the data is normal; a table that is EMPTY in the backup while live has rows is not.
-    result = run(DRILL, {**env, "FLOWPILOT_DRILL_TABLES": "organizations nonexistent_table"})
+    result = run(DRILL, {**env, "SERVABO_DRILL_TABLES": "organizations nonexistent_table"})
     assert result.returncode != 0 and "missing or empty" in result.stderr
 
 
 def test_retention_keeps_seven_daily_and_four_weekly(env) -> None:
-    folder = Path(env["FLOWPILOT_BACKUP_DIR"])
+    folder = Path(env["SERVABO_BACKUP_DIR"])
     folder.mkdir(parents=True)
     # 21 daily backups ending 2026-09-30 (a Wednesday), so ISO weeks are well defined.
     import datetime as dt
@@ -201,7 +201,7 @@ def test_retention_keeps_seven_daily_and_four_weekly(env) -> None:
     created = []
     for back in range(21):
         day = end - dt.timedelta(days=back)
-        path = folder / f"flowpilot-{day:%Y%m%d}T021100Z.dump.enc"
+        path = folder / f"servabo-{day:%Y%m%d}T021100Z.dump.enc"
         path.write_bytes(b"x")
         Path(str(path) + ".sha256").write_bytes(b"x")
         created.append(path.name)
@@ -214,13 +214,13 @@ def test_retention_keeps_seven_daily_and_four_weekly(env) -> None:
 
 
 def test_a_failed_mirror_is_reported_but_the_local_backup_stays(env) -> None:
-    result = run(BACKUP, {**env, "FLOWPILOT_BACKUP_MIRROR_CMD": "exit 1"})
+    result = run(BACKUP, {**env, "SERVABO_BACKUP_MIRROR_CMD": "exit 1"})
     assert result.returncode == 2 and "MIRROR FAILED" in result.stderr
     assert len(backups(env)) == 1
 
 
 def test_the_mirror_command_receives_the_backup_path(env, tmp_path: Path) -> None:
-    result = run(BACKUP, {**env, "FLOWPILOT_BACKUP_MIRROR_CMD": f'cp "$1" "{tmp_path}/offsite.enc"'}, check=True)
+    result = run(BACKUP, {**env, "SERVABO_BACKUP_MIRROR_CMD": f'cp "$1" "{tmp_path}/offsite.enc"'}, check=True)
     assert "mirrored" in result.stdout
     assert (tmp_path / "offsite.enc").stat().st_size == backups(env)[0].stat().st_size
 
@@ -229,15 +229,15 @@ def test_the_mirror_command_receives_the_backup_path(env, tmp_path: Path) -> Non
 # Scheduled sweeps on a Compose host (F-006)
 # ---------------------------------------------------------------------------
 
-SWEEP = BIN / "flowpilot-sweep"
+SWEEP = BIN / "servabo-sweep"
 
 
 def _sweep_env(tmp_path: Path, runner: Path) -> dict[str, str]:
     return {
         **os.environ,
-        "FLOWPILOT_SWEEPER_ENV": str(tmp_path / "none.env"),
-        "FLOWPILOT_RUNNER": str(runner),
-        "FLOWPILOT_LOG_DIR": str(tmp_path / "log"),
+        "SERVABO_SWEEPER_ENV": str(tmp_path / "none.env"),
+        "SERVABO_RUNNER": str(runner),
+        "SERVABO_LOG_DIR": str(tmp_path / "log"),
         "LOCK_DIR": str(tmp_path / "lock"),
         "TEXTFILE_DIR": str(tmp_path / "prom"),
     }
@@ -257,8 +257,8 @@ def test_a_sweep_runs_through_the_configured_container_runner(tmp_path: Path) ->
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "runner.args").read_text().split() == ["-m", "scripts.sweep_invitations", "--send-delay-ms", "250"]
     assert "outcome=ok" in (tmp_path / "log" / "sweep_invitations.log").read_text()
-    metrics = (tmp_path / "prom" / "flowpilot_sweeper_invitations.prom").read_text()
-    assert 'flowpilot_sweeper_last_exit_code{sweeper="invitations"} 0' in metrics
+    metrics = (tmp_path / "prom" / "servabo_sweeper_invitations.prom").read_text()
+    assert 'servabo_sweeper_last_exit_code{sweeper="invitations"} 0' in metrics
 
 
 def test_a_failing_sweep_is_recorded_as_a_failure(tmp_path: Path) -> None:
@@ -266,7 +266,7 @@ def test_a_failing_sweep_is_recorded_as_a_failure(tmp_path: Path) -> None:
     env = _sweep_env(tmp_path, _runner(tmp_path, exit_code=1))
     subprocess.run([str(SWEEP), "compliance", "--apply"], env=env, capture_output=True, text=True)
     assert "outcome=fail" in (tmp_path / "log" / "sweep_compliance.log").read_text()
-    assert 'flowpilot_sweeper_last_exit_code{sweeper="compliance"} 1' in (tmp_path / "prom" / "flowpilot_sweeper_compliance.prom").read_text()
+    assert 'servabo_sweeper_last_exit_code{sweeper="compliance"} 1' in (tmp_path / "prom" / "servabo_sweeper_compliance.prom").read_text()
 
 
 def test_every_cron_entry_names_a_sweeper_the_wrapper_knows() -> None:
@@ -276,14 +276,14 @@ def test_every_cron_entry_names_a_sweeper_the_wrapper_knows() -> None:
     known = set(re.findall(r"^\s+([a-z0-9_-]+)\)\s+SCRIPT=", wrapper, re.M)) | set(re.findall(r"^\s+([a-z0-9_-]+)\) +SCRIPT=", wrapper, re.M))
     assert {"invitations", "compliance", "backup", "revops", "obligations"} <= known, known
     for cron in (BIN.parent / "cron.d").iterdir():
-        for name in re.findall(r"flowpilot-sweep\s+([a-z0-9_-]+)", cron.read_text(encoding="utf-8")):
+        for name in re.findall(r"servabo-sweep\s+([a-z0-9_-]+)", cron.read_text(encoding="utf-8")):
             assert name in known, f"{cron.name} runs an unknown sweeper: {name}"
 
 
 def test_the_compose_cron_file_schedules_a_nightly_backup_and_a_weekly_drill() -> None:
-    text_ = (BIN.parent / "cron.d" / "flowpilot-compose-backups").read_text(encoding="utf-8")
-    assert "flowpilot-compose-backup" in text_ and "flowpilot-compose-restore-drill" in text_
-    assert "FLOWPILOT_RUNNER" in text_ and "FLOWPILOT_BACKUP_KEY_FILE" in text_
+    text_ = (BIN.parent / "cron.d" / "servabo-compose-backups").read_text(encoding="utf-8")
+    assert "servabo-compose-backup" in text_ and "servabo-compose-restore-drill" in text_
+    assert "SERVABO_RUNNER" in text_ and "SERVABO_BACKUP_KEY_FILE" in text_
 
 
 # ---------------------------------------------------------------------------
@@ -324,12 +324,12 @@ def test_a_failed_backup_pings_the_failure_address(env, monitor) -> None:
 
 
 def test_a_backup_that_cannot_even_start_is_reported_as_failed(env, monitor, tmp_path: Path) -> None:
-    assert run(BACKUP, {**env, "FLOWPILOT_BACKUP_KEY_FILE": str(tmp_path / "nope.key")}).returncode == 64
+    assert run(BACKUP, {**env, "SERVABO_BACKUP_KEY_FILE": str(tmp_path / "nope.key")}).returncode == 64
     assert monitor() == ["https://hc.example.test/backup-uuid/fail"]
 
 
 def test_a_failed_off_host_mirror_is_reported_as_failed(env, monitor) -> None:
-    result = run(BACKUP, {**env, "FLOWPILOT_BACKUP_MIRROR_CMD": "false"})
+    result = run(BACKUP, {**env, "SERVABO_BACKUP_MIRROR_CMD": "false"})
     assert result.returncode == 2
     assert monitor() == ["https://hc.example.test/backup-uuid/fail"]
 

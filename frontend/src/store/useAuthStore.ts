@@ -23,7 +23,7 @@ import { useTenantStore } from "@/store/useTenantStore";
  * paint after a reload can show the authenticated shell instead of a login
  * flash; neither is a credential and neither is trusted by the server.
  */
-const AUTH_STORAGE_KEY = "flowpilot_auth_session";
+const AUTH_STORAGE_KEY = "servabo_auth_session";
 
 /**
  * Mirrors the backend User schema.

@@ -1,7 +1,7 @@
 """ARCH47-S1:mock-targets — mock ERP servers for the gates (verify_arch47, the conformance matrix).
 
 No live ERP is reachable from a test run: those need each customer's sandbox.
-These mocks implement, for every preset, the endpoints FlowPilot calls, as the
+These mocks implement, for every preset, the endpoints Servabo calls, as the
 vendors document them, and let a gate inject the failures exactly-once must
 survive:
 
@@ -492,7 +492,7 @@ class MockErp:
 
 
 class MockSftp:
-    USER, PASSWORD = "flowpilot", "sftp-secret"
+    USER, PASSWORD = "servabo", "sftp-secret"
 
     def __init__(self) -> None:
         import paramiko

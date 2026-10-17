@@ -1,5 +1,5 @@
 /**
- * Authentication guard for FlowPilot AI.
+ * Authentication guard for Servabo.
  *
  * The previous implementation trusted a single rehydrated flag:
  *

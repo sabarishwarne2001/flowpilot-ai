@@ -499,7 +499,7 @@ def organization_overview(
 #: The token placeholder shown in every snippet. A real token is displayed
 #: once at issuance and never again — the portal has no way to interpolate
 #: one here even if that were desirable, and it is not.
-TOKEN_PLACEHOLDER: str = "$FLOWPILOT_API_KEY"
+TOKEN_PLACEHOLDER: str = "$SERVABO_API_KEY"
 
 
 def code_snippets(
@@ -528,7 +528,7 @@ def code_snippets(
             "import os, requests\n\n"
             f"response = requests.{verb.lower()}(\n"
             f"    \"{url}\",\n"
-            "    headers={\"Authorization\": f\"Bearer {os.environ['FLOWPILOT_API_KEY']}\"},\n"
+            "    headers={\"Authorization\": f\"Bearer {os.environ['SERVABO_API_KEY']}\"},\n"
             f"    json={json.dumps(body)},\n"
             "    timeout=30,\n"
             ")\n"
@@ -541,7 +541,7 @@ def code_snippets(
             f"const response = await fetch(\"{url}\", {{\n"
             f"  method: \"{verb}\",\n"
             "  headers: {\n"
-            "    Authorization: `Bearer ${process.env.FLOWPILOT_API_KEY}`,\n"
+            "    Authorization: `Bearer ${process.env.SERVABO_API_KEY}`,\n"
             "    \"Content-Type\": \"application/json\",\n"
             "  },\n"
             f"  body: JSON.stringify({json.dumps(body)}),\n"
@@ -559,7 +559,7 @@ def code_snippets(
             "import os, requests\n\n"
             f"response = requests.{verb.lower()}(\n"
             f"    \"{url}\",\n"
-            "    headers={\"Authorization\": f\"Bearer {os.environ['FLOWPILOT_API_KEY']}\"},\n"
+            "    headers={\"Authorization\": f\"Bearer {os.environ['SERVABO_API_KEY']}\"},\n"
             "    timeout=30,\n"
             ")\n"
             "response.raise_for_status()\n"
@@ -569,7 +569,7 @@ def code_snippets(
         typescript = (
             f"const response = await fetch(\"{url}\", {{\n"
             f"  method: \"{verb}\",\n"
-            "  headers: { Authorization: `Bearer ${process.env.FLOWPILOT_API_KEY}` },\n"
+            "  headers: { Authorization: `Bearer ${process.env.SERVABO_API_KEY}` },\n"
             "});\n\n"
             "if (!response.ok) throw new Error(await response.text());\n"
             "console.log(response.headers.get(\"X-RateLimit-Remaining\"));\n"

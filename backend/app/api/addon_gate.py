@@ -12,7 +12,7 @@ WHY 402, AND WHY A DOMAIN ERROR
 refused a custom domain has the right role and the wrong plan; 402 says so.
 
 Tranche 3 changed the raise from an HTTP exception carrying a dict to
-`AddonRequiredError`, a `FlowPilotError`. The console's client parses only the
+`AddonRequiredError`, a `ServaboError`. The console's client parses only the
 ARCH-01 envelope `{code, message, details}` and sent every other 402 to the
 quota banner, so the Tranche 2 body was never read.
 

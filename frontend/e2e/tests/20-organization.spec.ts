@@ -8,7 +8,7 @@
  */
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
 import { api, apiLogin, loginAs, resolveWorkspaceId } from "../support/api";
-import { PASSWORD, TENANTS, USERS, org, runId, ws } from "../support/env";
+import { GATEWAY, PASSWORD, TENANTS, USERS, org, runId, ws } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
 import { samplePath } from "../support/sample-docs";
 
@@ -281,7 +281,7 @@ test.describe("Branding and custom domains", () => {
     // offered "Claim domain" and the click answered 501.
     await page.goto(org("C", "branding"));
     await settle(page);
-    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this FlowPilot deployment/);
+    await expect(page.locator("main")).toContainText(/Custom domains are not switched on for this Servabo deployment/);
     await expect(page.getByRole("button", { name: "Claim domain" })).toHaveCount(0);
     await expect(page.locator("#hostname")).toHaveCount(0);
   });
@@ -295,7 +295,7 @@ test.describe("Analytics and BI egress", () => {
     await page.getByRole("textbox", { name: "Label" }).fill(`E2E S3 ${runId()}`);
     await page.getByRole("textbox", { name: "Bucket" }).fill("caretakers-e2e-bucket");
     await page.getByRole("textbox", { name: "Region" }).fill("eu-west-2");
-    await page.getByRole("textbox", { name: "Key prefix" }).fill("flowpilot/");
+    await page.getByRole("textbox", { name: "Key prefix" }).fill("servabo/");
     await page.getByRole("textbox", { name: "Access key ID" }).fill("AKIAE2ETESTONLY0000");
     await page.getByRole("textbox", { name: "Secret access key" }).fill("e2e-secret-not-real");
     await page.getByRole("button", { name: "Add destination" }).last().click();
@@ -336,7 +336,7 @@ test.describe("Egress lockdown", () => {
     await page.getByRole("textbox", { name: "Port" }).fill("443");
     await page.getByRole("button", { name: "Add rule" }).click();
     await expect(page.locator("main")).toContainText(host, { timeout: 10_000 });
-    await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.caretakers.example.com/flowpilot");
+    await page.getByRole("textbox", { name: "URL or host" }).fill("https://hooks.caretakers.example.com/servabo");
     await page.getByRole("button", { name: "Test" }).click();
     await expect(page.locator("main")).toContainText(/allowed|refused|blocked|permitted/i, { timeout: 10_000 });
     await page.getByRole("button", { name: "Switch lockdown on" }).click();
@@ -373,7 +373,10 @@ test.describe("Billing", () => {
   });
 
   test("without a Stripe test key, plan switches are disabled with the reason shown", async ({ page }) => {
-    // The sandbox has no STRIPE_SECRET_KEY, so checkout cannot start; the page must say why.
+    // The sandbox has no STRIPE_SECRET_KEY, so checkout cannot start; the page must say why. Only the
+    // Stripe pass has no gateway configured: the default pass bills through the stand-in Dodo, and
+    // CI runs this test in its Stripe pass (E2E_GATEWAY=stripe).
+    test.skip(GATEWAY !== "stripe", "needs a deployment with no payment gateway configured (the Stripe pass)");
     await page.goto(org("C", "billing"));
     await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Switch to Business" })).toBeDisabled();
@@ -395,8 +398,11 @@ test.describe("Billing", () => {
     const seats = page.getByRole("spinbutton", { name: /Seats/ });
     await expect(seats).toHaveValue(String(state.body.seats_purchased));
     await seats.fill("6");
-    // Applying a seat change goes through the gateway; with no Stripe key here it stays disabled.
-    await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
+    // Applying a seat change goes through the gateway; with no Stripe key (the Stripe pass) it stays
+    // disabled. The Dodo pass's seat and plan changes are journeys 62 and 68.
+    if (GATEWAY === "stripe") {
+      await expect(page.getByText(/Paid checkout is not configured/)).toBeVisible();
+    }
     await seats.fill(String(state.body.seats_purchased));
   });
 
@@ -439,7 +445,7 @@ test.describe("API keys", () => {
     await page.getByRole("textbox", { name: "Name" }).fill(name);
     await page.getByRole("checkbox", { name: "work_items:read" }).check();
     await page.getByRole("button", { name: "Create key" }).click();
-    await expect(page.getByText(/fp_test_|only time|won.t be shown/i).first()).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/svb_test_|only time|won.t be shown/i).first()).toBeVisible({ timeout: 15_000 });
     const done = page.getByRole("button", { name: /done|close|i.ve copied/i }).first();
     if (await done.isVisible()) await done.click();
     await page.reload();
@@ -472,7 +478,7 @@ test.describe("Webhooks", () => {
     problems.allowHttp(/\/webhooks\//, [400, 422, 502], "the receiver is unreachable from the sandbox");
     await page.goto(org("C", "webhooks"));
     await page.getByRole("button", { name: "New endpoint" }).click();
-    await page.getByRole("textbox", { name: "Endpoint URL" }).fill("https://hooks.caretakers.example.com/flowpilot");
+    await page.getByRole("textbox", { name: "Endpoint URL" }).fill("https://hooks.caretakers.example.com/servabo");
     await page.getByRole("textbox", { name: "Description (optional)" }).fill("E2E endpoint");
     await page.getByRole("checkbox", { name: "work_item.created" }).check();
     await page.getByRole("button", { name: /create|save|add endpoint/i }).last().click();

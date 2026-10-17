@@ -1,11 +1,11 @@
 # =============================================================================
-# FlowPilot AI — Multi-Stage Production Dockerfile (ARCH-10 Step 8)
+# Servabo — Multi-Stage Production Dockerfile (ARCH-10 Step 8)
 #
 # Build targets:
-#   docker build --target web    -t flowpilot/web:latest    .
-#   docker build --target worker -t flowpilot/worker:latest .  # light
-#   docker build --target enrich -t flowpilot/enrich:latest .
-#   docker build --target ocr    -t flowpilot/ocr:latest    .
+#   docker build --target web    -t servabo/web:latest    .
+#   docker build --target worker -t servabo/worker:latest .  # light
+#   docker build --target enrich -t servabo/enrich:latest .
+#   docker build --target ocr    -t servabo/ocr:latest    .
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -17,7 +17,7 @@ FROM python:3.12.13-slim-bookworm AS base
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    HOME=/home/flowpilot
+    HOME=/home/servabo
 
 WORKDIR /app
 
@@ -42,12 +42,12 @@ COPY scripts ./scripts
 COPY .env.example .
 
 # Create non-root application user
-RUN addgroup --system flowpilot && \
-    adduser --system --ingroup flowpilot --home /home/flowpilot flowpilot && \
-    mkdir -p /home/flowpilot/.cache && \
-    chown -R flowpilot:flowpilot /app /home/flowpilot
+RUN addgroup --system servabo && \
+    adduser --system --ingroup servabo --home /home/servabo servabo && \
+    mkdir -p /home/servabo/.cache && \
+    chown -R servabo:servabo /app /home/servabo
 
-USER flowpilot
+USER servabo
 
 
 # -----------------------------------------------------------------------------
@@ -83,13 +83,13 @@ FROM base AS enrich
 
 USER root
 # Ensure writable HuggingFace cache for non-root user
-RUN mkdir -p /home/flowpilot/.cache/huggingface && \
-    chown -R flowpilot:flowpilot /home/flowpilot/.cache/huggingface
-USER flowpilot
+RUN mkdir -p /home/servabo/.cache/huggingface && \
+    chown -R servabo:servabo /home/servabo/.cache/huggingface
+USER servabo
 
 ENV WORKER_PROFILE=enrich \
     TRANSFORMERS_OFFLINE=0 \
-    HF_HOME=/home/flowpilot/.cache/huggingface
+    HF_HOME=/home/servabo/.cache/huggingface
 
 # ARCH-29 Tranche 1 — pre-bake the embedding weights.
 #
@@ -146,14 +146,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # F-045: PaddleOCR, PaddleX and OpenCV live in this image only.
 RUN pip install --no-cache-dir -r requirements-ocr.txt
 
-RUN mkdir -p /home/flowpilot/.cache/paddle && \
-    mkdir -p /home/flowpilot/.paddlex && \
-    chown -R flowpilot:flowpilot /home/flowpilot/.cache /home/flowpilot/.paddlex
-USER flowpilot
+RUN mkdir -p /home/servabo/.cache/paddle && \
+    mkdir -p /home/servabo/.paddlex && \
+    chown -R servabo:servabo /home/servabo/.cache /home/servabo/.paddlex
+USER servabo
 
 ENV WORKER_PROFILE=ocr \
     OMP_NUM_THREADS=1 \
-    PADDLE_HOME=/home/flowpilot/.cache/paddle \
+    PADDLE_HOME=/home/servabo/.cache/paddle \
     PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=True \
     FLAGS_use_mkldnn=0 \
     FLAGS_enable_pir_api=0 \

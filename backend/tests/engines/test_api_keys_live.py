@@ -34,7 +34,7 @@ def test_a_read_only_key_is_scoped_rate_limited_and_revocable(engines: Engines, 
     issued = engines.post("/developer/keys", body, org=True, as_user=t.org_admin)
     assert issued.status_code == 201, issued.text
     token, key_id = issued.json()["token"], issued.json()["api_key"]["id"]
-    assert token.startswith(("fp_live_", "fp_test_"))
+    assert token.startswith(("svb_live_", "svb_test_"))
     listed = engines.get("/api-keys", org=True, as_user=t.org_admin)
     assert listed.status_code == 200 and token not in listed.text
 

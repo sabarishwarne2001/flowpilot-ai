@@ -1,0 +1,381 @@
+{
+  "generated_by": "backend/scripts/export_public_pricing.py",
+  "as_of": "2026-01-01",
+  "billing": {
+    "usage_billing": false,
+    "merchant_of_record": true
+  },
+  "trial": {
+    "plan_key": "free",
+    "days": 7
+  },
+  "plans": [
+    {
+      "key": "free",
+      "display_name": "Free",
+      "is_priced": true,
+      "per_seat": false,
+      "prices": [
+        {
+          "interval": "month",
+          "currency": "USD",
+          "unit_amount": 0
+        }
+      ],
+      "allowances": [
+        {
+          "key": "document.upload",
+          "limit_quantity": 25,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "ocr.page",
+          "limit_quantity": 50,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "assistant.message",
+          "limit_quantity": 30,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.seats",
+          "limit_quantity": 2,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.workspaces",
+          "limit_quantity": 1,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.file_size_mb",
+          "limit_quantity": 10,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.pages_per_document",
+          "limit_quantity": 10,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "storage.gb_month",
+          "limit_quantity": 0.25,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "llm.platform_key",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        }
+      ],
+      "features": [],
+      "helm": {
+        "edition": "preview",
+        "active_mandates": 0,
+        "backtest_months": 3,
+        "custom_conditions": false,
+        "approval_chains": false,
+        "all_workspaces": false,
+        "api_and_webhooks": false
+      }
+    },
+    {
+      "key": "developer",
+      "display_name": "Developer",
+      "is_priced": true,
+      "per_seat": true,
+      "prices": [
+        {
+          "interval": "year",
+          "currency": "USD",
+          "unit_amount": 49000
+        },
+        {
+          "interval": "month",
+          "currency": "USD",
+          "unit_amount": 4900
+        }
+      ],
+      "allowances": [
+        {
+          "key": "document.upload",
+          "limit_quantity": 500,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "ocr.page",
+          "limit_quantity": 5000,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "assistant.message",
+          "limit_quantity": 1000,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.workspaces",
+          "limit_quantity": 3,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.file_size_mb",
+          "limit_quantity": 50,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.pages_per_document",
+          "limit_quantity": 100,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "storage.gb_month",
+          "limit_quantity": 25,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "llm.platform_key",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        }
+      ],
+      "features": [
+        "addon.custom_domain",
+        "capability.automations",
+        "capability.custom_branding",
+        "capability.developer_api",
+        "capability.outgoing_webhooks"
+      ],
+      "helm": {
+        "edition": "preview",
+        "active_mandates": 0,
+        "backtest_months": 3,
+        "custom_conditions": false,
+        "approval_chains": false,
+        "all_workspaces": false,
+        "api_and_webhooks": false
+      }
+    },
+    {
+      "key": "business",
+      "display_name": "Business",
+      "is_priced": true,
+      "per_seat": true,
+      "prices": [
+        {
+          "interval": "year",
+          "currency": "USD",
+          "unit_amount": 299000
+        },
+        {
+          "interval": "month",
+          "currency": "USD",
+          "unit_amount": 29900
+        }
+      ],
+      "allowances": [
+        {
+          "key": "document.upload",
+          "limit_quantity": 5000,
+          "period": "MONTH",
+          "overage_policy": "ALLOW_AND_WARN"
+        },
+        {
+          "key": "ocr.page",
+          "limit_quantity": 40000,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "assistant.message",
+          "limit_quantity": 10000,
+          "period": "MONTH",
+          "overage_policy": "ALLOW_AND_WARN"
+        },
+        {
+          "key": "limit.workspaces",
+          "limit_quantity": 20,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.file_size_mb",
+          "limit_quantity": 100,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.pages_per_document",
+          "limit_quantity": 500,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "storage.gb_month",
+          "limit_quantity": 250,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "llm.platform_key",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        }
+      ],
+      "features": [
+        "addon.custom_domain",
+        "addon.warehouse_sync",
+        "capability.anomaly_radar",
+        "capability.automations",
+        "capability.batch_dispatch",
+        "capability.byok",
+        "capability.case_intelligence",
+        "capability.custom_branding",
+        "capability.custom_email",
+        "capability.developer_api",
+        "capability.entity_graph",
+        "capability.erp_posting",
+        "capability.extraction_memory",
+        "capability.helm",
+        "capability.obligations",
+        "capability.outgoing_webhooks",
+        "capability.reconciliation",
+        "capability.table_intelligence",
+        "capability.truthmesh"
+      ],
+      "helm": {
+        "edition": "full",
+        "active_mandates": 15,
+        "backtest_months": 6,
+        "custom_conditions": false,
+        "approval_chains": false,
+        "all_workspaces": false,
+        "api_and_webhooks": false
+      }
+    },
+    {
+      "key": "enterprise",
+      "display_name": "Enterprise",
+      "is_priced": true,
+      "per_seat": true,
+      "prices": [
+        {
+          "interval": "month",
+          "currency": "USD",
+          "unit_amount": 79900
+        }
+      ],
+      "allowances": [
+        {
+          "key": "document.upload",
+          "limit_quantity": 10000,
+          "period": "MONTH",
+          "overage_policy": "ALLOW_AND_WARN"
+        },
+        {
+          "key": "ocr.page",
+          "limit_quantity": 95000,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "assistant.message",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": null
+        },
+        {
+          "key": "limit.workspaces",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": null
+        },
+        {
+          "key": "limit.file_size_mb",
+          "limit_quantity": 100,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "limit.pages_per_document",
+          "limit_quantity": 500,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "storage.gb_month",
+          "limit_quantity": 1000,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        },
+        {
+          "key": "llm.platform_key",
+          "limit_quantity": null,
+          "period": "MONTH",
+          "overage_policy": "REFUSE"
+        }
+      ],
+      "features": [
+        "addon.custom_domain",
+        "addon.warehouse_sync",
+        "capability.anomaly_radar",
+        "capability.automations",
+        "capability.batch_dispatch",
+        "capability.byok",
+        "capability.calibrated_autonomy",
+        "capability.case_intelligence",
+        "capability.collaborative_review",
+        "capability.custom_branding",
+        "capability.custom_email",
+        "capability.developer_api",
+        "capability.egress_lockdown",
+        "capability.enterprise_identity",
+        "capability.entity_graph",
+        "capability.erp_posting",
+        "capability.extraction_memory",
+        "capability.helm",
+        "capability.helm_all_workspaces",
+        "capability.helm_api",
+        "capability.helm_approval_chains",
+        "capability.helm_custom",
+        "capability.obligations",
+        "capability.outgoing_webhooks",
+        "capability.priority_slo",
+        "capability.process_intelligence",
+        "capability.reconciliation",
+        "capability.redaction",
+        "capability.semantic_assertions",
+        "capability.table_intelligence",
+        "capability.truthmesh",
+        "capability.universal_corroborator"
+      ],
+      "helm": {
+        "edition": "full",
+        "active_mandates": null,
+        "backtest_months": 24,
+        "custom_conditions": true,
+        "approval_chains": true,
+        "all_workspaces": true,
+        "api_and_webhooks": true
+      }
+    }
+  ]
+}

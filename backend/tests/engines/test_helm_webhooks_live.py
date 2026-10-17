@@ -27,7 +27,7 @@ from tests.conftest import Fixture
 from tests.engines.test_webhooks_live import _deliver, _Receiver, _verify
 from tests.security.plans import put_on_plan
 
-URL = "https://hooks.acme.example.com/flowpilot"
+URL = "https://hooks.acme.example.com/servabo"
 
 
 def _book(db: Session, tenant: Fixture, plan: str) -> HelmBook:

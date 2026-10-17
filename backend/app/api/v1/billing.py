@@ -10,7 +10,8 @@ from typing import Optional
 from app.core.client_ip import client_ip as _resolve_client_ip
 from app.core.config import settings
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
+from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from sqlalchemy.orm import Session
 
 # ARCH30-T4F:access-summary-deps-import — A5.
@@ -57,7 +58,7 @@ from app.services.billing.portal_service import (
     CheckoutConfigurationError,
     ReauthenticationRequiredError,
 )
-from app.services.billing.payment_gateway import GatewayNotConfiguredError
+from app.services.billing.payment_gateway import GatewayNotConfiguredError, GatewayPermanentError
 from app.services.billing.stripe_gateway import StripePermanentError
 
 logger = logging.getLogger("app.api.v1.billing")
@@ -310,7 +311,17 @@ def get_billing_access(
         ),
         grace_ends_at=live.grace_ends_at if live else None,
         trial=_trial_service().status(db, organization_id=context.organization_id).as_dict(),
+        reason=_reversal_reason(db, context.organization_id, state.writes_allowed),  # type: ignore[arg-type]
     )
+
+
+def _reversal_reason(db: Session, organization_id: uuid.UUID, writes_allowed: bool) -> Optional[str]:
+    from app.services.billing import dispute_service
+
+    if writes_allowed:
+        return None
+    holding = dispute_service.reversal_holding(db, organization_id=organization_id)
+    return dispute_service.REASON_PAYMENT_REVERSED if holding is not None else None
 
 
 def _trial_service():
@@ -383,6 +394,13 @@ def get_billing_access_summary(
         exposed_grace = None
 
     from app.services import plan_admission
+    from app.services.billing import dispute_service
+
+    reason = None
+    if not state.writes_allowed and dispute_service.reversal_holding(
+        db, organization_id=context.organization_id
+    ) is not None:
+        reason = dispute_service.REASON_PAYMENT_REVERSED
 
     return BillingAccessSummaryResponse(
         state=summary_state,  # type: ignore[arg-type]
@@ -390,6 +408,7 @@ def get_billing_access_summary(
         grace_ends_at=exposed_grace,
         plan_contacts=plan_admission.plan_contacts(db, organization_id=context.organization_id),
         trial=trial.as_dict(),
+        reason=reason,  # type: ignore[arg-type]
     )
 
 
@@ -443,6 +462,153 @@ def get_invoice(
 
     return InvoiceDetailResponse.build(
         invoice=invoice, digest_matches=matches
+    )
+
+
+class PlanChangeIn(BaseModel):
+    quota_tier_key: str = Field(min_length=1, max_length=32)
+    seats: int = Field(ge=1, le=10_000)
+
+
+class PlanChangeConfirmIn(PlanChangeIn):
+    #: The amount the owner was shown (`/plan-change/preview`): the change is refused if it moved.
+    expected_amount_micros: int = Field(ge=0)
+
+
+def _plan_change_error(exc: Exception) -> HTTPException:
+    return HTTPException(status_code=getattr(exc, "status", 409), detail=str(exc))
+
+
+@router.post(
+    "/organizations/{organization_id}/billing/plan-change/preview",
+    summary="What a plan change would charge now, and when it takes effect (owners)",
+)
+def preview_plan_change(
+    organization_id: uuid.UUID,
+    payload: PlanChangeIn,
+    context: OrganizationContext = Depends(RequireOrgOwner),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Website and payments session (C6). Dodo's change-plan preview for an upgrade; the renewal
+    date and the checks that must pass first for a downgrade."""
+    from app.services.billing import plan_change_service
+    from app.services.billing.payment_gateway import GatewayTransientError
+
+    try:
+        return plan_change_service.preview(
+            db, organization_id=context.organization_id, tier_key=payload.quota_tier_key, seats=payload.seats
+        ).as_dict()
+    except plan_change_service.PlanChangeError as exc:
+        raise _plan_change_error(exc)
+    except (GatewayTransientError, GatewayNotConfiguredError, GatewayPermanentError):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Dodo Payments could not price the change just now. Try again in a minute.")
+
+
+@router.post(
+    "/organizations/{organization_id}/billing/plan-change",
+    summary="Change plan: an upgrade now, a downgrade at the renewal (owners)",
+)
+def confirm_plan_change(
+    organization_id: uuid.UUID,
+    payload: PlanChangeConfirmIn,
+    context: OrganizationContext = Depends(RequireOrgOwner),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.billing import plan_change_service
+    from app.services.billing.payment_gateway import GatewayTransientError
+
+    try:
+        result = plan_change_service.apply(
+            db, organization_id=context.organization_id, actor_id=context.user_id,
+            tier_key=payload.quota_tier_key, seats=payload.seats,
+            expected_amount_micros=payload.expected_amount_micros,
+        )
+    except plan_change_service.PlanChangeError as exc:
+        db.rollback()
+        raise _plan_change_error(exc)
+    except (GatewayTransientError, GatewayNotConfiguredError):
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Dodo Payments could not make the change just now. Nothing was charged; try again.")
+    except GatewayPermanentError:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                            detail="Dodo Payments did not accept the change (the payment may have been declined). "
+                                   "Your plan has not changed.")
+    db.commit()
+    result["subscription_id"] = str(result["subscription_id"])
+    return result
+
+
+@router.delete(
+    "/organizations/{organization_id}/billing/plan-change",
+    summary="Withdraw a downgrade scheduled for the renewal (owners)",
+)
+def withdraw_plan_change(
+    organization_id: uuid.UUID,
+    context: OrganizationContext = Depends(RequireOrgOwner),
+    db: Session = Depends(get_db),
+) -> dict:
+    from app.services.billing import plan_change_service
+
+    try:
+        withdrawn = plan_change_service.withdraw(db, organization_id=context.organization_id,
+                                                 actor_id=context.user_id)
+    except plan_change_service.PlanChangeError as exc:
+        raise _plan_change_error(exc)
+    db.commit()
+    return {"withdrawn": withdrawn}
+
+
+@router.get(
+    "/organizations/{organization_id}/invoices/{invoice_id}/download",
+    summary="Download the tax invoice for a payment (Dodo Payments issues it as merchant of record)",
+    response_class=Response,
+    responses={200: {"content": {"application/pdf": {}}}},
+)
+def download_invoice(
+    organization_id: uuid.UUID,
+    invoice_id: uuid.UUID,
+    context: OrganizationContext = Depends(RequireOrgBillingReader),
+    db: Session = Depends(get_db),
+) -> Response:
+    """Website and payments session (C4). Owners, admins and billing members only.
+
+    The PDF is Dodo's: fetched server-side with the deployment's key and streamed, so the
+    customer never needs a Dodo login and the key never reaches the browser.
+    """
+    from app.services.billing.dodo_gateway import DodoObjectNotFoundError, get_dodo_gateway
+    from app.services.billing.payment_gateway import GatewayTransientError
+
+    invoice = _invoice_or_404(db, organization_id=context.organization_id, invoice_id=invoice_id)
+    if invoice.gateway != "DODO" or not invoice.gateway_invoice_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="This invoice has no document to download.")
+    try:
+        pdf = get_dodo_gateway().fetch_invoice_pdf(invoice.gateway_invoice_id)
+    except DodoObjectNotFoundError:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail="Dodo Payments has no invoice for this payment yet.")
+    except (GatewayTransientError, GatewayNotConfiguredError, GatewayPermanentError):
+        logger.warning("invoice.download_unavailable", extra={"number": invoice.number})
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                            detail="Dodo Payments could not provide the invoice just now. Try again in a minute.")
+    audit_service.record(
+        db,
+        organization_id=context.organization_id,
+        actor_id=context.user_id,
+        resource_type=AuditResourceType.INVOICE,
+        resource_id=invoice.id,
+        action=AuditAction.ACCESSED,
+        details={"event": "invoice_downloaded", "number": invoice.number, "gateway": invoice.gateway},
+    )
+    db.commit()
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{invoice.number}.pdf"',
+                 "Cache-Control": "private, no-store"},
     )
 
 

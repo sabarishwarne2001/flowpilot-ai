@@ -1,11 +1,11 @@
 """The nightly host sweeps do what their cron lines say (campaign session 3, ledger: cron rows).
 
-`deploy/cron.d/flowpilot-sweepers` runs these from the host, not the worker, and their tests only
+`deploy/cron.d/servabo-sweepers` runs these from the host, not the worker, and their tests only
 checked `--help` and dry runs. Each job is run here for real against data placed on both sides of
 its line: what is past retention goes, what is not stays.
 
-* ARCH-09 (`flowpilot-sweep arch09 --all --apply`): published outbox events older than 7 days.
-* ARCH-07 (`flowpilot-sweep arch07 --all --apply`): deleted files past the reclamation window
+* ARCH-09 (`servabo-sweep arch09 --all --apply`): published outbox events older than 7 days.
+* ARCH-07 (`servabo-sweep arch07 --all --apply`): deleted files past the reclamation window
   (row and stored object), and email-change requests past their expiry (audit retention has its
   own test, `test_audit_retention_follows_the_policy.py`).
 * identity and invitations are proven by `tests/services/test_session_service.py`,

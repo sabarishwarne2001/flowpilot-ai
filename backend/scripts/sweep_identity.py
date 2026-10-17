@@ -1,5 +1,5 @@
 """
-Identity table sweeper for FlowPilot AI (ARCH-03 R8).
+Identity table sweeper for Servabo (ARCH-03 R8).
 
 Deletes expired sessions and expired single-use tokens once they are old enough
 that nobody will need to read them.
@@ -28,7 +28,7 @@ during an incident. Add one of:
 
     # crontab, 03:17 daily — an odd minute, so it does not pile up with every
     # other job in the world that runs at 03:00
-    17 3 * * *  cd /srv/flowpilot/backend && /srv/flowpilot/.venv/bin/python -m scripts.sweep_identity
+    17 3 * * *  cd /srv/servabo/backend && /srv/servabo/.venv/bin/python -m scripts.sweep_identity
 
     # systemd timer
     OnCalendar=*-*-* 03:17:00

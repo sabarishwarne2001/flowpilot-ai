@@ -70,7 +70,7 @@ def test_the_renewal_closes_the_period_and_carries_its_overage(db, gateway, bill
     assert lines[InvoiceLineKind.OVERAGE].quantity == Decimal("500000")
     [item] = gateway.invoice_items
     assert item["invoice"] == "in_renewal" and item["amount"] == OVERAGE_CENTS and item["currency"] == "USD"
-    assert item["metadata"]["flowpilot_invoice"] == statement.number
+    assert item["metadata"]["servabo_invoice"] == statement.number
     assert statement.assembly_notes["overage_billing"]["status"] == "ON_INVOICE"
 
     # The same event again (a webhook retry) charges nothing twice.

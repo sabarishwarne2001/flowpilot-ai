@@ -19,8 +19,8 @@ For every ACTIVE ERP target of an organization holding capability.erp_posting:
      postings awaiting acknowledgement; a posting with no acknowledgement within
      the target's ack_timeout_hours is FAILED (the review hub, posting.failed).
 
-Scheduled every 10 minutes (deploy/cron.d/flowpilot-sweepers), dispatched by
-`flowpilot-sweep erp_postings` (deploy/bin/flowpilot-sweep, RH-4 G14).
+Scheduled every 10 minutes (deploy/cron.d/servabo-sweepers), dispatched by
+`servabo-sweep erp_postings` (deploy/bin/servabo-sweep, RH-4 G14).
 """
 
 from __future__ import annotations

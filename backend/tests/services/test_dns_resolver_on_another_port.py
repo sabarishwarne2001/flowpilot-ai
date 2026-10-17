@@ -19,7 +19,7 @@ from scripts import e2e_dns
 
 pytestmark = pytest.mark.no_db
 
-TOKEN = "flowpilot-site-verification=2c624232cdd221771294dfbb310aca00"
+TOKEN = "servabo-site-verification=2c624232cdd221771294dfbb310aca00"
 
 
 @pytest.fixture
@@ -44,10 +44,10 @@ def test_a_published_record_is_read_from_a_resolver_on_another_port(resolver) ->
     assert result.contains(TOKEN)
 
 
-def test_the_flowpilot_subdomain_and_a_missing_name(resolver) -> None:
+def test_the_servabo_subdomain_and_a_missing_name(resolver) -> None:
     records, _ = resolver
-    records["_flowpilot.acme.example.com"] = [TOKEN]
-    assert dns_service.lookup_txt("acme.example.com", subdomain="_flowpilot").contains(TOKEN)
+    records["_servabo.acme.example.com"] = [TOKEN]
+    assert dns_service.lookup_txt("acme.example.com", subdomain="_servabo").contains(TOKEN)
     missing = dns_service.lookup_txt("nobody.example.com")
     assert (missing.resolved, missing.records, missing.error) == (True, [], None)
 

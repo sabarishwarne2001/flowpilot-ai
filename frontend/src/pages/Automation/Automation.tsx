@@ -69,7 +69,7 @@ const OPERATOR_DISPLAY_MAP: Record<string, string> = {
 };
 
 /**
- * Split-pane business Automation Rules and Audit Logs control panel for FlowPilot AI.
+ * Split-pane business Automation Rules and Audit Logs control panel for Servabo.
  */
 const RuleErrorPolicyBadge: React.FC<{
   readonly policy: AutomationErrorPolicy | undefined;

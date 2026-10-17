@@ -1,5 +1,5 @@
 """
-Password reset and change for FlowPilot AI.
+Password reset and change for Servabo.
 
 Two entry points into one outcome: the stored hash changes, every session dies,
 every outstanding reset link is withdrawn, and the account holder is told.

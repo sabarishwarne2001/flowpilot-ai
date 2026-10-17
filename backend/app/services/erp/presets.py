@@ -292,7 +292,7 @@ def _qbo(kind: str) -> dict:
         return spec(kind, [F("DocNumber", P("document_number", T(21)), True), F("TxnDate", P("document_date", D())),
                            F("DueDate", P("due_date", D())), F("VendorRef.value", VENDOR_ID, True),
                            F("CurrencyRef.value", P("currency")),
-                           F("PrivateNote", CAT(K("FlowPilot: "), P("source.label"), sep=""))],
+                           F("PrivateNote", CAT(K("Servabo: "), P("source.label"), sep=""))],
                     L("Line", line, "lines_with_tax"))
     if kind == v.OBJECT_PURCHASE_ORDER:
         return spec(kind, [F("DocNumber", P("document_number", T(21)), True), F("TxnDate", P("document_date", D())),
@@ -323,7 +323,7 @@ def _zoho(kind: str) -> dict:
         return spec(kind, [F("vendor_id", VENDOR_ID, True), F("bill_number", P("document_number"), True),
                            F("date", P("document_date", D()), True), F("due_date", P("due_date", D())),
                            F("reference_number", P("po_reference")),
-                           F("notes", CAT(K("FlowPilot: "), P("source.label")))],
+                           F("notes", CAT(K("Servabo: "), P("source.label")))],
                     L("line_items", bill_line, "lines_with_tax"))
     if kind == v.OBJECT_PURCHASE_ORDER:
         return spec(kind, [F("vendor_id", VENDOR_ID, True), F("purchaseorder_number", P("document_number")),
@@ -403,7 +403,7 @@ def _netsuite(kind: str) -> dict:
         return spec(kind, [F("entity.id", VENDOR_ID, True), F("tranDate", P("document_date", D()), True),
                            F("tranId", P("document_number", T(45)), True), F("dueDate", P("due_date", D())),
                            F("currency.id", P("currency", LK("settings", "null"))),
-                           F("memo", CAT(K("FlowPilot: "), P("source.label")))],
+                           F("memo", CAT(K("Servabo: "), P("source.label")))],
                     L("expense.items", [F("account.id", LINE_ACCOUNT, True),
                                         F("amount", P("line.amount", N(output="number")), True),
                                         F("memo", P("line.description"))], "lines_with_tax"))

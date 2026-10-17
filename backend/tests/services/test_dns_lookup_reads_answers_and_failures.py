@@ -24,7 +24,7 @@ from app.services.identity import dns_service
 
 pytestmark = pytest.mark.no_db
 
-TOKEN = "flowpilot-verify=8f14e45fceea167a5a36dedd4bea2543"
+TOKEN = "servabo-verify=8f14e45fceea167a5a36dedd4bea2543"
 
 
 def _txt(*strings: str) -> dns.rdata.Rdata:
@@ -51,11 +51,11 @@ def answer(monkeypatch: pytest.MonkeyPatch):
 
 def test_a_record_split_into_strings_is_read_whole(answer) -> None:
     asked = answer([_txt("v=spf1 -all"), _txt(TOKEN[:20], TOKEN[20:])])
-    result = dns_service.lookup_txt("acme.example.com", subdomain="_flowpilot")
+    result = dns_service.lookup_txt("acme.example.com", subdomain="_servabo")
     assert result.resolved and result.error is None
     assert result.records == ["v=spf1 -all", TOKEN]
     assert result.contains(TOKEN)
-    assert asked[0][0] == "_flowpilot.acme.example.com"
+    assert asked[0][0] == "_servabo.acme.example.com"
 
 
 @pytest.mark.parametrize("missing", [dns.resolver.NXDOMAIN(), dns.resolver.NoAnswer()])

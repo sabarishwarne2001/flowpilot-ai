@@ -1,0 +1,16 @@
+---
+import Base from "../layouts/Base.astro";
+import { APP } from "../config/site";
+---
+<Base title="Page not found" description="This page does not exist. Go to Servabo's home page, pricing, or sign in to the app." noindex>
+  <section class="page flex min-h-[50vh] flex-col items-start justify-center pt-20">
+    <p class="eyebrow">404</p>
+    <h1 class="display mt-4">This page was not kept.</h1>
+    <p class="lede mt-5 max-w-xl">The address may be mistyped, or the page has moved. Everything else is where it should be.</p>
+    <div class="mt-8 flex flex-wrap gap-3">
+      <a href="/" class="btn-primary">Home</a>
+      <a href="/pricing" class="btn-quiet">Pricing</a>
+      <a href={APP.signIn} class="btn-quiet">Sign in to the app</a>
+    </div>
+  </section>
+</Base>

@@ -1,7 +1,7 @@
 /**
  * ARCH47-S2:new-target — register where postings go (workspace admins). The
  * choices come from the server's catalog: a format, how it travels, which ERP
- * preset reads it, how the ERP acknowledges it, and how FlowPilot signs in.
+ * preset reads it, how the ERP acknowledges it, and how Servabo signs in.
  * The credential is sent once and stored encrypted; it is never shown again.
  * Every URL and host is checked by the server before the target is saved.
  */
@@ -142,7 +142,7 @@ export const NewTarget: React.FC<NewTargetProps> = ({ workspaceId, catalog, onCr
       <p className={HINT}>
         Takes: {objects.map((k) => OBJECT_LABELS[k]).join(", ") || "—"}.
         {presetInfo?.idempotency ? ` Duplicate protection at the ERP: ${presetInfo.idempotency}.` : ""}
-        {presetInfo && presetInfo.probe_objects.length > 0 ? " FlowPilot checks the ERP before any resend." : ""}
+        {presetInfo && presetInfo.probe_objects.length > 0 ? " Servabo checks the ERP before any resend." : ""}
       </p>
       <label className="block space-y-1">
         <span className={FIELD_LABEL}>Configuration (JSON)</span>

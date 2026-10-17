@@ -39,7 +39,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, WebSocket, stat
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.schemas.collab import (BreakLockResult, CommentCreated, EditComment, LiveState, LockOut, NewComment,
                                 NewThread, ParagraphList, ParagraphOut, ThreadCreated, ThreadList, ThreadOut)
 from app.services.collab import gate
@@ -66,7 +66,7 @@ def _item(db: Session, context: Any, kind: str, item_id: uuid.UUID) -> Any:
     return item
 
 
-class CollabRefusedError(FlowPilotError):
+class CollabRefusedError(ServaboError):
     """A thread refusal in the ARCH-01 envelope `{code, message, details}` (the console branches on `code`)."""
 
     status_code = 400

@@ -237,7 +237,7 @@ def statement(seed: int = 44, *, planted: bool = False, pages: int = 3) -> Case:
     while i < len(txns) and len(canvases) < pages:
         c = Canvas()
         n = len(canvases) + 1
-        c.text(36, 30, "FLOWPILOT DEMO BANK", size=12, bold=True)
+        c.text(36, 30, "SERVABO DEMO BANK", size=12, bold=True)
         if n == 1:
             c.text(36, 48, "Statement of Account", size=10)
         c.text(36, 70, "Account No :")
@@ -295,7 +295,7 @@ def statement(seed: int = 44, *, planted: bool = False, pages: int = 3) -> Case:
     canvases = []
     for n, placed in enumerate(rows_per_page, start=1):
         c = Canvas()
-        c.text(36, 30, "FLOWPILOT DEMO BANK", size=12, bold=True)
+        c.text(36, 30, "SERVABO DEMO BANK", size=12, bold=True)
         if n == 1:
             c.text(36, 48, "Statement of Account", size=10)
         c.text(36, 70, "Account No :")

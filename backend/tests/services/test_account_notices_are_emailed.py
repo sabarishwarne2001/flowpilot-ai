@@ -195,7 +195,7 @@ def test_essential_mail_goes_through_the_platform_relay_with_a_link_to_act(
 
     from app.services.email_service import email_service
 
-    monkeypatch.setattr(settings, "PLATFORM_SMTP_HOST", "relay.flowpilot.test")
+    monkeypatch.setattr(settings, "PLATFORM_SMTP_HOST", "relay.servabo.test")
     monkeypatch.setattr(settings, "PLATFORM_SMTP_USERNAME", "apikey")
     monkeypatch.setattr(settings, "PLATFORM_SMTP_PASSWORD", SecretStr("test-only"))
     sent: list[dict] = []
@@ -217,7 +217,7 @@ def test_essential_mail_goes_through_the_platform_relay_with_a_link_to_act(
     assert claimed.status is NotificationDeliveryStatus.DELIVERED
 
     (mail,) = sent
-    assert mail["settings"].smtp_host == "relay.flowpilot.test"
+    assert mail["settings"].smtp_host == "relay.servabo.test"
     assert mail["recipient"] == finance.user.email
     assert mail["subject"] == "Organization is read-only"
     frontend = settings.FRONTEND_URL.rstrip("/")

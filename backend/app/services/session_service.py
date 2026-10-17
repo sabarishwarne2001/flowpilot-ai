@@ -1,5 +1,5 @@
 """
-Refresh session lifecycle for FlowPilot AI.
+Refresh session lifecycle for Servabo.
 """
 
 from __future__ import annotations

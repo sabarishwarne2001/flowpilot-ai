@@ -125,9 +125,7 @@ const PacketSplits = lazy(() => import("@/pages/packets/PacketSplits"));
 const SplitReview = lazy(() => import("@/pages/packets/SplitReview"));
 const DocumentRequestUpload = lazy(() => import("@/pages/public/DocumentRequestUpload"));
 // Campaign session 4: the public pricing and legal pages.
-const Pricing = lazy(() => import("@/pages/public/Pricing"));
-const Terms = lazy(() => import("@/pages/public/Terms"));
-const Privacy = lazy(() => import("@/pages/public/Privacy"));
+const WebsiteRedirect = lazy(() => import("@/pages/public/WebsiteRedirect"));
 // ARCH44-S2:lazy-pages
 const Tables = lazy(() => import("@/pages/tables/Tables"));
 const TableViewer = lazy(() => import("@/pages/tables/TableViewer"));
@@ -201,6 +199,7 @@ import SuperAdminGuard from "@/routes/SuperAdminGuard";
 import TenantGuard from "@/routes/TenantGuard";
 
 import { ROUTE_PATTERNS } from "@/routes/tenantPaths";
+import { WEBSITE } from "@/config/website";
 import { ROUTES } from "@/constants/routes";
 
 /** The flat addresses from before ARCH-01, forwarded into the person's workspace. */
@@ -237,11 +236,11 @@ function AppRoutes() {
           <Route path={ROUTES.VERIFY_EMAIL} element={<VerifyEmail />} />
           {/* ARCH43-S2:public-request-route. No account: the single-use token is the credential. */}
           <Route path="/request/:token" element={<DocumentRequestUpload />} />
-          {/* Campaign session 4 (CAMPAIGN-MAP 4.3). Outside PublicRoute and PrivateRoute:
-              readable signed out and signed in. */}
-          <Route path={ROUTES.PRICING} element={<Pricing />} />
-          <Route path={ROUTES.TERMS} element={<Terms />} />
-          <Route path={ROUTES.PRIVACY} element={<Privacy />} />
+          {/* Campaign session 4 (CAMPAIGN-MAP 4.3), outside PublicRoute and PrivateRoute. Website
+              session (B7): these pages live on the public website now; old links are sent there. */}
+          <Route path={ROUTES.PRICING} element={<WebsiteRedirect to={WEBSITE.pricing} title="Plans and pricing" />} />
+          <Route path={ROUTES.TERMS} element={<WebsiteRedirect to={WEBSITE.terms} title="Terms of Service" />} />
+          <Route path={ROUTES.PRIVACY} element={<WebsiteRedirect to={WEBSITE.privacy} title="Privacy Policy" />} />
           <Route
             path={ROUTES.FORGOT_PASSWORD}
             element={<ForgotPassword />}

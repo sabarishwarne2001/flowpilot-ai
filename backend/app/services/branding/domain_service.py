@@ -18,7 +18,7 @@ THE THREE REFUSALS THAT MATTER
 ==============================
 
 1.  `assert_claimable_hostname` refuses any hostname at or under a
-    PLATFORM_RESERVED_HOSTS entry. A tenant who claimed `app.flowpilot.ai`
+    PLATFORM_RESERVED_HOSTS entry. A tenant who claimed `app.servabo.app`
     would be served the platform's own origin from a page they control, and
     every session cookie scoped to that domain would be delivered to them.
     An EMPTY reserved list refuses every claim rather than allowing all of
@@ -132,12 +132,12 @@ def reserved_hosts() -> frozenset[str]:
 def _is_reserved(hostname: str) -> bool:
     """True if `hostname` is, or sits beneath, a reserved host.
 
-    Suffix matching, not equality. Reserving `flowpilot.ai` must also reserve
-    `login.flowpilot.ai` and `anything.else.flowpilot.ai`, because a subdomain
+    Suffix matching, not equality. Reserving `servabo.app` must also reserve
+    `login.servabo.app` and `anything.else.servabo.app`, because a subdomain
     of the platform origin inherits cookies scoped to the parent.
 
-    The check is on label boundaries: `notflowpilot.ai` is not beneath
-    `flowpilot.ai`, and a naive `endswith` would say it was.
+    The check is on label boundaries: `notservabo.app` is not beneath
+    `servabo.app`, and a naive `endswith` would say it was.
     """
     reserved = reserved_hosts()
     if hostname in reserved:
@@ -172,7 +172,7 @@ def assert_claimable_hostname(hostname: str) -> None:
 
     if _is_reserved(hostname):
         raise DomainPolicyError(
-            f"{hostname} is a FlowPilot platform hostname and cannot be "
+            f"{hostname} is a Servabo platform hostname and cannot be "
             "claimed."
         )
 

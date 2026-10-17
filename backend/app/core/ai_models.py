@@ -1,11 +1,11 @@
 """
-Supported AI models registry for FlowPilot AI.
+Supported AI models registry for Servabo.
 Dynamically read by the frontend AI Settings dropdowns.
 
 Campaign session 2 (N-054). Two lists:
 
 * AI_MODELS: every model a workspace may select.
-* PLATFORM_SERVED_MODELS: the models FlowPilot serves on its OWN provider keys, inside the
+* PLATFORM_SERVED_MODELS: the models Servabo serves on its OWN provider keys, inside the
   plans' token allowances. A plan's allowance is counted in tokens, so every model it covers
   must cost about the same per token: GPT-OSS 20B and 120B do ($0.075-$0.60 per million on
   Groq). The others cost up to 33 times more (Gemini 2.5 Pro $1.25 / $10.00, Qwen 3.8 27B

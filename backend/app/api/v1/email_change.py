@@ -1,5 +1,5 @@
 """
-Email change endpoints for FlowPilot AI.
+Email change endpoints for Servabo.
 """
 
 from __future__ import annotations

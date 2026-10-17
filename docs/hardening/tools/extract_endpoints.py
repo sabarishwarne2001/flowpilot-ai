@@ -1,4 +1,4 @@
-"""Static endpoint extractor for FlowPilot backend (Phase 0 mapping).
+"""Static endpoint extractor for Servabo backend (Phase 0 mapping).
 
 Parses app/api/v1/**.py with ast, finds every @<router>.<method>(path) handler,
 resolves the mount prefix from router.py/main.py, and classifies auth, role,

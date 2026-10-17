@@ -47,6 +47,7 @@ def test_role_is_case_and_whitespace_insensitive():
     "alias,target",
     [
         ("worker-delivery", "worker-relay"),
+        ("worker-billing", "worker-relay"),
         ("worker-stripe", "worker-relay"),
         ("migrate", "sweeper"),
         ("cron", "sweeper"),

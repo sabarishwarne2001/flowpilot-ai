@@ -43,7 +43,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-E2E_PASSWORD = "E2e-FlowPilot-Pass-2026!"
+E2E_PASSWORD = "E2e-Servabo-Pass-2026!"
 EMAIL_DOMAIN = "e2e.example.com"
 
 
@@ -118,7 +118,7 @@ TENANTS: tuple[SeedTenant, ...] = (
     SeedTenant(
         key="P",
         slug="e2e-platform-ops",
-        name="FlowPilot Platform Ops",
+        name="Servabo Platform Ops",
         plan="free",
         workspaces=(("ops", "Platform Ops"),),
         users=(_user("P", "superadmin", "OWNER", "ADMIN", "Sam Superadmin"),),
@@ -294,7 +294,12 @@ def _seed_billing(db, organization, tier, seats: int, owner_email: str) -> dict[
     return {"customer_id": account.gateway_customer_id or customer_id, "subscription_id": subscription_id}
 
 
-def seed(db) -> dict[str, Any]:
+def seed(db, tenants: tuple[SeedTenant, ...] | None = None) -> dict[str, Any]:
+    """Converge the database on `tenants` (default: the browser suite's own, plus its fixtures).
+
+    `scripts/seed_website_demo.py` passes its single demonstration organization; the suite's
+    notices and dead job are seeded only with the default tenants.
+    """
     from app.core.security import get_password_hash
     from app.models.organization import (
         MembershipStatus,
@@ -313,7 +318,7 @@ def seed(db) -> dict[str, Any]:
     password_hash = get_password_hash(E2E_PASSWORD)
     summary: dict[str, Any] = {"password": E2E_PASSWORD, "tenants": {}, "users": {}}
 
-    for tenant in TENANTS:
+    for tenant in tenants if tenants is not None else TENANTS:
         tier = _tier(db, tenant.plan)
         organization = db.execute(
             select(Organization).where(Organization.slug == tenant.slug)
@@ -428,8 +433,9 @@ def seed(db) -> dict[str, Any]:
             "billing": billing,
         }
 
-    _seed_organization_notices(db)
-    _seed_dead_job(db)
+    if tenants is None:
+        _seed_organization_notices(db)
+        _seed_dead_job(db)
     db.commit()
     quota_service.clear_cache()
     return summary

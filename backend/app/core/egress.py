@@ -39,7 +39,7 @@ THE DECISION
        must match one of its allow rules.
 
 A refusal FAILS CLOSED: `EgressDenied` (a `ForbiddenAddressError`, so every existing caller already treats it as
-permanent -- never retried -- and a `FlowPilotError`: 403 `EGRESS_DENIED` at the API) is raised before a byte is
+permanent -- never retried -- and a `ServaboError`: 403 `EGRESS_DENIED` at the API) is raised before a byte is
 sent. It is recorded in `egress_refusals` (one row per organization, channel, host, reason and hour, with a
 count) and, the first time in that hour, in the organization's audit log. A tenant policy that cannot be read
 (the database is unreachable) is a refusal too (`POLICY_UNAVAILABLE`), never an allowance.
@@ -73,7 +73,8 @@ from datetime import datetime, timezone
 from typing import Any, Iterator, Optional
 from urllib.parse import urlsplit
 
-from app.core.exceptions import FlowPilotError
+from app.core import legacy_names
+from app.core.exceptions import ServaboError
 from app.core.ssrf_client import ForbiddenAddressError, SSRFSafeHTTPClient, SSRFResponse
 
 logger = logging.getLogger("app.core.egress")
@@ -148,7 +149,7 @@ _ZERO_UUID = uuid.UUID(int=0)
 _UNSET: Any = object()
 
 
-class EgressDenied(ForbiddenAddressError, FlowPilotError):
+class EgressDenied(ForbiddenAddressError, ServaboError):
     """Raised BEFORE a connection opens. Permanent: a caller must not retry it."""
 
     status_code = 403
@@ -355,7 +356,7 @@ def operator_destinations() -> dict[str, list[HostPattern]]:
     for resolver in str(getattr(s, "DNS_RESOLVERS", "") or "").split(","):
         if resolver.strip():
             add(DNS, resolver.strip())
-    backup = _url_host_port(os.environ.get("FLOWPILOT_BACKUP_S3_ENDPOINT"))
+    backup = _url_host_port(legacy_names.env("BACKUP_S3_ENDPOINT"))
     if backup:
         add(BACKUP, backup[0], backup[1])
     for entry in str(getattr(s, "EGRESS_OPERATOR_HOSTS", "") or "").replace(";", ",").split(","):

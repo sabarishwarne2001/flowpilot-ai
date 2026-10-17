@@ -1,5 +1,7 @@
 # Phase 4 — Live engine hardening and core feature verification
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Branch `hardening/phase-4-core-engines`. Written 2026-10-05 at the Phase 4 checkpoint._
 
 ## 1. In plain language

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 
-class HelmError(FlowPilotError):
+class HelmError(ServaboError):
     status_code = 409
     code = "HELM_CONFLICT"
 

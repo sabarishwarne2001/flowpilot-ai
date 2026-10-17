@@ -1,5 +1,5 @@
 """
-Data validation and serialization schemas (Pydantic v2) for FlowPilot AI.
+Data validation and serialization schemas (Pydantic v2) for Servabo.
 
 Enforces parameter boundaries on user registration and login parameters, 
 and maps standardized, secure response payloads.

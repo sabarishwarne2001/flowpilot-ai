@@ -1,5 +1,5 @@
 """
-File validation, sanitization, and path-security utility helpers for FlowPilot AI.
+File validation, sanitization, and path-security utility helpers for Servabo.
 
 Enforces absolute path boundaries to block directory traversal attacks and handles 
 secure, unique disk filename generation.

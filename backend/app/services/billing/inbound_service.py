@@ -170,7 +170,7 @@ def record_event(
     created = row_id is not None
 
     logger.info(
-        "stripe_inbound.recorded" if created else "stripe_inbound.replayed",
+        "billing_inbound.recorded" if created else "billing_inbound.replayed",
         extra={
             "stripe_event_id": event.id,
             "event_type": event.type,
@@ -365,7 +365,7 @@ def mark_failed(
             result={"dead_reason": "attempt_ceiling", "attempts": attempts},
         )
         logger.error(
-            "stripe_inbound.dead_letter",
+            "billing_inbound.dead_letter",
             extra={
                 "stripe_inbound_event_id": str(event_id),
                 "attempts": attempts,

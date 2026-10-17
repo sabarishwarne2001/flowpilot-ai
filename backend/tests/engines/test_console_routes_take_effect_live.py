@@ -88,7 +88,7 @@ def _schedule(engines: Engines) -> dict:
     engines.plan("enterprise")
     destination = engines.post("/analytics/destinations", {
         "label": f"bucket-{uuid.uuid4().hex[:6]}",
-        "credential": {"kind": "S3", "bucket": "acme-analytics", "region": "eu-west-1", "prefix": "flowpilot/",
+        "credential": {"kind": "S3", "bucket": "acme-analytics", "region": "eu-west-1", "prefix": "servabo/",
                        "access_key_id": "AKIAEXAMPLE0000000000", "secret_access_key": "s" * 40},
     }, org=True)
     assert destination.status_code == 201, destination.text

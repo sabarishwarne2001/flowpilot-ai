@@ -1,5 +1,5 @@
 """
-Automation Rules API router endpoints for FlowPilot AI.
+Automation Rules API router endpoints for Servabo.
 """
 
 import asyncio

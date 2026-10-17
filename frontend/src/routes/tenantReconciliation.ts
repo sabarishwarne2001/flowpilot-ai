@@ -1,5 +1,5 @@
 /**
- * URL/state reconciliation for FlowPilot AI.
+ * URL/state reconciliation for Servabo.
  *
  * Both the URL and the persisted store name a tenant, and they can disagree —
  * a deep link, a back button, a second browser tab.

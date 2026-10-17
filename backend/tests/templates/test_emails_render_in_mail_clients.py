@@ -45,22 +45,22 @@ def _grants() -> list:
 
 EMAILS = {
     "verify": lambda: render_verify_email(recipient_email="a@example.com", verify_link=LINK, expiry_str="24 hours",
-                                          brand_name="FlowPilot"),
+                                          brand_name="Servabo"),
     "reset": lambda: render_password_reset(recipient_email="a@example.com", reset_link=LINK, expiry_str="1 hour",
-                                           brand_name="FlowPilot"),
+                                           brand_name="Servabo"),
     "invitation": lambda: render_organization_invitation(
         invited_email="b@example.com", organization_name="Acme", inviter_email="a@example.com",
         organization_role_display="Member", grants=_grants(), accept_link=LINK,
-        expires_at=NOW + timedelta(days=7), brand_name="FlowPilot"),
+        expires_at=NOW + timedelta(days=7), brand_name="Servabo"),
     "notice": lambda: render_account_notice(
         title="Your card was declined", body="Update your card to keep the workspace writable.",
         organization_name="Acme", category_label="Billing", essential=True, action_url=LINK,
-        action_label="Update card", preferences_url="https://app.example.com/prefs", brand_name="FlowPilot"),
+        action_label="Update card", preferences_url="https://app.example.com/prefs", brand_name="Servabo"),
     "trial": lambda: render_trial_notice(kind="ENDING", organization_names=["Acme"], ends_at=NOW + timedelta(days=2),
-                                         plans_link=LINK, brand_name="FlowPilot"),
+                                         plans_link=LINK, brand_name="Servabo"),
     "operator": lambda: render_operator_alert(subject="Dead jobs", body="3 jobs failed for good.", occurrences=3,
                                               first_seen_at=NOW, last_seen_at=NOW, console_url=LINK,
-                                              brand_name="FlowPilot"),
+                                              brand_name="Servabo"),
     # Flagship session: Helm's emails (the Monday briefing, and what its hands send to suppliers and customers).
     "helm-briefing": lambda: render_briefing(
         brand_name="Example Cloud", organization_name="Meridian Wholesale", book_name="Main", week_of="19 Oct 2026",
@@ -115,3 +115,42 @@ def test_the_email_suits_every_mail_client(name: str) -> None:
         assert not buttons, "an email with nothing to follow has no button"
         return
     assert LINK.split("#")[0] in text_body, "the plain-text part lacks the link"
+
+
+# Website and payments session (Part A8): mail sent as Servabo carries the Servabo mark; mail sent
+# under an organization's own brand never does.
+
+
+def test_servabo_mail_shows_the_mark_beside_the_name() -> None:
+    _, html, _ = EMAILS["verify"]()
+    header = html.split('<div class="content"', 1)[0]
+    assert re.search(r'<span class="mark" aria-hidden="true" style="[^"]*background-color:#1555e0[^"]*">S</span>', header)
+    assert ">Servabo</span>" in header
+    assert "<img" not in header, "no remote image: clients hold them, and some emails must carry no address"
+
+
+def test_white_label_mail_has_no_servabo_mark() -> None:
+    _, html, _ = EMAILS["helm-briefing"]()
+    assert 'class="mark"' not in html
+    assert ">Example Cloud</span>" in html
+
+
+# Website and payments session (Part B7): Servabo's own mail links its terms, privacy policy and
+# refund policy on the website, in emails that already carry a link; never under another brand,
+# and never in an email that must stay free of addresses.
+
+
+def test_servabo_mail_with_a_link_ends_with_the_legal_pages() -> None:
+    from app.core.config import settings
+
+    _, html, _ = EMAILS["verify"]()
+    footer = html.split('<div class="footer"', 1)[1]
+    for path, label in (("terms", "Terms"), ("privacy", "Privacy"), ("refunds", "Refunds")):
+        assert f'href="{settings.WEBSITE_URL}/legal/{path}"' in footer and f">{label}</a>" in footer, path
+    assert settings.WEBSITE_URL == "https://servabo.app"
+
+
+@pytest.mark.parametrize("name", sorted(LINKLESS | {"helm-briefing"}))
+def test_linkless_or_white_label_mail_has_no_legal_links(name: str) -> None:
+    _, html, _ = EMAILS[name]()
+    assert 'class="legal"' not in html and "/legal/" not in html

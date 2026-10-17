@@ -1,5 +1,5 @@
 """
-Automated API Routing validation script for FlowPilot AI.
+Automated API Routing validation script for Servabo.
 """
 import os
 import sys

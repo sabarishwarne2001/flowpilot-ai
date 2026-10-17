@@ -120,7 +120,7 @@ class PartnerCreate(BaseModel):
 class PartnerUpdate(BaseModel):
     """What a partner's own owner may change (campaign session 3): its name and billing contact.
 
-    The standing (`status`) and the platform's `notes` are FlowPilot's to set
+    The standing (`status`) and the platform's `notes` are Servabo's to set
     (`PartnerPlatformUpdate`); a partner marking itself ACTIVE again after a suspension is refused
     here as an unknown field (422).
     """

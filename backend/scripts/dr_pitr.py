@@ -3,7 +3,7 @@
 
     python scripts/dr_pitr.py archive-wal %p %f            # PostgreSQL's archive_command (see below)
     python scripts/dr_pitr.py restore-wal %f %p            # restore_command during a recovery
-    python scripts/dr_pitr.py base-backup                  # pg_basebackup of the primary into FLOWPILOT_BASEBACKUP_DIR
+    python scripts/dr_pitr.py base-backup                  # pg_basebackup of the primary into SERVABO_BASEBACKUP_DIR
     python scripts/dr_pitr.py heartbeat                    # one dr_heartbeats row (cron: every minute)
     python scripts/dr_pitr.py restore --into DIR --port P [--target-time ISO] [--base DIR]
     python scripts/dr_pitr.py drill --scratch [--record] [--json out.json]   # self-contained, timed, verified
@@ -19,11 +19,11 @@ The primary archives every WAL segment as it completes (postgresql.conf):
     archive_command = '<venv>/bin/python <repo>/backend/scripts/dr_pitr.py archive-wal "%p" "%f"'
     archive_timeout = 60        # a quiet primary still closes a segment every minute: the RPO ceiling
 
-`archive-wal` copies the segment into FLOWPILOT_WAL_ARCHIVE_DIR (write to a temporary name, fsync, rename; an
+`archive-wal` copies the segment into SERVABO_WAL_ARCHIVE_DIR (write to a temporary name, fsync, rename; an
 existing segment with the same content is success, with different content a refusal -- never an overwrite).
 Keep that directory on a different disk or host (NFS / SMB share / a mounted bucket): an archive on the primary's
 disk is lost with it. `base-backup` runs nightly (pg_basebackup -Ft -z -X none --checkpoint=fast) and keeps the
-newest FLOWPILOT_BASEBACKUP_KEEP (7). A recovery restores the newest base backup older than the target, replays
+newest SERVABO_BASEBACKUP_KEEP (7). A recovery restores the newest base backup older than the target, replays
 the archive to the target instant (recovery_target_time, then promote) or to the end of the archive.
 
 WHAT "MEASURED" MEANS
@@ -66,6 +66,7 @@ from typing import Any, Optional
 BACKEND = Path(__file__).resolve().parents[1]
 if str(BACKEND) not in sys.path:
     sys.path.insert(0, str(BACKEND))
+from app.core import legacy_names  # noqa: E402  (one release of SERVABO_* names)
 
 UTC = dt.timezone.utc
 TARGET_RPO_SECONDS = 300
@@ -206,7 +207,7 @@ def restore_wal(name: str, dest: str, archive: Path) -> int:
 # --------------------------------------------------------------------------- base backup and restore
 
 
-def base_backup(runner: Runner, *, dsn_env: dict, out_root: Path, keep: int = 7, label: str = "flowpilot") -> Path:
+def base_backup(runner: Runner, *, dsn_env: dict, out_root: Path, keep: int = 7, label: str = "servabo") -> Path:
     stamp = now().strftime("%Y%m%dT%H%M%SZ")
     target = out_root / stamp
     out_root.mkdir(parents=True, exist_ok=True)
@@ -216,8 +217,8 @@ def base_backup(runner: Runner, *, dsn_env: dict, out_root: Path, keep: int = 7,
                 "-l", f"{label}-{stamp}", "--no-password"], env=dsn_env, timeout=6 * 3600)
     meta = {"started_at": started.isoformat(), "finished_at": now().isoformat(), "label": f"{label}-{stamp}",
             "host": socket.gethostname()}
-    (target / "flowpilot-backup.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-    backups = sorted(p for p in out_root.iterdir() if p.is_dir() and (p / "flowpilot-backup.json").exists())
+    (target / "servabo-backup.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    backups = sorted(p for p in out_root.iterdir() if p.is_dir() and (p / "servabo-backup.json").exists())
     for old in backups[:-keep]:
         shutil.rmtree(old, ignore_errors=True)
     return target
@@ -251,7 +252,7 @@ def restore(runner: Runner, *, base: Path, archive: Path, into: Path, port: int,
     if target_time is not None:
         lines += [f"recovery_target_time = '{target_time.isoformat()}'", "recovery_target_inclusive = true"]
     with open(conf, "a", encoding="utf-8") as handle:
-        handle.write("\n# flowpilot dr_pitr restore\n" + "\n".join(lines) + "\n")
+        handle.write("\n# servabo dr_pitr restore\n" + "\n".join(lines) + "\n")
     (into / "recovery.signal").write_text("", encoding="utf-8")
     runner.own(into)
     log = into / "restore.log"
@@ -298,7 +299,7 @@ class Writer(threading.Thread):
 def scratch_drill(*, run_as: Optional[str], workdir: Optional[Path] = None, archive_timeout: int = 5,
                   before_backup: float = 3.0, after_backup: float = 12.0, keep: bool = False) -> dict[str, Any]:
     runner = Runner(run_as)
-    work = Path(workdir or tempfile.mkdtemp(prefix="flowpilot-pitr-"))
+    work = Path(workdir or tempfile.mkdtemp(prefix="servabo-pitr-"))
     work.mkdir(parents=True, exist_ok=True)
     os.chmod(work, 0o755)
     primary, archive, backups = work / "primary", work / "archive", work / "basebackups"
@@ -424,7 +425,7 @@ def from_archive_drill(*, run_as: Optional[str], archive: Path, backups: Path,
     with SessionLocal() as db:
         primary_beat = db.execute(text("SELECT max(beat_at) FROM dr_heartbeats")).scalar()
         dbname = db.execute(text("SELECT current_database()")).scalar()
-    work = Path(workdir or tempfile.mkdtemp(prefix="flowpilot-drill-"))
+    work = Path(workdir or tempfile.mkdtemp(prefix="servabo-drill-"))
     os.chmod(work, 0o755)
     runner.own(work)
     into, port = work / "restore", free_port()
@@ -476,14 +477,14 @@ def record(report: dict[str, Any]) -> str:
 
 
 def _dirs() -> tuple[Path, Path]:
-    archive = Path(os.environ.get("FLOWPILOT_WAL_ARCHIVE_DIR", str(BACKEND / ".flowpilot_wal_archive")))
-    backups = Path(os.environ.get("FLOWPILOT_BASEBACKUP_DIR", str(BACKEND / ".flowpilot_basebackups")))
+    archive = Path(legacy_names.env("WAL_ARCHIVE_DIR", str(legacy_names.local_directory(BACKEND, ".servabo_wal_archive"))))
+    backups = Path(legacy_names.env("BASEBACKUP_DIR", str(legacy_names.local_directory(BACKEND, ".servabo_basebackups"))))
     return archive, backups
 
 
 def main(argv: Optional[list[str]] = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--run-as", default=os.environ.get("FLOWPILOT_PG_RUN_AS"))
+    parser.add_argument("--run-as", default=legacy_names.env("PG_RUN_AS"))
     sub = parser.add_subparsers(dest="command", required=True)
     a = sub.add_parser("archive-wal")
     a.add_argument("path")
@@ -494,7 +495,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     r.add_argument("path")
     r.add_argument("--archive")
     b = sub.add_parser("base-backup")
-    b.add_argument("--keep", type=int, default=int(os.environ.get("FLOWPILOT_BASEBACKUP_KEEP", "7")))
+    b.add_argument("--keep", type=int, default=int(legacy_names.env("BASEBACKUP_KEEP", "7")))
     sub.add_parser("heartbeat")
     rs = sub.add_parser("restore")
     rs.add_argument("--into", required=True)

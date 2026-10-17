@@ -1,5 +1,5 @@
 /**
- * Declarative workspace role guard for FlowPilot AI.
+ * Declarative workspace role guard for Servabo.
  *
  * The client-side counterpart of RequireWorkspaceRole in app/api/deps.py, and
  * it takes a MINIMUM role for the same reason: workspace roles form a true

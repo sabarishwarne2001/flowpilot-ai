@@ -236,7 +236,7 @@ def test_email_settings(
     success, message = email_service.send_email(
         settings=identity.smtp,
         recipient=request.recipient,
-        subject="FlowPilot AI SMTP Test",
+        subject="Servabo SMTP Test",
         body=(
             "Your email configuration is working.\n\n"
             f"This message was sent through the {identity.transport_layer} "

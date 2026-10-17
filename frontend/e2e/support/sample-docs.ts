@@ -195,7 +195,7 @@ export const SAMPLE = {
   contract: "contract-MSA-E2E-2026.pdf",
   packet: "scanned-packet-E2E.pdf",
   tableCsv: "invoice-lines-E2E.csv",
-  logoPng: "flowpilot-logo.png",
+  logoPng: "servabo-mark.png",
   policyPdf: "Procurement_Policy.pdf",
 } as const;
 
@@ -216,7 +216,7 @@ export function writeSampleDocuments(): void {
     [SAMPLE.contract]: buildPdf([CONTRACT_MSA]),
     [SAMPLE.packet]: buildPdf(PACKET_PAGES),
     [SAMPLE.tableCsv]: Buffer.from(TABLE_CSV, "utf8"),
-    [SAMPLE.logoPng]: fs.readFileSync(path.join(REPO_ROOT, "frontend", "public", "flowpilot-logo.png")),
+    [SAMPLE.logoPng]: fs.readFileSync(path.join(REPO_ROOT, "frontend", "e2e", "support", "servabo-mark.png")),
     [SAMPLE.policyPdf]: fs.readFileSync(
       path.join(REPO_ROOT, "backend", "evaluation", "corpus", "Procurement_Policy.pdf"),
     ),

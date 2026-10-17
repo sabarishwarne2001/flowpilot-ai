@@ -1,5 +1,5 @@
 /**
- * Document processing settings API service for FlowPilot AI.
+ * Document processing settings API service for Servabo.
  *
  * Workspace-addressed since backend ARCH-01 Step 9c-2. See aiSettings.ts for
  * why the identifier is an explicit parameter.

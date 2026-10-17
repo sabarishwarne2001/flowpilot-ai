@@ -88,7 +88,7 @@ class WebhookDeliveryAttempt(Base, UUIDMixin, TimestampMixin):
         JSONB,
         nullable=False,
         server_default=text("'{}'::jsonb"),
-        doc="REDACTED. X-FlowPilot-Signature is replaced with a marker before storage.",
+        doc="REDACTED. X-Servabo-Signature is replaced with a marker before storage.",
     )
     resolved_ip: Mapped[Optional[str]] = mapped_column(String(45), nullable=True)
 

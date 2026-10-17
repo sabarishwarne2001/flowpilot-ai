@@ -131,7 +131,7 @@ class EndpointCreated(BaseModel):
     endpoint: EndpointOut
     secret: str = Field(
         ...,
-        description="Store this now. FlowPilot cannot show it again.",
+        description="Store this now. Servabo cannot show it again.",
     )
 
 
@@ -499,7 +499,7 @@ def send_test_event(
         event_type=TEST_EVENT_TYPE,
         payload={
             "endpoint_id": str(endpoint.id),
-            "message": "This is a test event from FlowPilot. No action is needed.",
+            "message": "This is a test event from Servabo. No action is needed.",
             "requested_at": datetime.now(timezone.utc).isoformat(),
         },
         status=WebhookDeliveryStatus.PENDING,

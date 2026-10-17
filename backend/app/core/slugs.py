@@ -1,5 +1,5 @@
 """
-Slug generation and validation utilities for FlowPilot AI.
+Slug generation and validation utilities for Servabo.
 
 This is the single, project-wide entry point for converting human-readable
 names (organization names, workspace names) into URL-safe tenant identifiers.
@@ -12,7 +12,7 @@ Slugs form part of the public URL surface:
 
 They are therefore constrained to the DNS label grammar (lowercase letters,
 digits, and internal hyphens, maximum 63 characters). This keeps future
-subdomain-based tenant addressing (acme.flowpilot.ai) available without a
+subdomain-based tenant addressing (acme.servabo.app) available without a
 second migration, at no cost today.
 
 Generic by design: this module knows nothing about the database, SQLAlchemy,
@@ -39,7 +39,7 @@ from app.core.exceptions import (
 # ============================================================================
 
 #: Maximum slug length. Matches the DNS label limit so that slugs remain
-#: usable as subdomains if tenant addressing moves to acme.flowpilot.ai.
+#: usable as subdomains if tenant addressing moves to acme.servabo.app.
 MAX_SLUG_LENGTH: int = 63
 
 #: Minimum slug length. Two characters permits legitimate short names ("hr",

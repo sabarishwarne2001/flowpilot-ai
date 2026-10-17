@@ -80,7 +80,9 @@ for (const width of WIDTHS) {
 
   test.describe(`layout at ${width}px — signed out`, () => {
     test.use({ viewport: { width, height: HEIGHT[width] } });
-    for (const path of ["/login", "/register", "/forgot-password", "/pricing", "/terms", "/privacy"]) {
+    // Website session (B7): /pricing, /terms and /privacy are the website's pages now (spec 70
+    // checks the redirect); the website CI job checks their layout and Lighthouse scores.
+    for (const path of ["/login", "/register", "/forgot-password"]) {
       test(`public ${path}`, async ({ page }, testInfo) => {
         await page.goto(path);
         await check(page, testInfo, path, width);

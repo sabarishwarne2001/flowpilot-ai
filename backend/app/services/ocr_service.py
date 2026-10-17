@@ -1,5 +1,5 @@
 """
-OCR text extraction service for FlowPilot AI.
+OCR text extraction service for Servabo.
 
 ARCH-07 §B.10 (Option C) — import-time decoupling.
 

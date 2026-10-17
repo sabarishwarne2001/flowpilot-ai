@@ -1,5 +1,5 @@
 """
-Organization-level authorization logic for FlowPilot AI.
+Organization-level authorization logic for Servabo.
 
 Governs the commercial and identity surface: billing, seats, member
 administration, workspace provisioning, audit access, SSO, and security

@@ -57,7 +57,7 @@ would have been enough to gate the first send. The fourth exists because
 "never configured" and "configured, then stopped verifying" must produce
 different console output and different operator alerts. Collapsing them means
 a tenant whose DKIM record was deleted sees the same neutral empty state as a
-tenant who never set one up, and mail quietly goes out as FlowPilot from a
+tenant who never set one up, and mail quietly goes out as Servabo from a
 domain the recipient's filter has been trained to expect from Acme.
 
 `ck_tenant_branding_sender_status_coherent` binds the two together: NULL
@@ -417,13 +417,13 @@ class TenantBranding(Base, UUIDMixin, TimestampMixin):
         if self.sender_domain_status == SENDER_STATUS_LAPSED:
             return (
                 f"The sender domain {self.sender_domain} stopped verifying. "
-                "Mail is being sent from the FlowPilot platform address until "
+                "Mail is being sent from the Servabo platform address until "
                 "its DNS records are restored."
             )
         if self.sender_domain_status == SENDER_STATUS_PENDING:
             return (
                 f"The sender domain {self.sender_domain} has not completed "
-                "verification. Mail is being sent from the FlowPilot platform "
+                "verification. Mail is being sent from the Servabo platform "
                 "address."
             )
         return None

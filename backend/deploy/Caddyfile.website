@@ -1,0 +1,49 @@
+# =============================================================================
+# Servabo — the public website (servabo.app), served by Caddy from the app server.
+#
+# The ALTERNATIVE to Cloudflare Pages (docs/website/DEPLOY.md, "Option B"). Build the site
+# (`cd website && npm ci && npm run build`), mount website/dist read-only at /srv/website, and
+# add `import /etc/caddy/Caddyfile.website` at the end of the main Caddyfile. Same headers as
+# website/public/_headers: the Content-Security-Policy allows nothing but this origin.
+#
+#   WEBSITE_DOMAIN      servabo.app (fallback: getservabo.com)
+# =============================================================================
+
+www.{$WEBSITE_DOMAIN} {
+    redir https://{$WEBSITE_DOMAIN}{uri} permanent
+}
+
+{$WEBSITE_DOMAIN} {
+    encode zstd gzip
+    root * /srv/website
+
+    header {
+        Content-Security-Policy "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; manifest-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+        Strict-Transport-Security "max-age=63072000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+        Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()"
+        Cross-Origin-Opener-Policy "same-origin"
+        -Server
+    }
+
+    @immutable path /_astro/*
+    header @immutable Cache-Control "public, max-age=31536000, immutable"
+
+    # The same short addresses as website/public/_redirects.
+    redir /legal /legal/terms 301
+    redir /terms /legal/terms 301
+    redir /privacy /legal/privacy 301
+    redir /refunds /legal/refunds 301
+    redir /refund-policy /legal/refunds 301
+
+    # /pricing serves pricing.html; an unknown path is the site's own 404 page.
+    try_files {path} {path}.html {path}/index.html
+    file_server
+    handle_errors {
+        @notfound expression {http.error.status_code} == 404
+        rewrite @notfound /404.html
+        file_server
+    }
+}

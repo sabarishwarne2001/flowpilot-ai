@@ -1,0 +1,6 @@
+{
+  "name": "servabo-brand",
+  "private": true,
+  "type": "module",
+  "description": "Servabo brand tokens, Tailwind preset and mark, shared by frontend/ and website/."
+}

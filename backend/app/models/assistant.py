@@ -1,5 +1,5 @@
 """
-Database representation of Conversation Memory and Messages for FlowPilot AI.
+Database representation of Conversation Memory and Messages for Servabo.
 
 ARCH-12 Step 1 & 6 — the message row now has to be able to describe a
 generation that is still happening, one that stopped early, and one whose

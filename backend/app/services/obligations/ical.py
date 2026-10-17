@@ -3,7 +3,7 @@
 Every obligation occurrence is an all-day VEVENT (DTSTART;VALUE=DATE, DTEND
 the day after), because a due date is a local date, not an instant (temporal
 rule 6): a calendar app shows it on that day in any zone. Series are written
-occurrence by occurrence (UID <obligation>-<n>@flowpilot) rather than as an
+occurrence by occurrence (UID <obligation>-<n>@servabo) rather than as an
 RRULE, because each occurrence is rolled to a business day on its own and an
 RRULE cannot say that.
 
@@ -20,7 +20,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from typing import Optional, Sequence
 
-PRODID = "-//FlowPilot AI//Obligations ARCH-46//EN"
+PRODID = "-//Servabo//Obligations ARCH-46//EN"
 
 
 def escape(text: str) -> str:

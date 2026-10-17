@@ -1,5 +1,5 @@
 """
-Business orchestration service for FlowPilot AI notifications.
+Business orchestration service for Servabo notifications.
 """
 
 from __future__ import annotations

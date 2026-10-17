@@ -55,7 +55,7 @@ def s3_payload(label: str = "Acme warehouse") -> dict[str, Any]:
             "kind": "S3",
             "bucket": "acme-analytics",
             "region": "eu-west-1",
-            "prefix": "flowpilot/",
+            "prefix": "servabo/",
             "access_key_id": "AKIAEXAMPLE0000000000",
             "secret_access_key": "s" * 40,
         },

@@ -1,5 +1,5 @@
 """
-Workspace API router for FlowPilot AI.
+Workspace API router for Servabo.
 
 Every route is addressed as /workspaces/{workspace_id}/... The workspace
 identifier is taken directly rather than nested under the organization.

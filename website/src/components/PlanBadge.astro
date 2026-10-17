@@ -1,0 +1,19 @@
+---
+/** "Business and up": the lowest plan that includes a feature, read from the price list. */
+import { lowestPlanWith, PLANS } from "../lib/pricing";
+
+interface Props {
+  feature: string | null;
+}
+const { feature } = Astro.props;
+const lowest = lowestPlanWith(feature);
+const last = PLANS[PLANS.length - 1];
+const text = lowest === null ? "Every plan" : lowest.key === last?.key ? `${lowest.name} only` : `${lowest.name} and up`;
+const tone =
+  lowest === null
+    ? "border-border bg-muted text-muted-foreground"
+    : lowest.key === "enterprise"
+      ? "border-foreground/25 bg-foreground/5 text-foreground"
+      : "border-primary/30 bg-primary/5 text-primary dark:text-[hsl(var(--primary-on-dark))]";
+---
+<span class={`plan-badge ${tone}`}>{text}</span>

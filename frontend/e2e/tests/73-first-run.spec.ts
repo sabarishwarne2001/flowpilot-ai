@@ -1,7 +1,7 @@
 /**
  * FIRST RUN (campaign session 4, §A.4): a new customer reaches a useful result in minutes.
  *
- * A new organization's dashboard shows "Get started with FlowPilot": add a document, see what was
+ * A new organization's dashboard shows "Get started with Servabo": add a document, see what was
  * read from it, ask the assistant, invite a colleague. With no document at hand the owner tries
  * the built-in sample invoice (an ordinary upload made by the server); each step ticks itself from
  * the workspace's real state, the read document opens from the card, and the card can be hidden.
@@ -17,7 +17,7 @@ test.describe("First run", () => {
     await signInAs(page, customer.email);
     await page.goto(customer.ws(""));
 
-    const card = page.getByRole("region", { name: "Get started with FlowPilot" });
+    const card = page.getByRole("region", { name: "Get started with Servabo" });
     await expect(card).toBeVisible({ timeout: 30_000 });
     await expect(card).toContainText("0 of 4 done");
     const steps = card.getByRole("list", { name: "Getting started steps" });
@@ -42,7 +42,7 @@ test.describe("First run", () => {
     await expect(card).toHaveCount(0);
     await page.reload();
     await expect(page.locator("main")).toContainText(/Overview|Documents/, { timeout: 30_000 });
-    await expect(page.getByRole("region", { name: "Get started with FlowPilot" })).toHaveCount(0);
+    await expect(page.getByRole("region", { name: "Get started with Servabo" })).toHaveCount(0);
     await expectHealthyPage(page);
   });
 });

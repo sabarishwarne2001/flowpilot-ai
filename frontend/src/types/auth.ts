@@ -1,5 +1,5 @@
 /**
- * Authentication Data Transfer Objects (DTOs) for FlowPilot AI.
+ * Authentication Data Transfer Objects (DTOs) for Servabo.
  *
  * These interfaces mirror the backend Pydantic request/response models
  * and provide strict compile-time contracts between the React frontend

@@ -1,6 +1,6 @@
 """ARCH46-S1:temporal — deterministic date arithmetic for obligations. Pure: no I/O, no clock.
 
-Every date FlowPilot tracks is computed here from what a document states, and
+Every date Servabo tracks is computed here from what a document states, and
 every rule below is stated once and tested by verify_arch46 (G1-G5).
 
 MONTHS AND YEARS
@@ -233,7 +233,7 @@ def parse_rrule(text: str) -> dict[str, str]:
         if key == "DTSTART":
             raise TemporalError("the series start is its own field, not part of the rule")
         if key not in _RRULE_KEYS:
-            raise TemporalError(f"{key} is not an RRULE part FlowPilot accepts")
+            raise TemporalError(f"{key} is not an RRULE part Servabo accepts")
         if key in parts:
             raise TemporalError(f"{key} appears twice")
         parts[key] = value

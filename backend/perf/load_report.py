@@ -1,6 +1,6 @@
 """Read a load test's results and say whether it passed (campaign session 4, §B.2).
 
-    python perf/load_report.py --csv /tmp/flowpilot-load --api-log /tmp/flowpilot-e2e-logs/api.log
+    python perf/load_report.py --csv /tmp/servabo-load --api-log /tmp/servabo-e2e-logs/api.log
 
 Reads Locust's `<prefix>_stats.csv` and `<prefix>_failures.csv` and the API's log, prints a
 Markdown table of every request type (count, median, p95, p99, failures), and fails (exit 1) when:

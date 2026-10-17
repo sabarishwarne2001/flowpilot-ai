@@ -18,7 +18,7 @@ interface ErrorStateProps {
 }
 
 /**
- * Universal, stateless Error Fallback Presenter Card for FlowPilot AI.
+ * Universal, stateless Error Fallback Presenter Card for Servabo.
  *
  * Provides consistent failure typography, error vectors, and standardized retry triggers
  * to maintain high user engagement during transient API bottlenecks.

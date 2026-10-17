@@ -50,7 +50,7 @@ def test_no_token_anywhere_is_refused() -> None:
         gate.extract_token({}, {})
 
 
-@pytest.mark.parametrize("key", ["fp_live_abc123", "fp_test_abc123"])
+@pytest.mark.parametrize("key", ["svb_live_abc123", "svb_test_abc123"])
 def test_an_api_key_cannot_open_a_live_connection(key: str) -> None:
     with pytest.raises(gate.LiveRefused, match="API keys"):
         gate.extract_token({"authorization": f"Bearer {key}"}, {})

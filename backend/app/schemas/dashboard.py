@@ -1,5 +1,5 @@
 """
-Dashboard response schemas for FlowPilot AI.
+Dashboard response schemas for Servabo.
 
 Defines the response models returned by the Dashboard API.
 """

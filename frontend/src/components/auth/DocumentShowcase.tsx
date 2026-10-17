@@ -1,5 +1,5 @@
 /**
- * The right-hand pane of the sign-in screens: what FlowPilot does, shown
+ * The right-hand pane of the sign-in screens: what Servabo does, shown
  * rather than told. A stylised invoice with the boxes the extractor draws, the
  * fields it read with their confidence, and the match that clears it for
  * posting. Hovering a field lights its box.
@@ -289,7 +289,7 @@ export function DocumentShowcase({ footer }: { footer: React.ReactNode }) {
           </span>
         </h2>
         <p className="mt-4 max-w-lg text-[15px] leading-relaxed text-zinc-400">
-          FlowPilot reads invoices, contracts and purchase orders, extracts every field with a
+          Servabo reads invoices, contracts and purchase orders, extracts every field with a
           confidence score, and routes the exceptions to your team.
         </p>
       </div>

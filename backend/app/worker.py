@@ -496,7 +496,7 @@ def _observe_job_outcome(organization_id: Any, enqueued_at: Optional[datetime], 
         )
 
 
-def run_stripe_inbound_loop(
+def run_billing_inbound_loop(
     *,
     shutdown: GracefulShutdown,
     batch_size: int,
@@ -510,7 +510,7 @@ def run_stripe_inbound_loop(
     from app.workers.handlers.billing import _reconcile_claimed_row
 
     worker = worker_identity()
-    logger.info("worker.start", extra={"worker": worker, "loop": "stripe_inbound"})
+    logger.info("worker.start", extra={"worker": worker, "loop": "billing_inbound"})
     passes = 0
 
     while not shutdown.requested:
@@ -521,7 +521,7 @@ def run_stripe_inbound_loop(
                 reaped = inbound_service.reap_expired_leases(db)
                 db.commit()
             if reaped:
-                logger.warning("stripe_inbound.reaped", extra={"count": reaped})
+                logger.warning("billing_inbound.reaped", extra={"count": reaped})
 
         with SessionLocal() as db:
             claimed = inbound_service.claim_batch(
@@ -540,7 +540,7 @@ def run_stripe_inbound_loop(
             continue
 
         if shutdown.requested:
-            logger.info("stripe_inbound.draining", extra={"remaining": len(snapshot)})
+            logger.info("billing_inbound.draining", extra={"remaining": len(snapshot)})
 
         for event_id, attempts, max_attempts in snapshot:
             _reconcile_claimed_row(
@@ -549,18 +549,39 @@ def run_stripe_inbound_loop(
 
     logger.info(
         "worker.stopped",
-        extra={"worker": worker, "loop": "stripe_inbound", "passes": passes},
+        extra={"worker": worker, "loop": "billing_inbound", "passes": passes},
     )
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+# >>> one-release names: the billing loop was `stripe` (website and payments session, C10).
+run_stripe_inbound_loop = run_billing_inbound_loop
+LOOP_ALIASES: dict[str, str] = {"stripe": "billing"}
+# <<< one-release names
+
+#: What `--loop all` runs.
+ALL_LOOPS: tuple[str, ...] = ("jobs", "relay", "delivery", "billing", "scheduler")
+
+
+def canonical_loop(name: str) -> str:
+    """The loop's current name; an old one still works, with a warning."""
+    current = LOOP_ALIASES.get(name)
+    if current is None:
+        return name
+    logger.warning(
+        f"worker: --loop {name} is now --loop {current}; it runs the same loop. "
+        f"Change the command (docker-compose service worker-billing) before the next release."
+    )
+    return current
+
+
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="app.worker")
     parser.add_argument(
         "--loop",
-        choices=["relay", "delivery", "jobs", "stripe", "scheduler", "all"],
+        choices=["relay", "delivery", "jobs", "billing", "scheduler", "all", *LOOP_ALIASES],
         required=True,
         help=(
-            "relay | delivery | jobs | stripe | scheduler | all. "
+            "relay | delivery | jobs | billing | scheduler | all. "
             "'all' runs every loop plus the scheduler in one supervised "
             "process, which is the single-node and local-development shape. "
             "'scheduler' runs only the recurring-job producer."
@@ -589,6 +610,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     parser.add_argument(
         "--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING"]
     )
+    return parser
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     # The API's logging set-up, with the worker's level and line format: the same context
@@ -596,7 +622,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     from app.core.logging_config import setup_logging
 
     setup_logging(level=args.log_level, fmt="%(asctime)s %(levelname)s %(name)s %(message)s")
+    from app.core import legacy_names
 
+    legacy_names.warn_once()
+
+    args.loop = canonical_loop(args.loop)
     register_all()
     profile = get_profile(args.profile)
     assert_imports_match_profile(profile)
@@ -611,7 +641,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     if lease is None:
         if args.loop == "delivery":
             lease = 120
-        elif args.loop == "stripe":
+        elif args.loop == "billing":
             lease = int(getattr(settings, "STRIPE_INBOUND_LEASE_SECONDS", 60))
         else:
             lease = 60
@@ -640,8 +670,8 @@ def main(argv: Optional[list[str]] = None) -> int:
                 runner=run_delivery_loop,
                 kwargs={**kwargs, "per_org_cap": args.per_org_cap},
             )
-        if name == "stripe":
-            return LoopSpec(name="stripe", runner=run_stripe_inbound_loop, kwargs=dict(kwargs))
+        if name == "billing":
+            return LoopSpec(name="billing", runner=run_billing_inbound_loop, kwargs=dict(kwargs))
         if name == "scheduler":
             from app.workers.scheduler import run_scheduler_loop
 
@@ -662,7 +692,7 @@ def main(argv: Optional[list[str]] = None) -> int:
         )
 
     if args.loop == "all":
-        names = ["jobs", "relay", "delivery", "stripe", "scheduler"]
+        names = list(ALL_LOOPS)
     else:
         names = [args.loop]
 

@@ -150,7 +150,7 @@ def test_organization_email_settings(
     delivered, detail = email_service.send_email(
         settings=config,
         recipient=payload.recipient,
-        subject="FlowPilot SMTP test",
+        subject="Servabo SMTP test",
         body=(
             "This is a test message confirming your organization's SMTP "
             "configuration is working.\n\nIf you did not request this, you "

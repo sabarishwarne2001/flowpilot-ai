@@ -1,4 +1,4 @@
-"""Time one 500-document bulk delete against a running FlowPilot (campaign session 4, PERFORMANCE.md).
+"""Time one 500-document bulk delete against a running Servabo (campaign session 4, PERFORMANCE.md).
 
     python backend/perf/bulk_delete_timing.py --api http://127.0.0.1:8000/api/v1 \
         --email c-owner@e2e.example.com --password '...' --org caretakers-global [--count 500]

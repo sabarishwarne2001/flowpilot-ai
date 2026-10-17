@@ -43,9 +43,9 @@ import numpy as np
 from app.services.ocr.base import OCRUnavailableError
 from app.services.ocr.paddle import PaddleOCRProvider
 
-STUB_OCR_LABEL = "[FLOWPILOT TEST STUB OCR - NOT REAL TEXT]"
+STUB_OCR_LABEL = "[SERVABO TEST STUB OCR - NOT REAL TEXT]"
 STUB_EMBEDDING_DIMENSION = 384
-STUB_MODEL_NAME = "flowpilot-test-stub-embedding"
+STUB_MODEL_NAME = "servabo-test-stub-embedding"
 
 _TOKEN = re.compile(r"\w+|[^\w\s]", re.UNICODE)
 _CLS_ID, _SEP_ID = 101, 102

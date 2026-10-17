@@ -1,5 +1,5 @@
 """
-Work Items API router endpoints for FlowPilot AI.
+Work Items API router endpoints for Servabo.
 """
 
 import logging
@@ -425,7 +425,7 @@ def upload_sample_document(
 ) -> WorkItemResponse:
     """The built-in sample invoice, added as an ordinary upload (campaign session 4, §A.4).
 
-    A new customer with no document at hand tries FlowPilot on this one: it goes through the same
+    A new customer with no document at hand tries Servabo on this one: it goes through the same
     file checks, plan limits and processing as any upload, because it is one.
     """
     import io

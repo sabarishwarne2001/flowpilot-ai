@@ -148,7 +148,7 @@ def claim_domain(organization_id: str, payload: dict = Body(...),
         "status": getattr(row.status, "value", row.status),
         "expected_txt_record": domain_service.expected_record(row.challenge_token),
         "instructions": (
-            f"Publish a TXT record at {row.domain} (or _flowpilot.{row.domain}) "
+            f"Publish a TXT record at {row.domain} (or _servabo.{row.domain}) "
             f"with the value above, then call verify. DNS changes can take up "
             f"to 48 hours to propagate."
         ),
@@ -409,7 +409,7 @@ def add_role_mapping(organization_id: str, config_id: str, payload: dict = Body(
         raise HTTPException(
             422,
             "An identity provider cannot grant OWNER. Ownership transfer is an "
-            "explicit, audited action in FlowPilot.")
+            "explicit, audited action in Servabo.")
 
     if role not in _GRANTABLE_ROLES:
         raise HTTPException(422, "organization_role must be ADMIN, BILLING or MEMBER.")

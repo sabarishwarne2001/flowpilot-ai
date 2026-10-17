@@ -7,7 +7,7 @@ Decided 2026-10-10 under founder authority (NEEDS-OWNER.md):
 * N-037 (F-230): an invitation link lasts 7 days.
 * N-036 (F-231): accepting an invitation never lowers an existing member's role;
   it only raises it. A deactivated member rejoins with the invitation's role.
-* N-034 (F-232): an invitation FlowPilot's relay delivered proves the mailbox, so
+* N-034 (F-232): an invitation Servabo's relay delivered proves the mailbox, so
   its one-step sign-up takes over an account whose address was never verified
   (new password, verified, every old session ended). A verified account still
   signs in instead.

@@ -193,7 +193,7 @@ test.describe("Batch operations in depth — a tenant of its own", () => {
       { mode: "edit", says: /extractions\.csv/ },
       { mode: "drop", says: /extractions\.json/ },
       { mode: "add", says: /extra-invoice\.csv/ },
-      { mode: "edit-and-reseal", says: /not the one FlowPilot issued/ },
+      { mode: "edit-and-reseal", says: /not the one Servabo issued/ },
     ] as const;
     for (const { mode, says } of cases) {
       const changed = testInfo.outputPath(`package-${mode}.zip`);

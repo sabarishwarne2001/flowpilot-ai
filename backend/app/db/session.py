@@ -1,5 +1,5 @@
 """
-Role-aware database engines and session factories for FlowPilot AI.
+Role-aware database engines and session factories for Servabo.
 
 ARCH-0G §4.4 — Roadmap §1.1 Step 1 (role-aware pools).
 ARCH-19 §3.1, §3.2 — NullPool for migration runs, and the read/write split.
@@ -76,7 +76,10 @@ POOL_PROFILES: dict[str, PoolProfile] = {
 
 ROLE_ALIASES: dict[str, str] = {
     "worker-delivery": "worker-relay",
+    "worker-billing": "worker-relay",
+    # >>> one-release names: the billing worker's service role before it was renamed (C10).
     "worker-stripe": "worker-relay",
+    # <<< one-release names
     "migrate": "sweeper",
     "cron": "sweeper",
 }

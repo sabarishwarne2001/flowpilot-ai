@@ -83,7 +83,7 @@ class TestGate157ReauthWindow:
     def test_api_key_style_header_is_refused(self):
         with pytest.raises(ReauthenticationRequiredError):
             portal_service.assert_recent_authentication(
-                authorization_header="ApiKey fp_live_something"
+                authorization_header="ApiKey svb_live_something"
             )
 
     def test_future_dated_token_is_refused(self):

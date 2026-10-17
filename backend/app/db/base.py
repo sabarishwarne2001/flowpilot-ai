@@ -1,5 +1,5 @@
 """
-SQLAlchemy Declarative Base and shared model mixins for FlowPilot AI.
+SQLAlchemy Declarative Base and shared model mixins for Servabo.
 
 Defines standard metadata containers and provides mixins for automated 
 primary keys (UUIDv4) and audit tracking timestamps.

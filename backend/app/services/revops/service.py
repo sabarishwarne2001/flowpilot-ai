@@ -6,7 +6,7 @@ from datetime import date, datetime, timezone
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Any
 
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.services.revops import vocabulary as v
 
 
@@ -22,7 +22,7 @@ def today() -> date:
 _BY_CODE: dict[tuple[str, int], type] = {}
 
 
-class RevOpsError(FlowPilotError):
+class RevOpsError(ServaboError):
     """A refusal the console branches on by `code`. The domain exception handler maps an error to its HTTP status
     and body code through the CLASS (`resolve_exception_mapping` walks the MRO), so each (code, status) gets its own
     subclass carrying them: a PRICE_NOT_SOLD is a 400 with code PRICE_NOT_SOLD, never a 409 REVOPS_CONFLICT."""

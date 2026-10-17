@@ -1,5 +1,5 @@
 """
-Unified LLM Gateway and Prompt Orchestration Service for FlowPilot AI.
+Unified LLM Gateway and Prompt Orchestration Service for Servabo.
 ARCH-11.5 Step 1 & 2: Spend ceilings, token metering, resilience and enrichment execution.
 ARCH-12 Step 1 & 3: Streaming prompt preparation, system prompt isolation, and metered prompt execution.
 ARCH-14 Step 1 & 6: Platform-owned pricing and Vertex billing label guard.
@@ -122,7 +122,7 @@ Document:
 """
 
 RAG_SYNTHESIS_PROMPT_TEMPLATE = """
-You are FlowPilot AI, an enterprise document intelligence assistant.
+You are Servabo, an enterprise document intelligence assistant.
 
 Your responsibility is to answer the user's question using ONLY the supplied document context.
 
@@ -619,7 +619,7 @@ class LLMService:
         if key == "gemini":
             return self.gemini_client
         raise ValueError(
-            f"FlowPilot holds no platform key for '{key}', so this call "
+            f"Servabo holds no platform key for '{key}', so this call "
             "cannot be served without a tenant credential."
         )
 

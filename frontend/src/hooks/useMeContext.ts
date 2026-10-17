@@ -1,5 +1,5 @@
 /**
- * Bootstrap context query for FlowPilot AI.
+ * Bootstrap context query for Servabo.
  *
  * Wraps GET /me/context, the single call that reports who the actor is, which
  * tenants they belong to, and where they should land.

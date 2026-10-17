@@ -165,7 +165,7 @@ const ErpPostingDetail: React.FC = () => {
           <h2 id="posting-decide" className={SECTION_TITLE}>Decide</h2>
           {p.state === "UNCERTAIN" ? (
             <p className="text-sm">
-              FlowPilot cannot tell whether the ERP received this, and cannot check. Look in the ERP: retry only if it does not
+              Servabo cannot tell whether the ERP received this, and cannot check. Look in the ERP: retry only if it does not
               have the document; if it does, mark it posted with the ERP&apos;s reference.
             </p>
           ) : null}
@@ -194,7 +194,7 @@ const ErpPostingDetail: React.FC = () => {
             <div className="space-y-2 border-t border-border/60 pt-3">
               <p className="text-sm">
                 Imported the file into the ERP? Confirm with the ERP&apos;s reference, report that it was refused, or paste the
-                ERP&apos;s response file (a Tally import response, an X12 997, an .ack file) and FlowPilot reads it.
+                ERP&apos;s response file (a Tally import response, an X12 997, an .ack file) and Servabo reads it.
               </p>
               <div className="flex flex-wrap gap-2">
                 <button type="button" className={BUTTON_PRIMARY} disabled={acknowledge.isPending}

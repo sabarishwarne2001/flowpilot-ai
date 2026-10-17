@@ -41,7 +41,7 @@ that needs Stripe-only behaviour asks for it explicitly.
 THE MERCHANT-OF-RECORD ASYMMETRY
 ================================
 
-Under Stripe, FlowPilot is the seller of record: it owes GST in India, VAT
+Under Stripe, Servabo is the seller of record: it owes GST in India, VAT
 across the EU, and US state sales-tax nexus analysis. Under Dodo, Dodo is the
 legal seller and remits on our behalf.
 
@@ -173,7 +173,7 @@ class GatewayCapabilities:
     #: A hosted portal exists for the customer to manage their own billing.
     supports_customer_portal: bool
 
-    #: Metered/usage quantities can be reported for overage billing. FlowPilot
+    #: Metered/usage quantities can be reported for overage billing. Servabo
     #: prices seats PLUS consumption, so a gateway without this can only sell
     #: the seat half of the model.
     supports_usage_billing: bool
@@ -287,7 +287,7 @@ def get_payment_gateway(name: Optional[str] = None) -> PaymentGateway:
     pays for its SDK import, and — worse — a missing optional dependency for the
     gateway you are NOT using becomes a startup crash.
     """
-    resolved = normalize_gateway(name or getattr(settings, "BILLING_GATEWAY", _STRIPE))
+    resolved = normalize_gateway(name or getattr(settings, "BILLING_GATEWAY", _DODO))
 
     if resolved == _STRIPE:
         from app.services.billing.stripe_gateway import get_gateway
@@ -310,7 +310,7 @@ def get_payment_gateway(name: Optional[str] = None) -> PaymentGateway:
 
 def active_gateway_name() -> str:
     """The configured gateway name, for stamping onto rows."""
-    return normalize_gateway(getattr(settings, "BILLING_GATEWAY", _STRIPE))
+    return normalize_gateway(getattr(settings, "BILLING_GATEWAY", _DODO))
 
 
 __all__ = [

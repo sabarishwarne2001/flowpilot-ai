@@ -142,15 +142,20 @@ def _public_allowances(by_key: dict[str, Any]) -> list[dict[str, Any]]:
     return allowances
 
 
-def public_catalog(db: Session, *, at: Optional[datetime] = None) -> dict[str, Any]:
-    """The public price list: every published plan, its prices and allowances, and the trial."""
-    from app.services import quota_service, trial_service
-    from app.services.revops import price_books
+def catalog_from_tiers(
+    tiers: Iterable[Any], book_prices: Iterable[Any], *, trial_days: int, at: datetime
+) -> dict[str, Any]:
+    """The public price list for these tier versions and plan prices.
 
-    moment = at or datetime.now(timezone.utc)
-    book_prices = price_books.published_prices(db)
+    `public_catalog` passes the published versions from the database; the website's export
+    (`scripts/export_public_pricing.py`) passes the plan seeds' own tiers. Both go through here,
+    so the website and `GET /api/v1/pricing` cannot describe a plan differently.
+    """
+    from app.services import quota_service
+
+    book_prices = list(book_prices)
     plans: list[dict[str, Any]] = []
-    for tier in quota_service.list_published_tiers(db, at=moment):
+    for tier in tiers:
         by_key = {entry.limit_key: entry for entry in tier.entries}
         plans.append(
             {
@@ -169,11 +174,25 @@ def public_catalog(db: Session, *, at: Optional[datetime] = None) -> dict[str, A
             }
         )
     return {
-        "as_of": moment,
+        "as_of": at,
         # The length the product enforces (`trial_service.trial_length`, N-052).
-        "trial": {"plan_key": quota_service.FREE_TIER_KEY, "days": trial_service.trial_length().days},
+        "trial": {"plan_key": quota_service.FREE_TIER_KEY, "days": trial_days},
         "plans": plans,
     }
+
+
+def public_catalog(db: Session, *, at: Optional[datetime] = None) -> dict[str, Any]:
+    """The public price list: every published plan, its prices and allowances, and the trial."""
+    from app.services import quota_service, trial_service
+    from app.services.revops import price_books
+
+    moment = at or datetime.now(timezone.utc)
+    return catalog_from_tiers(
+        quota_service.list_published_tiers(db, at=moment),
+        price_books.published_prices(db),
+        trial_days=trial_service.trial_length().days,
+        at=moment,
+    )
 
 
 __all__ = [
@@ -181,6 +200,7 @@ __all__ = [
     "NO_CEILING_WHEN_ABSENT",
     "PUBLIC_ALLOWANCE_KEYS",
     "allowance_quantity",
+    "catalog_from_tiers",
     "prices_for_tier",
     "public_catalog",
 ]

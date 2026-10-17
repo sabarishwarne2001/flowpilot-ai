@@ -33,7 +33,7 @@ def test_ready_is_503_when_the_database_is_down(client: TestClient, monkeypatch)
     from app.api.v1 import health
 
     def down() -> bool:
-        raise ConnectionError("password authentication failed for user flowpilot at 10.0.0.9")
+        raise ConnectionError("password authentication failed for user servabo at 10.0.0.9")
 
     monkeypatch.setattr(health, "_check_database", down)
     response = client.get(READY)

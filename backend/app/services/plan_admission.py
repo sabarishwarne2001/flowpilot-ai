@@ -37,7 +37,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.core.plan_limits import (
     FILE_SIZE_MB_LIMIT,
     PAGES_PER_DOCUMENT_LIMIT,
@@ -59,7 +59,7 @@ GIB = 1024 * MIB
 _AWAITING_OCR = ("QUEUED", "EXTRACTING")
 
 
-class PlanLimitExceededError(FlowPilotError):
+class PlanLimitExceededError(ServaboError):
     """The plan does not allow this, whatever the period: upgrading is the way on."""
 
     status_code = 402

@@ -1,5 +1,5 @@
 """
-Embedding Service for FlowPilot AI.
+Embedding Service for Servabo.
 Produces sentence embeddings using SentenceTransformers.
 
 ARCH-07 & ARCH-11: Import-time decoupling. Defers loading SentenceTransformer

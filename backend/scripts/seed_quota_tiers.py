@@ -199,6 +199,61 @@ COMMERCIALS: dict[str, dict[str, Any]] = {
     },
 }
 
+# N-051: yearly on Developer and Business at ten times the monthly price per seat (two months
+# free). Enterprise yearly is arranged by agreement, by email (not self-serve). A yearly price is
+# offered in the app only once its gateway product id is configured (`publish_yearly_prices`); the
+# website's price list (`scripts/export_public_pricing.py`) reads this same table.
+YEARLY_COMMERCIALS: dict[str, dict[str, Any]] = {
+    "developer": {
+        "unit_amount_micros": 490_000_000,
+        "currency": "USD",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_DEVELOPER_YEARLY",
+    },
+    "business": {
+        "unit_amount_micros": 2_990_000_000,
+        "currency": "USD",
+        "gateway_price_id_env": "GATEWAY_PRICE_ID_BUSINESS_YEARLY",
+    },
+}
+
+def publish_yearly_prices(db: Any, *, environ: Optional[dict[str, str]] = None) -> Optional[str]:
+    """Publish the USD plan price book once yearly products exist at the gateway (C11); its code.
+
+    The app sells an interval only through a published plan price book (`revops.price_books`).
+    With GATEWAY_PRICE_ID_DEVELOPER_YEARLY and/or _BUSINESS_YEARLY set, the book holds each
+    plan's monthly price (with its monthly product id) and the configured yearly prices from
+    YEARLY_COMMERCIALS, so the plan cards offer Monthly and Yearly. Without them nothing is
+    published and the switch stays hidden. A published USD book with the same entries is left
+    as it is (the seed can run again); a different one is superseded by publishing a new one.
+    """
+    from app.services.revops import price_books
+
+    env = dict(os.environ if environ is None else environ)
+    yearly = {key: env.get(c["gateway_price_id_env"]) for key, c in YEARLY_COMMERCIALS.items()}
+    yearly = {key: value for key, value in yearly.items() if value}
+    if not yearly:
+        return None
+    wanted: set[tuple[str, str, int, Optional[str]]] = set()
+    for key, c in COMMERCIALS.items():
+        monthly_id = env.get(c["gateway_price_id_env"]) if c["gateway_price_id_env"] else None
+        if c["unit_amount_micros"] > 0 and monthly_id:
+            wanted.add((key, "month", int(c["unit_amount_micros"]), monthly_id))
+    for key, price_id in yearly.items():
+        wanted.add((key, "year", int(YEARLY_COMMERCIALS[key]["unit_amount_micros"]), price_id))
+    current = [p for p in price_books.published_prices(db) if p.currency == "USD"]
+    if {(p.tier_key, p.interval, p.unit_amount_micros, p.gateway_price_id) for p in current} == wanted:
+        return current[0].book_code
+    code = f"SEED-USD-{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
+    book = price_books.create_book(db, code=code, currency="USD",
+                                   notes="Published by scripts/seed_quota_tiers.py (monthly and yearly prices).",
+                                   actor_id=None)
+    for key, interval, micros, price_id in sorted(wanted):
+        price_books.set_entry(db, book_id=book["id"], tier_key=key, interval=interval,
+                              unit_amount_minor=micros // 10_000, gateway_price_id=price_id)
+    price_books.publish(db, book_id=book["id"], actor_id=None)
+    return book["code"]
+
+
 # Campaign session 1 — the plan table, decided under delegated founder authority
 # (NEEDS-OWNER.md, "DECIDED (campaign session 1)"). Read with:
 #
@@ -391,11 +446,13 @@ PLACEHOLDER_TIERS: dict[str, dict[str, Any]] = {
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
-            # Per seat: ten seats hold the 1,000,000 pages a month the card used
-            # to promise per organization, at a margin that holds for one seat.
+            # Per seat. Website and payments session (C12): 95,000 pages, down from
+            # 100,000, so a seat used to every ceiling keeps 55% after Dodo Payments'
+            # fees (6% + 40 cents on an international subscription); at 100,000 it kept
+            # 54.7%. The allowance moved, never the price (NEEDS-OWNER, C12).
             {
                 "limit_key": "ocr.page",
-                "max_quantity": "100000",
+                "max_quantity": "95000",
                 "overage_policy": "ALLOW_AND_BILL",
                 "overage_price_tier_key": OVERAGE_TIER_KEY,
             },
@@ -436,6 +493,48 @@ def _specs(rows: list[dict[str, Any]]) -> list[TierEntrySpec]:
             notes=row.get("notes"),
         )
         for row in rows
+    ]
+
+
+def gateway_bills_usage(gateway: Optional[str] = None) -> bool:
+    """Whether the configured payment gateway can bill metered usage (overage).
+
+    Dodo Payments cannot today (`DodoGateway.capabilities.supports_usage_billing`); Stripe can.
+    """
+    from app.core.config import settings
+    from app.services.billing.payment_gateway import get_payment_gateway
+
+    return bool(get_payment_gateway(gateway or settings.BILLING_GATEWAY).capabilities.supports_usage_billing)
+
+
+def published_entries(
+    key: str, *, gateway: Optional[str] = None, rows: Optional[list[dict[str, Any]]] = None
+) -> list[TierEntrySpec]:
+    """The entries plan `key` is published with on this deployment's gateway.
+
+    Where a row says "bill overage" (ALLOW_AND_BILL) and the gateway cannot bill usage, it is
+    published as a hard ceiling (REFUSE): the customer raises it by adding seats (allowances are
+    per seat) or by upgrading, and is never charged for usage nobody can invoice. Every other row,
+    and every row on a gateway that bills usage, is published exactly as written above.
+    """
+    specs = _specs(rows if rows is not None else PLACEHOLDER_TIERS[key]["entries"])
+    if gateway_bills_usage(gateway):
+        return specs
+    hard = OveragePolicy.REFUSE.value
+    return [
+        TierEntrySpec(
+            limit_key=s.limit_key,
+            period=s.period,
+            max_quantity=s.max_quantity,
+            max_cost_micros=s.max_cost_micros,
+            overage_policy=hard,
+            overage_price_tier_key=None,
+            grace_quantity=s.grace_quantity,
+            notes=s.notes,
+        )
+        if s.overage_policy == OveragePolicy.ALLOW_AND_BILL.value
+        else s
+        for s in specs
     ]
 
 
@@ -747,7 +846,7 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
 
     prepared = {
-        key: (payload["display_name"], _specs(payload["entries"]))
+        key: (payload["display_name"], published_entries(key, rows=payload["entries"]))
         for key, payload in source.items()
     }
 
@@ -816,6 +915,10 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
             published.append(f"{tier.key}/v{tier.version}")
         db.flush()
+        # Website and payments session (C11): the yearly prices, once their products exist.
+        yearly_book = publish_yearly_prices(db)
+        if yearly_book:
+            print(f"plan prices: {yearly_book} (monthly and yearly)")
 
         moved: list[dict[str, Any]] = []
         if args.carry_forward:

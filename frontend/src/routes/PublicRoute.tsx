@@ -1,5 +1,5 @@
 /**
- * Public route guard for FlowPilot AI.
+ * Public route guard for Servabo.
  *
  * Keeps authenticated users off the login and registration screens.
  *

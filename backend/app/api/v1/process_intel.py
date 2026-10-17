@@ -42,7 +42,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.api import deps
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from app.schemas.process_intel import (AgentPolicyIn, AgentPolicyOut, ApproveOut, ConformanceOut, CostOut, DiscoveryOut,
                                        ExcerptOut, ModelRun, ObjectTypeSummary, Prediction, ProcessOverview,
                                        ProposalDetail, ProposalList, ProposalRow, RejectIn, SlaOut, SlaPolicy,
@@ -60,7 +60,7 @@ def _gate(db: Session, context: Any, operation: str) -> None:
     service.require(db, context=context, operation=operation)
 
 
-class ProcessConflictError(FlowPilotError):
+class ProcessConflictError(ServaboError):
     """A 409 in the ARCH-01 envelope `{code, message, details}`; one subclass per code (the console branches)."""
 
     status_code = 409

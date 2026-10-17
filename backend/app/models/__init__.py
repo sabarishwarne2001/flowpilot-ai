@@ -1,4 +1,4 @@
-"""Database models centralized import and registry gateway for FlowPilot AI."""
+"""Database models centralized import and registry gateway for Servabo."""
 
 from app.db.base import Base
 from app.models.user import User
@@ -766,6 +766,7 @@ from app.models.notification_preference import UsageLimitAlert, UserNotification
 
 # Campaign session 4 (§C.4): alerts for whoever runs the deployment.
 from app.models.operator_alert import OperatorAlert, ServerErrorMinute  # noqa: E402,F401
+from app.models.billing_dispute import BillingDispute  # noqa: E402,F401
 
 # Flagship session: Helm, outcome control (docs/helm/ARCHITECTURE.md).
 from app.models.helm import (  # noqa: E402,F401

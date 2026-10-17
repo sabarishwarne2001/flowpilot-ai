@@ -28,6 +28,8 @@ ARCH15_JOB_TYPES: frozenset[str] = frozenset(
         "billing.assemble_invoice",
         "billing.dunning_sweep",
         "billing.addon_grace_sweep",
+        "billing.plan_changes",
+        "billing.hold_notices",
     }
 )
 ARCH16_JOB_TYPES: frozenset[str] = frozenset(
@@ -212,6 +214,16 @@ def _billing_seat_drift(payload: dict[str, Any]) -> dict[str, Any]:
 def _billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
     from app.workers.handlers.billing import handle_billing_assemble_invoice
     return handle_billing_assemble_invoice(payload)
+
+
+def _billing_plan_changes(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_plan_changes
+    return handle_billing_plan_changes(payload)
+
+
+def _billing_hold_notices(payload: dict[str, Any]) -> dict[str, Any]:
+    from app.workers.handlers.billing import handle_billing_hold_notices
+    return handle_billing_hold_notices(payload)
 
 
 def _billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
@@ -473,6 +485,8 @@ _HANDLERS = {
     "billing.seat_drift": _billing_seat_drift,
     "billing.assemble_invoice": _billing_assemble_invoice,
     "billing.dunning_sweep": _billing_dunning_sweep,
+    "billing.plan_changes": _billing_plan_changes,
+    "billing.hold_notices": _billing_hold_notices,
     "billing.addon_grace_sweep": _billing_addon_grace_sweep,
     "identity.recheck_domains": _identity_recheck_domains,
     "identity.purge_assertion_payloads": _identity_purge_assertions,

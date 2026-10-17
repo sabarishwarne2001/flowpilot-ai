@@ -72,7 +72,7 @@ export const TimezoneField: React.FC<TimezoneFieldProps> = ({ id, value, onChang
   );
 };
 
-/** A curated set of locales FlowPilot formats well. */
+/** A curated set of locales Servabo formats well. */
 export const LOCALES: ReadonlyArray<{ value: string; label: string }> = [
   { value: "en-US", label: "English (United States)" },
   { value: "en-GB", label: "English (United Kingdom)" },

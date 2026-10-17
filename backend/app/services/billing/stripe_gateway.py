@@ -35,6 +35,8 @@ says `bytes` in its signature so the mistake cannot be made quietly.
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import hashlib
 import hmac
 import logging
@@ -52,6 +54,10 @@ logger = logging.getLogger("app.services.billing.stripe_gateway")
 # ============================================================================
 # Errors
 # ============================================================================
+
+
+if TYPE_CHECKING:
+    from app.services.billing.payment_gateway import GatewayCapabilities
 
 
 class StripeGatewayError(Exception):
@@ -146,7 +152,7 @@ class StripeInvoiceSnapshot:
 
 @dataclass(frozen=True)
 class StripeInvoiceItemDraft:
-    """One line FlowPilot adds to a customer's Stripe invoice (campaign session 4, F-339)."""
+    """One line Servabo adds to a customer's Stripe invoice (campaign session 4, F-339)."""
 
     key: str
     amount_cents: int
@@ -418,6 +424,27 @@ class StripeGateway:
             else float(settings.STRIPE_TIMEOUT_SECONDS)
         )
         self._client: Any = None
+
+    # -- identity (the PaymentGateway protocol) ------------------------------
+    # The protocol always named these two; this class never had them, so asking the configured
+    # gateway what it can do failed whenever it was Stripe. Callers branch on capabilities, not
+    # on the vendor's name.
+
+    @property
+    def name(self) -> str:
+        return "STRIPE"
+
+    @property
+    def capabilities(self) -> "GatewayCapabilities":
+        from app.services.billing.payment_gateway import GatewayCapabilities
+
+        return GatewayCapabilities(
+            is_merchant_of_record=False,
+            supports_seat_proration=True,
+            supports_customer_portal=True,
+            # Overage is added to the renewal invoice as invoice items (period_close_service).
+            supports_usage_billing=True,
+        )
 
     def _resolved_key(self) -> str:
         if self._api_key:
@@ -989,7 +1016,7 @@ class StripeGateway:
             params["return_url"] = return_url
         if subscription_update is not None:
             # Campaign session 4 (F-344). The portal opens on the confirmation of the plan and seats
-            # the customer picked in FlowPilot, prorated, instead of on its home page where the pick
+            # the customer picked in Servabo, prorated, instead of on its home page where the pick
             # was lost. Stripe changes one item of the subscription: its licensed (seat) item.
             item_id = self._primary_item_id(subscription_update.subscription_id)
             if item_id is None:

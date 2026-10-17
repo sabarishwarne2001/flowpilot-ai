@@ -1,7 +1,7 @@
 # =============================================================================
-# FlowPilot AI — production stack for a single Linux host.
+# Servabo — production stack for a single Linux host.
 #
-#   cd /srv/flowpilot/backend
+#   cd /srv/servabo/backend
 #   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
 #
 # Sized for a 4 vCPU / 16 GB VPS (Hetzner CPX41, DigitalOcean g-4vcpu-16gb,
@@ -26,7 +26,7 @@
 #     will OOM-kill Postgres on a shared host, which looks like data loss.
 # =============================================================================
 
-name: flowpilot-prod
+name: servabo-prod
 
 x-app-env: &app-env
   ENVIRONMENT: production
@@ -41,8 +41,8 @@ x-app-env: &app-env
   POSTGRES_PORT: 5432
   POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set}
   POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set}
-  POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
-  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-flowpilot}
+  POSTGRES_DB: ${POSTGRES_DB:-servabo}
+  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-servabo}
   DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
   DATABASE_REPLICA_ENFORCE_READ_ONLY: ${DATABASE_REPLICA_ENFORCE_READ_ONLY:-true}
 
@@ -67,6 +67,7 @@ x-app-env: &app-env
   EMAIL_ENCRYPTION_KEYS: ${EMAIL_ENCRYPTION_KEYS:?EMAIL_ENCRYPTION_KEYS must be set. Newest Fernet key first}
 
   FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL must be set, e.g. https://app.example.com}
+  WEBSITE_URL: ${WEBSITE_URL:-https://servabo.app}
   CORS_ORIGINS: ${CORS_ORIGINS:?CORS_ORIGINS must be set}
 
   STORAGE_BACKEND: ${STORAGE_BACKEND:-s3}
@@ -105,6 +106,8 @@ x-app-env: &app-env
   GATEWAY_PRICE_ID_DEVELOPER: ${GATEWAY_PRICE_ID_DEVELOPER:-}
   GATEWAY_PRICE_ID_BUSINESS: ${GATEWAY_PRICE_ID_BUSINESS:-}
   GATEWAY_PRICE_ID_ENTERPRISE: ${GATEWAY_PRICE_ID_ENTERPRISE:-}
+  GATEWAY_PRICE_ID_DEVELOPER_YEARLY: ${GATEWAY_PRICE_ID_DEVELOPER_YEARLY:-}
+  GATEWAY_PRICE_ID_BUSINESS_YEARLY: ${GATEWAY_PRICE_ID_BUSINESS_YEARLY:-}
 
   # The platform's own LLM credentials. Tenants who bring their own key (BYOK) do not
   # need them; everyone else gets an error from any AI feature without one.
@@ -132,7 +135,7 @@ x-app-env: &app-env
   PLATFORM_SMTP_PASSWORD: ${PLATFORM_SMTP_PASSWORD:-}
   PLATFORM_SMTP_ENCRYPTION: ${PLATFORM_SMTP_ENCRYPTION:-TLS}
   PLATFORM_SMTP_FROM_EMAIL: ${PLATFORM_SMTP_FROM_EMAIL:-}
-  PLATFORM_SMTP_FROM_NAME: ${PLATFORM_SMTP_FROM_NAME:-FlowPilot AI}
+  PLATFORM_SMTP_FROM_NAME: ${PLATFORM_SMTP_FROM_NAME:-Servabo}
 
   # Required (campaign session 4): who is emailed about dead jobs, payment events that will
   # never apply, bursts of server errors and duplicate subscriptions (RUNBOOK 9.6, 9.8).
@@ -169,7 +172,7 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
+      POSTGRES_DB: ${POSTGRES_DB:-servabo}
       # Tuned for 16 GB. Raise shared_buffers to 25% of RAM on a larger box.
       POSTGRES_INITDB_ARGS: "--data-checksums"
     command:
@@ -192,7 +195,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./backups:/backups
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-flowpilot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB:-servabo}"]
       interval: 10s
       timeout: 5s
       retries: 12
@@ -258,7 +261,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
-    image: flowpilot/web:${IMAGE_TAG:-latest}
+    image: servabo/web:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: migrate
@@ -275,7 +278,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
-    image: flowpilot/web:${IMAGE_TAG:-latest}
+    image: servabo/web:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: web
@@ -324,7 +327,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: flowpilot/worker:${IMAGE_TAG:-latest}
+    image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-light
@@ -342,7 +345,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: flowpilot/worker:${IMAGE_TAG:-latest}
+    image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-light
@@ -360,7 +363,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: flowpilot/worker:${IMAGE_TAG:-latest}
+    image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-relay
@@ -377,7 +380,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: flowpilot/worker:${IMAGE_TAG:-latest}
+    image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-delivery
@@ -389,17 +392,17 @@ services:
           memory: 768M
     restart: unless-stopped
 
-  worker-stripe:
+  worker-billing:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
-    image: flowpilot/worker:${IMAGE_TAG:-latest}
+    image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
-      SERVICE_ROLE: worker-stripe
+      SERVICE_ROLE: worker-billing
     <<: *after-migrate
-    command: ["python", "-m", "app.worker", "--loop", "stripe"]
+    command: ["python", "-m", "app.worker", "--loop", "billing"]
     deploy:
       resources:
         limits:
@@ -411,7 +414,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ocr
-    image: flowpilot/ocr:${IMAGE_TAG:-latest}
+    image: servabo/ocr:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-ocr
@@ -428,7 +431,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: enrich
-    image: flowpilot/enrich:${IMAGE_TAG:-latest}
+    image: servabo/enrich:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-enrich
@@ -447,7 +450,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: enrich
-    image: flowpilot/enrich:${IMAGE_TAG:-latest}
+    image: servabo/enrich:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
       SERVICE_ROLE: reranker

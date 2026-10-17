@@ -506,7 +506,7 @@ export const OrganizationWebhooks: React.FC = () => {
               Copy this signing secret now — it won&apos;t be shown again
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use it to verify the signature on every request from FlowPilot to{" "}
+              Use it to verify the signature on every request from Servabo to{" "}
               <span className="font-mono text-xs text-foreground font-semibold">{revealed.url}</span>.
               {revealed.validUntil && (
                 <>
@@ -562,7 +562,7 @@ export const OrganizationWebhooks: React.FC = () => {
                 value={url}
                 onChange={(event) => setUrl(event.target.value)}
                 maxLength={2000}
-                placeholder="https://example.com/hooks/flowpilot"
+                placeholder="https://example.com/hooks/servabo"
                 aria-invalid={urlInvalid}
                 className={`mt-1 w-full rounded-md border bg-background px-3 py-1.5 font-mono text-sm text-foreground focus:outline-none ${
                   urlInvalid ? "border-destructive" : "border-border focus:border-primary"

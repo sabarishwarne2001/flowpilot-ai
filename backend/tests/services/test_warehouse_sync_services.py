@@ -151,7 +151,7 @@ def s3_credential() -> S3Credential:
     return S3Credential(
         bucket="acme-analytics",
         region="eu-west-1",
-        prefix="flowpilot/",
+        prefix="servabo/",
         access_key_id="AKIAEXAMPLE0000000000",
         secret_access_key="s" * 40,
     )
@@ -464,10 +464,10 @@ def test_split_credential_puts_every_secret_on_the_secret_side(s3_credential):
 def test_split_credential_handles_the_snowflake_two_credential_shape():
     credential = SnowflakeCredential(
         account="xy12345.eu-west-1",
-        user="FLOWPILOT",
+        user="SERVABO",
         warehouse="COMPUTE_WH",
         database="ANALYTICS",
-        stage_name="FLOWPILOT_STAGE",
+        stage_name="SERVABO_STAGE",
         stage_bucket="acme-stage",
         stage_region="eu-west-1",
         private_key="-----BEGIN PRIVATE KEY-----\nMIIEvQ\n-----END PRIVATE KEY-----",
@@ -477,7 +477,7 @@ def test_split_credential_handles_the_snowflake_two_credential_shape():
     config, secret = sync_service._split_credential(credential)
 
     assert set(secret) == {"private_key", "stage_secret_access_key"}
-    assert config["stage_name"] == "FLOWPILOT_STAGE"
+    assert config["stage_name"] == "SERVABO_STAGE"
     assert "private_key" not in config
 
 

@@ -1,0 +1,41 @@
+---
+/**
+ * A real screenshot of the product, light and dark (website/scripts/capture-screenshots.mjs takes
+ * them from the running app with demo data). The one matching the visitor's theme is shown.
+ * The build fails if a screenshot named here was never captured: no mock-ups on this site.
+ */
+import { Picture } from "astro:assets";
+import type { ImageMetadata } from "astro";
+
+interface Props {
+  name: string;
+  alt: string;
+  class?: string;
+  /** The hero image loads first; every other one waits until it is near the screen. */
+  eager?: boolean;
+  sizes?: string;
+  frame?: boolean;
+}
+
+const { name, alt, class: className = "", eager = false, sizes = "(min-width: 1280px) 1100px, 100vw", frame = true } = Astro.props;
+const files = import.meta.glob<{ default: ImageMetadata }>("../assets/screenshots/*.png", { eager: true });
+const pick = (theme: "light" | "dark") => {
+  const file = files[`../assets/screenshots/${name}-${theme}.png`];
+  if (!file) throw new Error(`Screenshot ${name}-${theme}.png is missing: run npm run screenshots (website/scripts/capture-screenshots.mjs)`);
+  return file.default;
+};
+const light = pick("light");
+const dark = pick("dark");
+const widths = [640, 960, 1280, 1600].filter((w) => w <= light.width);
+---
+<figure class={`${frame ? "overflow-hidden rounded-xl border border-border bg-card shadow-elevation-3" : ""} ${className}`}>
+  {frame && (
+    <div class="flex h-8 items-center gap-1.5 border-b border-border bg-muted/60 px-3" aria-hidden="true">
+      <span class="h-2.5 w-2.5 rounded-full bg-border-strong"></span>
+      <span class="h-2.5 w-2.5 rounded-full bg-border-strong"></span>
+      <span class="h-2.5 w-2.5 rounded-full bg-border-strong"></span>
+    </div>
+  )}
+  <Picture src={light} alt={alt} formats={["avif", "webp"]} widths={widths} sizes={sizes} loading={eager ? "eager" : "lazy"} fetchpriority={eager ? "high" : "auto"} decoding="async" class="shot-light block h-auto w-full" />
+  <Picture src={dark} alt={alt} formats={["avif", "webp"]} widths={widths} sizes={sizes} loading="lazy" decoding="async" class="shot-dark h-auto w-full" />
+</figure>

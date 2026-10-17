@@ -248,7 +248,7 @@ def test_reset_issues_no_session(client, registered, db):
     # mints a refresh cookie, reachable with a link sitting in a mailbox, is
     # one credential path more than this flow needs.
     assert "access_token" not in response.json()
-    assert not client.cookies.get("flowpilot_refresh")
+    assert not client.cookies.get("servabo_refresh")
 
 
 def test_reset_verifies_an_unverified_address(client, unverified, db):
@@ -443,7 +443,7 @@ def test_change_password_signs_out_every_other_device(
 
 def test_change_password_rotates_the_refresh_cookie(client, registered):
     token = _login(client, registered)
-    before = client.cookies.get("flowpilot_refresh")
+    before = client.cookies.get("servabo_refresh")
 
     client.post(
         "/api/v1/auth/change-password",
@@ -451,7 +451,7 @@ def test_change_password_rotates_the_refresh_cookie(client, registered):
         headers={"Authorization": f"Bearer {token}"},
     )
 
-    after = client.cookies.get("flowpilot_refresh")
+    after = client.cookies.get("servabo_refresh")
     assert after and after != before
     assert client.post("/api/v1/auth/refresh").status_code == 200
 

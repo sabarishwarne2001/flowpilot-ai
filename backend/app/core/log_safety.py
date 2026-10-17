@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 
-_INSTALLED_FLAG = "_flowpilot_safe_make_record"
+_INSTALLED_FLAG = "_servabo_safe_make_record"
 
 
 def install() -> None:

@@ -1,5 +1,5 @@
 """
-Organization API router for FlowPilot AI.
+Organization API router for Servabo.
 
 Exposes the commercial tenant surface: provisioning, settings, the member
 directory, role management, and ownership transfer.

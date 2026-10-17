@@ -1,5 +1,5 @@
 """
-The invitation itself: FlowPilot writing to someone who is not yet a member of
+The invitation itself: Servabo writing to someone who is not yet a member of
 anything, on behalf of a tenant they cannot yet see.
 
 Replaces workspace_invitation.py, which could describe exactly one workspace at

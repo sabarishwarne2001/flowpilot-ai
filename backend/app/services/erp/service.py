@@ -1432,7 +1432,7 @@ def test_target(db: Session, *, target: ErpTarget, actor_user_id: uuid.UUID) -> 
 
 
 def _test_target(db: Session, *, target: ErpTarget, actor_user_id: uuid.UUID) -> dict:
-    """Can FlowPilot reach and authenticate to the target? Nothing is posted: HTTP reads the probe path (a
+    """Can Servabo reach and authenticate to the target? Nothing is posted: HTTP reads the probe path (a
     document number that cannot exist) or the base URL; SFTP connects, checks the pinned host key, logs in and
     lists the upload directory."""
     result: dict = {"ok": False, "kind": v.OUTCOME_PERMANENT, "message": "", "detail": {}}
@@ -1447,7 +1447,7 @@ def _test_target(db: Session, *, target: ErpTarget, actor_user_id: uuid.UUID) ->
 
             sess = http.Session(auth_mode=target.auth_mode, credential=credential, config=target.config)
             kinds = PR.supported_objects(target.format, target.preset)
-            path = next((p for p in (jsonapi.probe_request(target.preset, k, "FLOWPILOT-CONNECTIVITY-CHECK",
+            path = next((p for p in (jsonapi.probe_request(target.preset, k, "SERVABO-CONNECTIVITY-CHECK",
                                                            target.config) for k in kinds) if p), None) or "/"
             r = sess.request("GET", path, headers={"Accept": "application/json"})
             reachable = r.status is not None

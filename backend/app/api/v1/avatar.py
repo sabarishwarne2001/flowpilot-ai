@@ -1,5 +1,5 @@
 """
-Avatar routes for FlowPilot AI.
+Avatar routes for Servabo.
 
 ARCH-06 Step 7, §B.7 Option B: avatars are served through an authenticated
 route that streams the file with a Content-Type taken from the VALIDATED

@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+set -uo pipefail
+# >>> one-release names: Servabo was called FlowPilot until 2026-10-16. The old FLOWPILOT_*
+# variables and /etc/flowpilot/ still work in this release (the new name wins when both are
+# set), with one warning naming what to rename. Remove this block in the next release.
+servabo_legacy_names() {
+    local old new
+    for old in $(compgen -v | grep '^FLOWPILOT_' || true); do
+        new="SERVABO_${old#FLOWPILOT_}"
+        [[ -z "${!new+x}" ]] && export "${new}=${!old}"
+        [[ " ${SERVABO_LEGACY_SEEN:-} " == *" ${old} "* ]] && continue
+        SERVABO_LEGACY_SEEN="${SERVABO_LEGACY_SEEN:-} ${old}"
+        echo "warning: FlowPilot was renamed Servabo; rename ${old} to ${new} (the old name stops working in the next release)" >&2
+    done
+    if [[ -z "${SERVABO_SWEEPER_ENV:-}" && ! -e /etc/servabo/sweepers.env && -r /etc/flowpilot/sweepers.env ]]; then
+        SERVABO_SWEEPER_ENV=/etc/flowpilot/sweepers.env
+        echo "warning: FlowPilot was renamed Servabo; move /etc/flowpilot/ to /etc/servabo/" >&2
+    fi
+    return 0
+}
+servabo_legacy_names
+# <<< one-release names
+
+CONFIG_FILE="${SERVABO_SWEEPER_ENV:-/etc/servabo/sweepers.env}"
+[[ -r "${CONFIG_FILE}" ]] && source "${CONFIG_FILE}"
+servabo_legacy_names  # names the config file still spells the old way
+
+TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile_collector}"
+DEADLINE_SECONDS="${SWEEPER_DEADLINE_SECONDS:-93600}"
+# Every sweep in cron.d/servabo-sweepers that a Compose deployment runs (the three
+# point-in-time-recovery lines are switched off there, RUNBOOK §9.6). Campaign session 4 (F-346):
+# the list named four of the thirteen, so a retention purge or ERP retry sweep that stopped for good
+# was never reported. A deployment that runs fewer sweeps sets WATCHED_SWEEPERS in sweepers.env.
+read -r -a SWEEPERS <<< "${WATCHED_SWEEPERS:-arch07 identity invitations arch09 compliance extraction_memory entities cases corroboration obligations erp_postings process revops}"
+
+NOW="$(date -u +%s)"
+STALE=()
+
+for name in "${SWEEPERS[@]}"; do
+    metric_file="${TEXTFILE_DIR}/servabo_sweeper_${name}.prom"
+
+    if [[ ! -f "${metric_file}" ]]; then
+        STALE+=("${name}=never-ran")
+        continue
+    fi
+
+    last_success="$(
+        grep '^servabo_sweeper_last_success_timestamp_seconds' "${metric_file}" \
+            | awk '{print $NF}' | tail -n1
+    )"
+
+    if [[ -z "${last_success}" ]]; then
+        STALE+=("${name}=no-successful-run-recorded")
+        continue
+    fi
+
+    age=$(( NOW - ${last_success%.*} ))
+    if (( age > DEADLINE_SECONDS )); then
+        STALE+=("${name}=stale-${age}s")
+    fi
+done
+
+if [[ -d "${TEXTFILE_DIR}" ]]; then
+    TMP="$(mktemp "${TEXTFILE_DIR}/servabo_sweeper_watchdog.XXXXXX")"
+    {
+        echo "# HELP servabo_sweeper_watchdog_stale_count Sweepers past their success deadline."
+        echo "# TYPE servabo_sweeper_watchdog_stale_count gauge"
+        echo "servabo_sweeper_watchdog_stale_count ${#STALE[@]}"
+        echo "# HELP servabo_sweeper_watchdog_last_check_timestamp_seconds Unix time of the last watchdog pass."
+        echo "# TYPE servabo_sweeper_watchdog_last_check_timestamp_seconds gauge"
+        echo "servabo_sweeper_watchdog_last_check_timestamp_seconds ${NOW}"
+    } > "${TMP}"
+    chmod 644 "${TMP}"
+    mv "${TMP}" "${TEXTFILE_DIR}/servabo_sweeper_watchdog.prom"
+fi
+
+if (( ${#STALE[@]} == 0 )); then
+    exit 0
+fi
+
+MESSAGE="Servabo sweepers past deadline (${DEADLINE_SECONDS}s): ${STALE[*]}"
+echo "${MESSAGE}" >&2
+
+if [[ -n "${ALERT_WEBHOOK:-}" ]]; then
+    curl -fsS -m 10 -X POST -H 'Content-Type: application/json' \
+        -d "{\"severity\":\"page\",\"summary\":\"$(printf '%s' "${MESSAGE}" | sed 's/"/\\"/g')\"}" \
+        -o /dev/null "${ALERT_WEBHOOK}" || true
+fi
+
+exit 1

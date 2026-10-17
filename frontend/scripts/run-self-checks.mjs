@@ -66,7 +66,11 @@ try {
   // Campaign session 3 (N-064): dates, times, numbers and money go through the display layer
   // (src/utils/displayTime.ts), which reads the person's language and clock and the workspace's
   // date format. A bare toLocale*String() or new Intl.*Format() reads the browser instead.
-  const BYPASS = /\.toLocale(?:Date|Time)?String\(|new Intl\.(?:NumberFormat|DateTimeFormat)\(/;
+  // Website and payments session: also Intl's other formatters and navigator.language itself.
+  // formatRelativeTime passed navigator.language straight to Intl.RelativeTimeFormat, which
+  // throws on a tag like "en-US@posix" and took the whole Helm cockpit down.
+  const BYPASS =
+    /\.toLocale(?:Date|Time)?String\(|new Intl\.(?:NumberFormat|DateTimeFormat|RelativeTimeFormat|ListFormat|PluralRules)\(|navigator\.languages?\b/;
   const ALLOWED = new Set([path.join("src", "utils", "displayTime.ts")]);
   const bypasses = [];
   const walk = (dir) => {
@@ -90,6 +94,33 @@ try {
   } else {
     failed += bypasses.length;
     console.log(`FAIL  one display layer\n${bypasses.map((f) => `        - ${f}`).join("\n")}`);
+  }
+
+  // Website and payments session (C10): Dodo Payments is the gateway customers see, so no screen
+  // names Stripe (the dormant Stripe adapter's identifiers and comments are not shown to anyone).
+  const stripeWords = [];
+  const scan = (dir) => {
+    for (const name of readdirSync(dir)) {
+      const full = path.join(dir, name);
+      if (statSync(full).isDirectory()) {
+        scan(full);
+      } else if (/\.(ts|tsx)$/.test(name) && !name.endsWith(".d.ts")) {
+        const relative = path.relative(ROOT, full);
+        readFileSync(full, "utf8").split("\n").forEach((line, index) => {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("//") || trimmed.startsWith("*") || trimmed.startsWith("/*")) return;
+          const code = line.replace(/\/\/.*$/, "").replace(/\{\/\*.*\*\/\}/, "");
+          if (/\bStripe\b/.test(code)) stripeWords.push(`${relative}:${index + 1}: ${trimmed}`);
+        });
+      }
+    }
+  };
+  scan(path.join(ROOT, "src"));
+  if (stripeWords.length === 0) {
+    console.log("ok    no Stripe on screen");
+  } else {
+    failed += stripeWords.length;
+    console.log(`FAIL  no Stripe on screen\n${stripeWords.map((f) => `        - ${f}`).join("\n")}`);
   }
   process.exitCode = failed ? 1 : 0;
 } finally {

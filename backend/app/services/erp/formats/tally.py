@@ -17,11 +17,11 @@ One voucher per posting:
 Tally's sign convention: a DEBIT is written ISDEEMEDPOSITIVE "Yes" with a
 NEGATIVE amount, a credit "No" with a positive one, and a voucher's amounts sum
 to zero. `render` refuses a voucher that does not balance; `validate` checks the
-file against schemas/tally/tally-voucher-import.xsd (FlowPilot's schema of the
+file against schemas/tally/tally-voucher-import.xsd (Servabo's schema of the
 documented format -- Tally publishes none) and re-checks both rules.
 
 The voucher's REMOTEID is "FP-" + the posting's idempotency key, so the voucher
-in Tally names the posting it came from (FlowPilot's exactly-once guarantee
+in Tally names the posting it came from (Servabo's exactly-once guarantee
 does not depend on it: a file is never re-delivered without a probe).
 """
 
@@ -198,7 +198,7 @@ def render(record: Record, object_kind: str, *, remote_id: str, config: Mapping[
 
 
 def validate(data: bytes) -> list[str]:
-    """The FlowPilot Tally XSD, then Tally's rules: amounts sum to zero, ISDEEMEDPOSITIVE agrees with the sign."""
+    """The Servabo Tally XSD, then Tally's rules: amounts sum to zero, ISDEEMEDPOSITIVE agrees with the sign."""
     from app.services.erp.formats import xmlsafe
 
     problems = xsd.validate(data, xsd.TALLY)

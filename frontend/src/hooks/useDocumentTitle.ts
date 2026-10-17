@@ -1,11 +1,11 @@
 import { useEffect } from "react";
 
-const PRODUCT = "FlowPilot AI";
+const PRODUCT = "Servabo";
 
 /**
- * The browser tab's title, most specific part first: "Documents · Operations · FlowPilot AI".
+ * The browser tab's title, most specific part first: "Documents · Operations · Servabo".
  *
- * Every tab and every history entry used to read "FlowPilot AI", so two open tabs (or the back
+ * Every tab and every history entry used to read "Servabo", so two open tabs (or the back
  * button's menu) could not be told apart. Empty parts are skipped; leaving the page restores the
  * product name, so a signed-out screen never shows the last tenant's page.
  */

@@ -141,7 +141,7 @@ export const DocumentSettings: React.FC = () => {
       <div className="fp-card p-6 shadow-sm">
         <h1 className="text-2xl font-semibold">Document Settings</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Configure document ingestion, chunking, OCR, and automated extraction behaviors used throughout FlowPilot AI.
+          Configure document ingestion, chunking, OCR, and automated extraction behaviors used throughout Servabo.
         </p>
 
         <div className="mt-6 rounded-lg border border-blue-900/50 bg-blue-950/20 p-4">

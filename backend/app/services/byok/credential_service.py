@@ -259,7 +259,7 @@ def assert_endpoint_storable(
     host = resource_endpoint.strip().lower()
     if suffix and not host.endswith(suffix):
         raise CredentialShapeError(
-            f"The resource endpoint must be a {suffix} host. FlowPilot's "
+            f"The resource endpoint must be a {suffix} host. Servabo's "
             "server connects to this address, so it is restricted to the "
             "provider's own domain."
         )

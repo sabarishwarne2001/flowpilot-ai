@@ -41,7 +41,7 @@ EXCLUDE = [
 ]
 
 AWS_DOCUMENTATION_EXAMPLE = "AKIAIOSFODNN7EXAMPLE"
-KNOWN_DEV_PASSWORDS = {"postgres", "flowpilot", "password", "changeme", "test", "secret"}
+KNOWN_DEV_PASSWORDS = {"postgres", "flowpilot", "servabo", "password", "changeme", "test", "secret"}
 DB_URL = re.compile(r"postgres(?:ql)?(?:\+\w+)?://([^:\s/@]+):([^@\s/]+)@")
 
 

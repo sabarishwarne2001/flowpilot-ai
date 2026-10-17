@@ -1,16 +1,16 @@
 # =============================================================================
-# FlowPilot AI — Separated Process Fleet (ARCH-10 Step 8, ARCH-0G §4.4)
+# Servabo — Separated Process Fleet (ARCH-10 Step 8, ARCH-0G §4.4)
 # =============================================================================
 
-name: flowpilot
+name: servabo
 
 x-app-env: &app-env
-  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-flowpilot}:${POSTGRES_PASSWORD:-flowpilot}@db:5432/${POSTGRES_DB:-flowpilot}
+  DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-servabo}:${POSTGRES_PASSWORD:-servabo}@db:5432/${POSTGRES_DB:-servabo}
   POSTGRES_HOST: db
   POSTGRES_PORT: 5432
-  POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
-  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
-  POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
+  POSTGRES_USER: ${POSTGRES_USER:-servabo}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-servabo}
+  POSTGRES_DB: ${POSTGRES_DB:-servabo}
   REDIS_URL: redis://redis:6379/0
   DATABASE_REPLICA_URL: ${DATABASE_REPLICA_URL:-}
   DATABASE_REPLICA_ENFORCE_READ_ONLY: ${DATABASE_REPLICA_ENFORCE_READ_ONLY:-true}
@@ -19,7 +19,7 @@ x-app-env: &app-env
   JWT_SECRET_KEY: "${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set. Generate one with openssl rand -hex 32}"
   ENVIRONMENT: ${ENVIRONMENT:-development}
   STORAGE_BACKEND: ${STORAGE_BACKEND:-minio}
-  S3_BUCKET: ${S3_BUCKET:-flowpilot-dev}
+  S3_BUCKET: ${S3_BUCKET:-servabo-dev}
   S3_ENDPOINT_URL: ${S3_ENDPOINT_URL:-http://minio:9000}
   # F-027: the local MinIO's own credentials, never the shell's AWS keys.
   # Compose prefers the shell environment over .env, so the AWS variable
@@ -34,17 +34,17 @@ x-app-env: &app-env
 services:
   db:
     image: pgvector/pgvector:0.8.1-pg16
-    container_name: flowpilot-db
+    container_name: servabo-db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-flowpilot}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-flowpilot}
-      POSTGRES_DB: ${POSTGRES_DB:-flowpilot}
+      POSTGRES_USER: ${POSTGRES_USER:-servabo}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-servabo}
+      POSTGRES_DB: ${POSTGRES_DB:-servabo}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowpilot} -d ${POSTGRES_DB:-flowpilot}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-servabo} -d ${POSTGRES_DB:-servabo}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -52,7 +52,7 @@ services:
 
   redis:
     image: redis:7.4.6-alpine
-    container_name: flowpilot-redis
+    container_name: servabo-redis
     ports:
       - "6379:6379"
     command: redis-server --maxmemory-policy noeviction
@@ -70,7 +70,7 @@ services:
     # publishing community images). pgsty/* rebuilds upstream MinIO from
     # source. Pinned so a fresh clone gets the same bytes every time.
     image: pgsty/minio:RELEASE.2026-08-04T00-00-00Z
-    container_name: flowpilot-minio
+    container_name: servabo-minio
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
@@ -89,15 +89,15 @@ services:
 
   minio-init:
     image: pgsty/mc:RELEASE.2026-09-16T00-00-00Z
-    container_name: flowpilot-minio-init
+    container_name: servabo-minio-init
     depends_on:
       minio:
         condition: service_healthy
     entrypoint: >
       /bin/sh -c "
       mc alias set local http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin} &&
-      mc mb --ignore-existing local/${S3_BUCKET:-flowpilot-dev} &&
-      mc ilm rule add --expire-delete-marker --noncurrent-expire-days 1 local/${S3_BUCKET:-flowpilot-dev} || true
+      mc mb --ignore-existing local/${S3_BUCKET:-servabo-dev} &&
+      mc ilm rule add --expire-delete-marker --noncurrent-expire-days 1 local/${S3_BUCKET:-servabo-dev} || true
       "
 
   migrate:
@@ -105,7 +105,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
-    container_name: flowpilot-migrate
+    container_name: servabo-migrate
     environment:
       <<: *app-env
       SERVICE_ROLE: migrate
@@ -123,7 +123,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: web
-    container_name: flowpilot-web
+    container_name: servabo-web
     environment:
       <<: *app-env
       SERVICE_ROLE: web
@@ -141,7 +141,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: flowpilot-worker-relay
+    container_name: servabo-worker-relay
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-relay
@@ -156,7 +156,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: flowpilot-worker-delivery
+    container_name: servabo-worker-delivery
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-delivery
@@ -171,7 +171,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: flowpilot-worker-light
+    container_name: servabo-worker-light
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-light
@@ -190,7 +190,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: flowpilot-worker-scheduler
+    container_name: servabo-worker-scheduler
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-light
@@ -200,19 +200,19 @@ services:
     command: ["python", "-m", "app.worker", "--loop", "scheduler"]
     restart: unless-stopped
 
-  worker-stripe:
+  worker-billing:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: flowpilot-worker-stripe
+    container_name: servabo-worker-billing
     environment:
       <<: *app-env
-      SERVICE_ROLE: worker-stripe
+      SERVICE_ROLE: worker-billing
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: ["python", "-m", "app.worker", "--loop", "stripe"]
+    command: ["python", "-m", "app.worker", "--loop", "billing"]
     restart: unless-stopped
 
   worker-ocr:
@@ -220,7 +220,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: ocr
-    container_name: flowpilot-worker-ocr
+    container_name: servabo-worker-ocr
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-ocr
@@ -246,7 +246,7 @@ services:
       context: .
       dockerfile: Dockerfile
       target: enrich
-    container_name: flowpilot-worker-enrich
+    container_name: servabo-worker-enrich
     environment:
       <<: *app-env
       SERVICE_ROLE: worker-enrich
@@ -273,7 +273,7 @@ services:
       dockerfile: app/reranker/Dockerfile
       args:
         RERANKER_MODEL: ${RERANKER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
-    container_name: flowpilot-reranker
+    container_name: servabo-reranker
     environment:
       RERANKER_MODEL: ${RERANKER_MODEL:-cross-encoder/ms-marco-MiniLM-L-6-v2}
       RERANKER_INTERNAL_TOKEN: "${RERANKER_INTERNAL_TOKEN:?RERANKER_INTERNAL_TOKEN must be set. Generate one with openssl rand -hex 32}"

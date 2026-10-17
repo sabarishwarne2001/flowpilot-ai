@@ -413,7 +413,7 @@ class TestEmailImmutability:
         """
         §B.5: the message should name the actual remedy, not just refuse.
         Enforced by convention rather than by the exception class itself
-        (FlowPilotError subclasses carry no fixed message), so this checks
+        (ServaboError subclasses carry no fixed message), so this checks
         the documented example message rather than a runtime invariant.
         """
         from app.core.exceptions import EmailImmutableError

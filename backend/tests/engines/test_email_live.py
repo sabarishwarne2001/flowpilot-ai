@@ -73,7 +73,7 @@ class _MailServer:
 @pytest.fixture
 def mail_server(tmp_path):
     ca_key, srv_key = ec.generate_private_key(ec.SECP256R1()), ec.generate_private_key(ec.SECP256R1())
-    ca_cert = _cert("FlowPilot Test CA", ca_key, None, ca_key, ca=True)
+    ca_cert = _cert("Servabo Test CA", ca_key, None, ca_key, ca=True)
     srv_cert = _cert(HOST, ca_key, ca_cert.subject, srv_key, ca=False, san=HOST)
     (tmp_path / "ca.pem").write_bytes(ca_cert.public_bytes(serialization.Encoding.PEM))
     (tmp_path / "srv.pem").write_bytes(srv_cert.public_bytes(serialization.Encoding.PEM))
@@ -201,7 +201,7 @@ def test_the_test_email_is_sent_over_verified_tls(engines: Engines, mail_server:
     assert mail_server.log.index("STARTTLS") < mail_server.log.index("AUTH")
     message = mail_server.messages[-1]
     assert message["To"] == "ap@customer.example" and "billing@acme-mail.com" in message["From"], message
-    assert message["Subject"] == "FlowPilot SMTP test"
+    assert message["Subject"] == "Servabo SMTP test"
 
 
 def test_an_untrusted_certificate_is_refused_before_the_password_is_sent(

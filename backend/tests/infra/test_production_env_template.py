@@ -34,7 +34,7 @@ GUARD_REQUIRED = {
     "JWT_SECRET_KEY", "API_KEY_PEPPER", "REDIS_IDENTITY_PEPPER", "EMAIL_ENCRYPTION_KEYS",
     "POSTGRES_PASSWORD", "CORS_ORIGINS", "FRONTEND_URL", "REDIS_URL", "PLATFORM_SMTP_HOST",
     "RERANKER_INTERNAL_TOKEN", "S3_BUCKET", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY",
-    "OPERATOR_ALERT_EMAILS", "GROQ_API_KEY",
+    "OPERATOR_ALERT_EMAILS", "GROQ_API_KEY", "DODO_API_KEY", "DODO_WEBHOOK_SECRET",
 }
 
 #: Must be empty in the template: a value here would be a committed secret.
@@ -72,6 +72,8 @@ def secrets_filled_in() -> dict[str, str]:
         S3_ACCESS_KEY_ID="AKIA" + secrets.token_hex(8).upper(),
         S3_SECRET_ACCESS_KEY=secrets.token_urlsafe(30),
         GROQ_API_KEY="gsk_" + secrets.token_hex(24),
+        DODO_API_KEY="dodo_test_" + secrets.token_hex(16),
+        DODO_WEBHOOK_SECRET="whsec_" + secrets.token_hex(24),
     )
     return values
 

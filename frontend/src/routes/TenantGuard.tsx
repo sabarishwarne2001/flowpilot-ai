@@ -1,5 +1,5 @@
 /**
- * Tenant resolution guard for FlowPilot AI.
+ * Tenant resolution guard for Servabo.
  *
  * Replaces the OnboardingGuard defined inline in App.tsx, which called
  * getWorkspace() and treated any falsy result as "no workspace". An expired

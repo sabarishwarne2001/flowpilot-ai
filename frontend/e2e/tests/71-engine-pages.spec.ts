@@ -16,7 +16,7 @@ import fs from "node:fs";
 import type { Page } from "@playwright/test";
 
 import { test, expect, expectHealthyPage, settle } from "../support/fixtures";
-import { api, type ApiSession } from "../support/api";
+import { api, fetchOnce, type ApiSession } from "../support/api";
 import { API_BASE, STATE_FILE, runId, ws } from "../support/env";
 import { addMember, newCustomer, signInAs, standIn, type Customer } from "../support/journey";
 import { buildPdf, DISPUTED_INVOICE_PAGE, INVOICE_1001_RESCAN } from "../support/sample-docs";
@@ -30,7 +30,7 @@ async function enterprise(label: string): Promise<Customer> {
 async function upload(customer: Customer, name: string, body: Buffer): Promise<string> {
   const form = new FormData();
   form.append("file", new Blob([new Uint8Array(body)], { type: "application/pdf" }), `${name}-${runId()}.pdf`);
-  const response = await fetch(`${API_BASE}/workspaces/${customer.wsId}/work-items`, {
+  const response = await fetchOnce(`${API_BASE}/workspaces/${customer.wsId}/work-items`, {
     method: "POST", headers: { Authorization: `Bearer ${customer.session.accessToken}` }, body: form,
   });
   expect(response.status, await response.clone().text()).toBe(201);

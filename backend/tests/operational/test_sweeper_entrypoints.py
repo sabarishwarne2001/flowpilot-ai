@@ -11,7 +11,7 @@ import sys
 import pytest
 
 BACKEND_ROOT = pathlib.Path(__file__).resolve().parents[2]
-CRON_FILE = BACKEND_ROOT / "deploy" / "cron.d" / "flowpilot-sweepers"
+CRON_FILE = BACKEND_ROOT / "deploy" / "cron.d" / "servabo-sweepers"
 
 SWEEPER_MODULES = {
     "arch07": "scripts.sweep_arch07",
@@ -51,7 +51,7 @@ def _scheduled_commands() -> dict[str, list[str]]:
         if match is None:
             continue
         argv = shlex.split(match.group("command"))
-        if argv[0].endswith("flowpilot-sweep-watchdog"):
+        if argv[0].endswith("servabo-sweep-watchdog"):
             scheduled["watchdog"] = []
             continue
         name, *rest = argv[1:]
@@ -133,7 +133,7 @@ def test_cron_lines_route_through_the_wrapper():
         if match is None:
             continue
         command = match.group("command")
-        assert "flowpilot-sweep" in shlex.split(command)[0]
+        assert "servabo-sweep" in shlex.split(command)[0]
 
 
 # ---------------------------------------------------------------------------
@@ -144,7 +144,7 @@ def test_cron_lines_route_through_the_wrapper():
 # past its argument parser.
 # ---------------------------------------------------------------------------
 
-WRAPPER = BACKEND_ROOT / "deploy" / "bin" / "flowpilot-sweep"
+WRAPPER = BACKEND_ROOT / "deploy" / "bin" / "servabo-sweep"
 WRAPPER_CASE = re.compile(
     r'^\s*(?P<name>[a-z0-9_-]+)\)\s+SCRIPT="(?P<script>scripts/[a-z0-9_]+\.py)"\s*;'
     r'(?:\s*set -- (?P<prefix>[^;]*?)\s*"\$@"\s*;)?',
@@ -171,7 +171,7 @@ def _scheduled_argv() -> list[tuple[str, list[str]]]:
         if match is None:
             continue
         argv = shlex.split(match.group("command"))
-        if argv[0].endswith("flowpilot-sweep"):
+        if argv[0].endswith("servabo-sweep"):
             lines.append((argv[1], argv[2:]))
     return lines
 
@@ -208,6 +208,6 @@ def test_every_scheduled_command_gets_past_its_argument_parser(name: str, args: 
         return  # still running past its parser: the arguments were accepted
     refused = result.returncode == 2 and "usage:" in result.stderr and "error:" in result.stderr
     assert not refused, (
-        f"cron runs `flowpilot-sweep {name} {' '.join(args)}` and {module} refuses it:\n"
+        f"cron runs `servabo-sweep {name} {' '.join(args)}` and {module} refuses it:\n"
         f"{result.stderr[-600:]}"
     )

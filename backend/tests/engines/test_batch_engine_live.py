@@ -289,7 +289,7 @@ def test_an_export_package_is_built_verified_and_tampering_is_caught(engines: En
     manifest_bytes = archive.read(f"{root}/manifest.json")
     assert hashlib.sha256(manifest_bytes).hexdigest() == package["manifest_sha256"]
     manifest = json.loads(manifest_bytes)
-    assert manifest["format"] == "flowpilot-export-package/1"
+    assert manifest["format"] == "servabo-export-package/1"
     assert manifest["batch"]["name"] == "January supplier run"
     assert all(d["source_verified"] is True for d in manifest["documents"]), manifest["documents"]
     sums = dict(reversed(line.split("  ", 1)) for line in archive.read(f"{root}/SHA256SUMS").decode().splitlines())
@@ -315,7 +315,7 @@ def test_an_export_package_is_built_verified_and_tampering_is_caught(engines: En
     assert edited["verdict"] == "TAMPERED"
     assert {p["path"] for p in edited["problems"]} >= {"data/extractions.json"}
 
-    # 2. Edited, and SHA256SUMS and the manifest regenerated to match: only FlowPilot's record catches it.
+    # 2. Edited, and SHA256SUMS and the manifest regenerated to match: only Servabo's record catches it.
     def forge(files):
         files = edit(files)
         listed = json.loads(files[f"{root}/manifest.json"])

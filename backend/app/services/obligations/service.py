@@ -1093,7 +1093,7 @@ def render_ical(db: Session, *, obligations: Sequence[Obligation], name: str, zo
             desc.append(f"Counterparty: {ob.counterparty_name}")
         desc += list(ob.derivation or [])[:6]
         link = _console_link(ob, prefix)
-        base = ical.Event(uid=f"{ob.id}-{ob.occurrence}@flowpilot", day=ob.due_date, summary=f"{ob.title}{pending}",
+        base = ical.Event(uid=f"{ob.id}-{ob.occurrence}@servabo", day=ob.due_date, summary=f"{ob.title}{pending}",
                           description="\n".join(desc), categories=cats, status=status, sequence=int(ob.revision or 1),
                           url=link, alarm_days=int(ob.lead_days), completed=ob.state == v.STATE_DONE)
         events.append(base)
@@ -1101,7 +1101,7 @@ def render_ical(db: Session, *, obligations: Sequence[Obligation], name: str, zo
             rule = rule_of(ob)
             for n, due in T.occurrences(rule, cal=calendar_for(db, ob), first=int(ob.occurrence) + 1, until=until,
                                         limit=12):
-                events.append(ical.Event(uid=f"{ob.id}-{n}@flowpilot", day=due, summary=f"{ob.title}{pending}",
+                events.append(ical.Event(uid=f"{ob.id}-{n}@servabo", day=due, summary=f"{ob.title}{pending}",
                                          description=f"{ob.kind.title()} · occurrence {n}", categories=[ob.kind.title()],
                                          sequence=int(ob.revision or 1), url=link, alarm_days=int(ob.lead_days)))
     return ical.calendar(events, name=name, zone=zone, now=at)

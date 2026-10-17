@@ -1,0 +1,182 @@
+---
+import Base from "../layouts/Base.astro";
+import ClosingCta from "../components/ClosingCta.astro";
+import { APP, SITE, absolute } from "../config/site";
+import {
+  ALLOWANCE_LABELS,
+  FEATURE_LABELS,
+  FEATURE_ORDER,
+  HAS_YEARLY,
+  PLANS,
+  TRIAL_DAYS,
+  USAGE_BILLING,
+  allowanceText,
+  dollars,
+} from "../lib/pricing";
+
+const free = PLANS.find((p) => p.key === "free")!;
+const paid = PLANS.filter((p) => p.monthly > 0);
+const enterpriseYearlyMail = `mailto:${SITE.contactEmail}?subject=${encodeURIComponent("Servabo Enterprise, yearly agreement")}`;
+const allowanceKeys = Object.keys(ALLOWANCE_LABELS);
+
+function noteFor(planKey: string, note: string): string {
+  if (!note) return "";
+  return planKey === "free" ? "hard limit during the trial" : note;
+}
+
+const faqs = [
+  { q: `How does the ${TRIAL_DAYS}-day trial work?`, a: `Create an account and an organization; the trial starts then and lasts ${TRIAL_DAYS} days, once per account. No payment details are asked for, so there is nothing to cancel and nothing to refund. When it ends your organization becomes read-only: you can still read, search, export and delete everything, and subscribing to any paid plan lifts it at once.` },
+  { q: "What is a seat?", a: "Each person in your organization occupies one seat. You buy the seats you need and see the exact price before you confirm; adding someone past your seats asks for a seat first, so your bill never changes without someone deciding it. Monthly allowances are per seat and pooled across the organization." },
+  { q: "What happens when we reach a monthly limit?", a: USAGE_BILLING ? "Limits marked hard stop at the ceiling; soft limits let work continue and show it on your usage page; limits marked billed per unit continue and are charged on your next invoice at the rate on your billing page." : "Hard monthly limits stop at the ceiling until the next month: add seats (allowances are per seat) or upgrade for more. Soft limits let work continue and show it on your usage page. Nothing is ever charged for usage." },
+  { q: "Can we change plans or cancel?", a: "Upgrade at any time: it takes effect immediately, and the confirmation screen shows the exact amount charged for the rest of the period before you confirm. A downgrade takes effect at your next renewal. Cancel any time: your plan stays active to the end of the period you paid for and nothing more is charged." },
+  { q: "Do you offer refunds?", a: "Every new paid subscription has a 14-day money-back guarantee on its first payment, once per organization; a duplicate or mistaken charge is always refunded in full. The refund and cancellation policy has the details." },
+  { q: "Who will charge my card, and what about tax?", a: `${SITE.merchantOfRecord} is our merchant of record: it processes your payment, calculates and collects the tax that applies where you are, and issues your invoice. Your card statement names ${SITE.merchantOfRecord}.` },
+];
+
+const offerCatalog = {
+  "@context": "https://schema.org",
+  "@type": "OfferCatalog",
+  name: "Servabo plans",
+  url: absolute("/pricing"),
+  itemListElement: paid.map((p) => ({
+    "@type": "Offer",
+    name: p.name,
+    price: (p.monthly / 100).toFixed(2),
+    priceCurrency: "USD",
+    priceSpecification: { "@type": "UnitPriceSpecification", price: (p.monthly / 100).toFixed(2), priceCurrency: "USD", unitText: "per seat per month", billingDuration: "P1M" },
+  })),
+};
+---
+<Base title="Pricing" description={`Servabo pricing: ${paid.map((p) => `${p.name} ${dollars(p.monthly)}`).join(", ")} per seat per month, a ${TRIAL_DAYS}-day trial with no card, yearly plans, and a 14-day money-back guarantee.`} structuredData={[offerCatalog]}>
+  <div class="pricing-root">
+    <section class="page pt-16 text-center sm:pt-20" aria-labelledby="pricing">
+      <p class="eyebrow">Pricing</p>
+      <h1 id="pricing" class="display mx-auto mt-4 max-w-3xl">Per seat. Every price shown is the price you pay.</h1>
+      <p class="lede mx-auto mt-6 max-w-2xl">Start with a {TRIAL_DAYS}-day trial, no card needed. Pick a plan when you are ready; add seats as your team grows.</p>
+      {HAS_YEARLY && (
+        <fieldset class="interval-switch mx-auto mt-10 inline-flex rounded-xl border border-border bg-card p-1 shadow-elevation-1">
+          <legend class="sr-only">Billing interval</legend>
+          <input type="radio" name="interval" id="interval-month" value="month" checked class="sr-only" />
+          <label for="interval-month" class="cursor-pointer rounded-lg px-5 py-2 text-sm font-semibold text-muted-foreground">Monthly</label>
+          <input type="radio" name="interval" id="interval-year" value="year" class="sr-only" />
+          <label for="interval-year" class="cursor-pointer rounded-lg px-5 py-2 text-sm font-semibold text-muted-foreground">Yearly <span class="ml-1 font-normal">· 2 months free</span></label>
+        </fieldset>
+      )}
+    </section>
+
+    <section class="page mt-12" aria-label="Plans">
+      <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+        {PLANS.map((p) => (
+          <article class={`sheet flex flex-col p-7 ${p.key === "business" ? "ring-2 ring-primary" : ""}`} aria-labelledby={`plan-${p.key}`}>
+            <div class="flex items-center justify-between">
+              <h2 id={`plan-${p.key}`} class="text-lg font-semibold">{p.name}</h2>
+              {p.key === "business" && <span class="chip border-primary/30 text-primary dark:text-[hsl(var(--primary-on-dark))]">Most teams</span>}
+            </div>
+            <p class="mt-2 min-h-[3rem] text-sm leading-relaxed text-muted-foreground">{p.for}</p>
+            <div class="mt-6">
+              {p.monthly === 0 ? (
+                <p><span class="figure text-4xl font-semibold">$0</span> <span class="text-sm text-muted-foreground">for {TRIAL_DAYS} days</span></p>
+              ) : (
+                <>
+                  <p class="price-month"><span class="figure text-4xl font-semibold">{dollars(p.monthly)}</span> <span class="text-sm text-muted-foreground">per seat / month, billed monthly</span></p>
+                  {p.yearly !== null ? (
+                    <p class="price-year"><span class="figure text-4xl font-semibold">{dollars(p.yearly)}</span> <span class="text-sm text-muted-foreground">per seat / year, billed yearly</span></p>
+                  ) : (
+                    <p class="price-year text-sm leading-relaxed text-muted-foreground"><span class="figure text-4xl font-semibold text-foreground">{dollars(p.monthly)}</span> per seat / month. Yearly by agreement: <a class="link" href={enterpriseYearlyMail}>email us</a>.</p>
+                  )}
+                </>
+              )}
+            </div>
+            <a href={APP.register} class={`mt-6 ${p.key === "business" ? "btn-primary" : "btn-quiet"}`}>{p.monthly === 0 ? "Start free trial" : `Start with ${p.name}`}</a>
+            <ul class="mt-7 space-y-2.5 text-sm">
+              {p.allowances.filter((a) => ["document.upload", "ocr.page", "assistant.message", "limit.workspaces", "storage.gb_month"].includes(a.key)).map((a) => {
+                const t = allowanceText(p, a);
+                return (<li class="flex gap-2"><span class="text-success" aria-hidden="true">✓</span><span>{ALLOWANCE_LABELS[a.key]!.label}: <strong class="font-medium">{t.value}</strong></span></li>);
+              })}
+              {p.features.length > 0 && <li class="flex gap-2"><span class="text-success" aria-hidden="true">✓</span><span>{p.features.length} engines and controls (<a href="#compare" class="link">compare</a>)</span></li>}
+            </ul>
+          </article>
+        ))}
+      </div>
+      <p class="mt-6 text-center text-sm text-muted-foreground">Prices exclude taxes; {SITE.merchantOfRecord}, our merchant of record, calculates and collects tax at checkout.</p>
+      <p class="mt-1 text-center text-sm text-muted-foreground">Enterprise is per seat and self-serve, like every plan. A yearly Enterprise agreement is arranged <a class="link" href={enterpriseYearlyMail}>by email</a>.</p>
+    </section>
+
+    <section class="page mt-16" aria-labelledby="trial">
+      <div class="sheet-fold grid gap-6 p-7 md:grid-cols-[1fr_2fr]">
+        <h2 id="trial" class="h3">The trial, in full</h2>
+        <ul class="space-y-2 leading-relaxed text-muted-foreground">
+          <li>{TRIAL_DAYS} days from creating your first organization, once per account. No payment details, so nothing to cancel.</li>
+          <li>During the trial: {free.allowances.filter((a) => ["document.upload", "ocr.page", "assistant.message"].includes(a.key)).map((a) => `${allowanceText(free, a).value.replace(" a month", "")}`).join(", ")}, one workspace, two people.</li>
+          <li>When it ends your organization is read-only: read, search, export and delete everything; subscribe to keep working. Nothing is deleted.</li>
+        </ul>
+      </div>
+    </section>
+
+    <section id="compare" class="page mt-20 scroll-mt-24" aria-labelledby="compare-title">
+      <h2 id="compare-title" class="h2">Compare plans</h2>
+      <div class="relative mt-8 overflow-x-auto rounded-xl border border-border bg-card">
+        <table class="w-full min-w-[46rem] border-collapse text-left text-sm">
+          <caption class="sr-only">Every plan's allowances and features</caption>
+          <thead>
+            <tr class="border-b border-border-strong">
+              <th scope="col" class="w-[34%] px-5 py-4 font-semibold">&nbsp;</th>
+              {PLANS.map((p) => <th scope="col" class="px-5 py-4 font-semibold">{p.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="border-b border-border bg-muted/50"><th scope="rowgroup" colspan={PLANS.length + 1} class="px-5 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground">Price</th></tr>
+            <tr class="border-b border-border">
+              <th scope="row" class="px-5 py-3 font-medium">Per seat</th>
+              {PLANS.map((p) => <td class="px-5 py-3 figure">{p.monthly ? `${dollars(p.monthly)} / month` : `$0 for ${TRIAL_DAYS} days`}{p.yearly ? <span class="block text-xs text-muted-foreground">or {dollars(p.yearly)} / year</span> : null}</td>)}
+            </tr>
+            <tr class="border-b border-border bg-muted/50"><th scope="rowgroup" colspan={PLANS.length + 1} class="px-5 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground">Allowances</th></tr>
+            {allowanceKeys.map((key) => (
+              <tr class="border-b border-border">
+                <th scope="row" class="px-5 py-3 font-medium">{ALLOWANCE_LABELS[key]!.label}</th>
+                {PLANS.map((p) => {
+                  const a = p.allowances.find((x) => x.key === key);
+                  if (!a) return <td class="px-5 py-3 text-muted-foreground"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></td>;
+                  const t = allowanceText(p, a);
+                  const note = noteFor(p.key, t.note);
+                  return <td class="px-5 py-3">{t.value}{note && <span class="block text-xs text-muted-foreground">{note}</span>}</td>;
+                })}
+              </tr>
+            ))}
+            <tr class="border-b border-border bg-muted/50"><th scope="rowgroup" colspan={PLANS.length + 1} class="px-5 py-2.5 font-mono text-xs uppercase tracking-wider text-muted-foreground">Engines and controls</th></tr>
+            <tr class="border-b border-border">
+              <th scope="row" class="px-5 py-3 font-medium">Reading, review, the assistant, the audit log</th>
+              {PLANS.map(() => <td class="px-5 py-3 text-success"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></td>)}
+            </tr>
+            {FEATURE_ORDER.filter((f) => PLANS.some((p) => p.features.includes(f))).map((f) => (
+              <tr class="border-b border-border last:border-0">
+                <th scope="row" class="px-5 py-3 font-medium">{FEATURE_LABELS[f]}</th>
+                {PLANS.map((p) => p.features.includes(f)
+                  ? <td class="px-5 py-3 text-success"><span aria-hidden="true">✓</span><span class="sr-only">Included</span></td>
+                  : <td class="px-5 py-3 text-muted-foreground"><span aria-hidden="true">—</span><span class="sr-only">Not included</span></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="mt-3 text-sm text-muted-foreground">Per-seat allowances are pooled across your organization. Workspaces, file size and pages per document are per organization.</p>
+    </section>
+
+    <section class="page mt-20" aria-labelledby="billing-faq">
+      <h2 id="billing-faq" class="h2">Billing questions</h2>
+      <div class="mt-8 max-w-3xl divide-y divide-border border-y border-border">
+        {faqs.map((f) => (
+          <details class="group py-5">
+            <summary class="flex cursor-pointer list-none items-center justify-between gap-4 font-medium [&::-webkit-details-marker]:hidden">
+              {f.q}
+              <span class="figure text-muted-foreground transition-transform group-open:rotate-45" aria-hidden="true">+</span>
+            </summary>
+            <p class="mt-3 leading-relaxed text-muted-foreground">{f.a}</p>
+          </details>
+        ))}
+      </div>
+      <p class="mt-6 text-sm text-muted-foreground">The full rules: <a class="link" href="/legal/refunds">Refund and Cancellation Policy</a> · <a class="link" href="/legal/terms">Terms of Service</a></p>
+    </section>
+  </div>
+  <ClosingCta />
+</Base>

@@ -1,5 +1,7 @@
 # Decisions only the owner can make
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 Each item says what the choice is, why it matters, and what the campaign does
 until you decide. Nothing here blocks work: the campaign continues with other
 items.
@@ -1583,3 +1585,91 @@ finds. Invented names only; it is also the data for the website's screenshots.
   never document text, a person's or supplier's name, an explanation or a mandate's sentence.
 - Every refusal of a key is audited (rate-limited summary rows past 50 an hour).
 
+
+## N-103 — The owner's decisions for the website and payments session (DECIDED (owner, planning chat, 2026-10-15))
+
+- **Name and addresses.** The product is **Servabo** ("I will keep", from *pacta sunt servanda*).
+  Positioning: "The AI back office that keeps every promise your documents make." Website
+  `https://servabo.app` (`www` redirects), app `https://app.servabo.app`; every place reads one
+  setting (`WEBSITE_URL`, `FRONTEND_URL`, the website's `PUBLIC_*` build variables). Fallback if the
+  domain is taken: `getservabo.com` / `app.getservabo.com` (`docs/website/DEPLOY.md` has the switch).
+- **Operator and contact.** Sabarish N, sole proprietor in India; public contact
+  sabarishwarne@gmail.com (one setting, to become support@servabo.app). No phone number is committed
+  or published; `PUBLIC_SUPPORT_PHONE`, when set at build time, shows on the contact page only.
+- **Payments.** Dodo Payments (merchant of record) is the only gateway customers see;
+  `BILLING_GATEWAY=DODO` by default; the Stripe adapter and its tests stay, switched off, and Stripe
+  is never shown to customers.
+- **Prices unchanged.** Developer $49, Business $299, Enterprise $799 per seat per month; 7-day trial
+  without a card; yearly Developer $490 and Business $2,990 per seat; Enterprise yearly by agreement.
+- **No usage overage on Dodo at launch**: limits that would bill overage are hard ceilings; the
+  customer adds seats or upgrades.
+- **Refund and cancellation policy** exactly as the website's `/refunds` page and the terms state it
+  (cancel any time to the end of the paid period; a 14-day money-back guarantee on the first payment
+  of a new subscription, once per organization; no other refunds; errors always refunded in full;
+  refunds paid by Dodo to the original payment method; read-only after cancellation).
+- **Website**: a static site in `website/`, hosted on Cloudflare Pages, with a Caddy block as the
+  alternative.
+
+## N-104 — The rename: history, compatibility and names (DECIDED (website and payments session))
+
+- History stays history: FINDINGS, NEEDS-OWNER, STATE, past CHANGELOG entries, `archive/` and existing
+  migrations keep the old name (a header line says so); a guard test refuses it anywhere else.
+- For **one release**, the old setting prefix, API keys with the old `fp_live_`/`fp_test_` prefixes and
+  the `--loop stripe` / `worker-stripe` names keep working, with one start-up warning. New API keys
+  start `svb_live_` / `svb_test_`. Other protocol identifiers (headers, cookie, TXT record,
+  WebSocket subprotocol, storage keys, licence format) changed at once; CHANGELOG lists each.
+- The GitHub repository keeps its current name and URL (renaming it breaks clones and links for no
+  customer benefit); the owner can rename it any time, GitHub redirects.
+- Database tables and columns keep their historical names (docs/billing/DODO.md §7).
+
+## N-105 — Where it runs (DECIDED (website and payments session))
+
+One Hetzner server for the app (4 vCPU, 16 GB, EU region; best price for the size, COSTS.md) and
+Cloudflare R2 with EU jurisdiction for customers' documents (no egress fees; EU data residency helps
+with EU customers' GDPR questions). The website on Cloudflare Pages (N-103). RUNBOOK §9 and the
+HANDOFF launch checklist follow this.
+
+## N-106 — Website copy, emails and consent (DECIDED (website and payments session))
+
+- The website's copy follows N-085 (truthful claims): no customer logos, testimonials or numbers we
+  do not have; Helm's "what we never claim" list holds on every page.
+- Emails sent under the Servabo brand carry the Servabo mark and links to the website's terms and
+  privacy pages; white-labelled emails (an organization's own branding) carry neither.
+- The sign-up page says "By creating an account you agree to the Terms and Privacy Policy" with links,
+  on white-label domains too: the contract is with Servabo whatever the domain.
+- The contact page uses a mailto link, never a form (nothing to store, nothing to spam).
+
+## N-107 — Plan and seat changes on Dodo (DECIDED (website and payments session))
+
+- Plans change on Servabo's Billing page, not in Dodo's portal (Dodo's portal manages the card,
+  invoices and cancellation). The owner sees Dodo's own preview first and confirms that exact amount;
+  a different amount at confirmation is refused.
+- **Upgrade:** at once, charged for the days left at the price difference
+  (`prorated_immediately`); if the card fails, nothing changes (`prevent_change`).
+- **Downgrade:** at the next renewal, so the paid period keeps what was paid for; it is made at Dodo
+  an hour before the renewal (`do_not_bill`) after checking the smaller plan fits; it can be withdrawn
+  until then.
+- **Seats:** priced by Dodo's preview, charged at once for the days left (`prorated_immediately`).
+- Only an organization owner changes the plan.
+
+## N-108 — Enterprise OCR allowance: 95,000 pages per seat (DECIDED (website and payments session))
+
+After Dodo's fees (4% + 40¢, +1.5% international, +0.5% subscription) Enterprise kept 54.7% gross
+margin at its ceilings with 100,000 OCR pages a seat, under the 55% rule every paid plan must meet.
+The allowance is now 95,000 pages a seat; the price is unchanged. COSTS.md §5 shows every plan's
+margin at its ceilings and at typical use.
+
+## N-109 — Notices while a Dodo renewal is on hold (DECIDED (website and payments session))
+
+A declined renewal keeps full access for 13 days (`BILLING_ON_HOLD_GRACE_DAYS`, chosen to match
+Dodo's default retry window; that window is unverified, DODO.md §6). The owner and billing members are told at once ("Payment failed"), reminded 7 days
+before the end ("Payment still outstanding"), warned 2 days before ("Final notice before access
+changes") and told when the organization becomes read-only. Only the latest true notice is sent, once
+per hold. Same words as the Stripe path's dunning, so customers hear one voice.
+
+## N-110 — Telling Dodo test keys from live keys (DECIDED (website and payments session))
+
+Dodo does not document how a live key differs from a test key, so Servabo does not guess from the key.
+`DODO_LIVEMODE` chooses the host (test or live), the start-up guard refuses a host that disagrees with
+it, and `scripts/dodo_setup.py` refuses live mode outright. A live key sent to the test host is refused
+by Dodo itself. **Unverified** against a real Dodo account (DODO.md §6).

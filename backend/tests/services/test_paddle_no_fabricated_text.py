@@ -2,7 +2,7 @@
 
 ``PaddleOCRProvider._run_engine`` used to catch one Paddle/CPU error class
 (``ConvertPirAttribute2RuntimeAttribute`` / ``onednn_instruction``) and return a
-made-up result containing the text "FLOWPILOT GATE INVOICE 12345". That text was
+made-up result containing the text "SERVABO GATE INVOICE 12345". That text was
 then extracted, embedded and shown as the customer's document content.
 
 An engine crash must surface as an ``OCRError`` so the job fails visibly.
@@ -17,7 +17,7 @@ import pytest
 from app.services.ocr.base import OCRError
 from app.services.ocr.paddle import PaddleOCRProvider
 
-FAKE_TEXT = "FLOWPILOT GATE INVOICE 12345"
+FAKE_TEXT = "SERVABO GATE INVOICE 12345"
 
 ONEDNN_ERRORS = [
     "(Unimplemented) ConvertPirAttribute2RuntimeAttribute not support "

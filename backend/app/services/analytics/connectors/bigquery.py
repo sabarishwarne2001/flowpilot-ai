@@ -64,7 +64,7 @@ SCOPES = ("https://www.googleapis.com/auth/bigquery",)
 JOB_POLL_TIMEOUT_SECONDS: float = 240.0
 JOB_POLL_INTERVAL_SECONDS: float = 3.0
 
-_MULTIPART_BOUNDARY = "flowpilot-arch26-boundary"
+_MULTIPART_BOUNDARY = "servabo-arch26-boundary"
 
 
 def _access_token(service_account_json: str) -> str:
@@ -123,7 +123,7 @@ class BigQueryConnector(WarehouseConnector):
             "Authorization": f"Bearer {token}",
             "Content-Type": content_type,
             "Accept": "application/json",
-            "User-Agent": "FlowPilot-ARCH26/1.0",
+            "User-Agent": "Servabo-ARCH26/1.0",
         }
 
     def _json_request(
@@ -249,7 +249,7 @@ class BigQueryConnector(WarehouseConnector):
         )
         dataset = str(self.require(config, "dataset", where="BigQuery config"))
         location = str(config.get("location") or "US")
-        table_prefix = str(config.get("table_prefix") or "flowpilot_")
+        table_prefix = str(config.get("table_prefix") or "servabo_")
 
         try:
             token = _access_token(
@@ -280,7 +280,7 @@ class BigQueryConnector(WarehouseConnector):
 
         for part in parts:
             table = f"{table_prefix}{part.dataset.lower()}"
-            job_id = f"flowpilot_{run_id.replace('-', '')}_{part.dataset.lower()}"
+            job_id = f"servabo_{run_id.replace('-', '')}_{part.dataset.lower()}"
             configuration = {
                 "jobReference": {
                     "projectId": project_id,

@@ -151,7 +151,7 @@ const SessionLifetime: React.FC<{
       </select>
       <p className="mt-2 text-xs text-muted-foreground">
         When your SAML identity provider sends a signed single-logout request, that person&apos;s
-        FlowPilot sessions end too.
+        Servabo sessions end too.
       </p>
     </section>
   );

@@ -1,5 +1,5 @@
 """
-Database representation of Automation Rules and Audit History Logs for FlowPilot AI.
+Database representation of Automation Rules and Audit History Logs for Servabo.
 """
 
 from __future__ import annotations

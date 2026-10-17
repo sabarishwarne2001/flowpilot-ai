@@ -8,7 +8,7 @@ The console holds its access token in memory and sends it as
 cookie scoped to /auth/refresh; the access token is never a cookie). A
 browser cannot set Authorization on a WebSocket, so the console offers the
 same token in the one header a page may set: the subprotocol list,
-`["flowpilot.review.v1", "bearer.<access token>"]`. Non-browser clients may
+`["servabo.review.v1", "bearer.<access token>"]`. Non-browser clients may
 send `Authorization: Bearer` instead. The token is validated by exactly the
 checks `deps.get_current_user` / `get_verified_user` / `get_workspace_context`
 apply (signature, expiry, type; the user exists, is active and verified; the
@@ -18,7 +18,7 @@ workspace operational) plus the review hub's own role (CONTRIBUTOR) and the
 capability. A token in the query string is REFUSED, never read: it would be
 written into every access log between the browser and uvicorn.
 
-API keys (`fp_live_` / `fp_test_`) cannot open a live connection: presence
+API keys (`svb_live_` / `svb_test_`) cannot open a live connection: presence
 and soft locks are a person's, and a key has no person at a screen.
 
 The Host header is held to the same rule HostTenantMiddleware applies to HTTP
@@ -122,7 +122,7 @@ def extract_token(headers: Mapping[str, str], query: Mapping[str, str]) -> tuple
             token = auth[7:].strip()
     if not token:
         raise LiveRefused("no access token")
-    if token.startswith(("fp_live_", "fp_test_")):
+    if token.startswith(("svb_live_", "svb_test_")):
         raise LiveRefused("API keys cannot open a live review connection")
     return token, ours
 

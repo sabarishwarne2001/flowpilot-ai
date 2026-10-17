@@ -1,0 +1,31 @@
+---
+import Legal from "../../layouts/Legal.astro";
+import { SITE } from "../../config/site";
+
+const app = [
+  { name: "servabo_refresh", kind: "Cookie (HttpOnly, Secure, SameSite=Lax), sent only to the sign-in endpoints", purpose: "Keeps you signed in and lets the app renew your session securely.", lasts: "Until you sign out, or your session expires" },
+  { name: "servabo_auth_session", kind: "Browser storage (this device only)", purpose: "Your current sign-in session, so a page reload does not sign you out.", lasts: "Until you sign out" },
+  { name: "servabo_ui_preferences", kind: "Browser storage", purpose: "Your theme and layout choices, such as light or dark and a collapsed sidebar.", lasts: "Until you clear it" },
+  { name: "servabo_tenant_selection", kind: "Browser storage", purpose: "The organization and workspace you last opened.", lasts: "Until you sign out or clear it" },
+  { name: "Other small keys", kind: "Browser storage", purpose: "Things you dismissed or chose on a screen (a hidden checklist, a banner already seen, Helm's last page), so they stay that way.", lasts: "Until you clear it" },
+];
+---
+<Legal title="Cookies" description="The one cookie the Servabo app uses to keep you signed in, the settings it keeps in your browser, and the website's policy: no cookies, no analytics, no tracking." contents={[["website", "This website"], ["app", "The app"], ["choices", "Your choices"]]}>
+  <p>Servabo uses no advertising, analytics or tracking cookies, on the website or in the app.</p>
+
+  <h2 id="website">This website ({new URL(SITE.url).host})</h2>
+  <p>This website sets <strong>no cookies</strong> and loads nothing from third parties: no analytics, fonts or scripts from anyone else. If you use the light/dark switch, your choice is saved in your browser's local storage on your device so the next page matches; it is never sent to us.</p>
+
+  <h2 id="app">The app ({new URL(SITE.appUrl).host})</h2>
+  <p>The app needs these to work; none is used for anything else, and none is shared with anyone:</p>
+  <table>
+    <thead><tr><th>Name</th><th>Type</th><th>Purpose</th><th>Lasts</th></tr></thead>
+    <tbody>
+      {app.map((c) => <tr><td><code>{c.name}</code></td><td>{c.kind}</td><td>{c.purpose}</td><td>{c.lasts}</td></tr>)}
+    </tbody>
+  </table>
+  <p>Payment pages are served by {SITE.merchantOfRecord}, which sets its own cookies under its own policy while you pay.</p>
+
+  <h2 id="choices">Your choices</h2>
+  <p>Because these are strictly necessary for signing in and remembering your choices, there is no consent banner. You can delete cookies and site data in your browser at any time; you will then be signed out and your display choices reset.</p>
+</Legal>

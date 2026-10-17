@@ -6,7 +6,7 @@ WHAT ARCH-21 ALREADY BUILT, AND WHY THAT WAS NOT ENOUGH
 =======================================================
 
 `app/api/v1/public/gateway.py` has `_apply_version_headers`, which stamps
-`X-FlowPilot-API-Version`, `Deprecation`, `Sunset` and `Link` on every public
+`X-Servabo-API-Version`, `Deprecation`, `Sunset` and `Link` on every public
 gateway response. That machinery is correct and stays. Two things it cannot do:
 
 1.  IT ONLY COVERS THE PUBLIC GATEWAY. `GET /api/v1/audit-logs` carries a
@@ -68,11 +68,11 @@ logger = logging.getLogger("app.middleware.deprecation")
 HEADER_DEPRECATION = "Deprecation"
 HEADER_SUNSET = "Sunset"
 HEADER_LINK = "Link"
-HEADER_API_VERSION = "X-FlowPilot-API-Version"
+HEADER_API_VERSION = "X-Servabo-API-Version"
 
 #: Where the published policy lives. One URL, referenced by every entry that
 #: does not override it, so moving the documentation is one edit.
-POLICY_URL = "https://docs.flowpilot.ai/public-api/deprecation-policy"
+POLICY_URL = "https://docs.servabo.app/public-api/deprecation-policy"
 
 
 @dataclass(frozen=True)
@@ -130,7 +130,7 @@ DEPRECATION_POLICY: tuple[DeprecationEntry, ...] = (
         path_prefix="/api/v1/audit-logs",
         deprecation=_utc(2026, 3, 1),
         sunset=_utc(2027, 3, 1),
-        successor="https://docs.flowpilot.ai/public-api/audit-logs#cursor",
+        successor="https://docs.servabo.app/public-api/audit-logs#cursor",
         note=(
             "Offset pagination was removed in ARCH-08 and has raised 422 since. "
             "The twelve-month sunset covers the cursor migration for clients "

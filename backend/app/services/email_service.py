@@ -1,5 +1,5 @@
 """
-SMTP email delivery service for FlowPilot AI.
+SMTP email delivery service for Servabo.
 """
 
 from __future__ import annotations
@@ -64,7 +64,7 @@ def validate_smtp_host(host: str, port: int) -> str | None:
         if development and getattr(app_settings, "SMTP_ALLOW_PRIVATE_IN_DEVELOPMENT", True):
             return None
         raise SMTPHostRefused(
-            f"SMTP host '{host}' is not reachable from FlowPilot: {exc} "
+            f"SMTP host '{host}' is not reachable from Servabo: {exc} "
             "Use your provider's public SMTP hostname."
         ) from exc
     return addresses[0]

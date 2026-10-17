@@ -45,7 +45,7 @@ const LAYER_LABELS: Readonly<Record<string, string>> = {
   WORKSPACE_OVERRIDE: "This workspace's override",
   BRANDING_SENDER: "Verified branding domain",
   ORGANIZATION: "Organization email settings",
-  PLATFORM: "FlowPilot platform relay",
+  PLATFORM: "Servabo platform relay",
 };
 
 interface FormValues {

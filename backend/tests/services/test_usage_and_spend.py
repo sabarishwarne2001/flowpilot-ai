@@ -159,7 +159,7 @@ def test_secret_shaped_detail_keys_are_redacted(db, org_id):
         organization_id=org_id,
         event_type="ocr.page",
         quantity=1,
-        details={"api_key": "fp_live_abc", "pages": 1},
+        details={"api_key": "svb_live_abc", "pages": 1},
     )
     assert event.details["api_key"] == "[REDACTED]"
     assert event.details["pages"] == 1

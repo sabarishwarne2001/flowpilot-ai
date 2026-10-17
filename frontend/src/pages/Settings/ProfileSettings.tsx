@@ -213,7 +213,7 @@ export const ProfileSettings: React.FC = () => {
       <div>
         <h2 className="text-lg font-semibold tracking-tight text-foreground">Profile</h2>
         <p className="mt-1 text-sm text-muted-foreground">
-          How you appear across FlowPilot — in the member directory, on audit
+          How you appear across Servabo — in the member directory, on audit
           entries, and in notifications.
         </p>
       </div>

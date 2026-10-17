@@ -653,7 +653,7 @@ def compile_pack(db: Any = None, *, include_environment: bool = True) -> dict[st
     }
 
     pack: dict[str, Any] = {
-        "report": "FlowPilot AI — SOC 2 Type I evidence pack",
+        "report": "Servabo — SOC 2 Type I evidence pack",
         "report_type": "TYPE_I",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "ga_migration_head": GA_MIGRATION_HEAD,

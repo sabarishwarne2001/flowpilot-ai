@@ -1,4 +1,4 @@
-FlowPilot AI — Backend Core Foundation
+Servabo — Backend Core Foundation
 
 Architectural Purpose
 
@@ -6,7 +6,7 @@ The README.md serves as the developer onboard documentation. It establishes the 
 
 README.md
 
-FlowPilot AI is a production-ready, modular document intelligence and workflow automation SaaS platform. This repository contains the ASGI backend API services engine built with FastAPI, Python 3.12, and Pydantic v2.
+Servabo is a production-ready, modular document intelligence and workflow automation SaaS platform. This repository contains the ASGI backend API services engine built with FastAPI, Python 3.12, and Pydantic v2.
 
 This foundation establishes the core scaffolding, settings validation engines, centralized logging handlers, base health check routes, and Docker deployment layers.
 
@@ -105,7 +105,7 @@ The local codebase maps to /app/app within the container context, enabling immed
 
 View Runtime Console Logs
 
-docker logs -f flowpilot-backend
+docker logs -f servabo-backend
 
 Terminate Container Services
 
@@ -131,7 +131,7 @@ Baseline Health Diagnostic Route
 
 {
     "status": "healthy",
-    "service": "FlowPilot AI",
+    "service": "Servabo",
     "version": "1.0.0",
     "environment": "development",
     "timestamp": "2024-03-24T12:00:00.000000"
@@ -215,7 +215,7 @@ Docker Commands
 docker-compose up --build -d
 
 # 2. Monitor execution log outputs
-docker logs -f flowpilot-backend
+docker logs -f servabo-backend
 
 # 3. Shut down and clean container configurations
 docker-compose down

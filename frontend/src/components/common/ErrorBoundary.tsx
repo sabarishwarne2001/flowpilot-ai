@@ -107,12 +107,12 @@ export class ErrorBoundary extends Component<
             {stale ? <RefreshCw className="h-5 w-5" aria-hidden /> : <AlertOctagon className="h-5 w-5" aria-hidden />}
           </div>
           <h2 className="mb-1.5 text-lg font-semibold tracking-tight text-foreground">
-            {stale ? "A new version of FlowPilot is available" : "Something went wrong on this page"}
+            {stale ? "A new version of Servabo is available" : "Something went wrong on this page"}
           </h2>
           <p className="mb-5 text-sm leading-relaxed text-muted-foreground">
             {stale
-              ? "FlowPilot was updated while this tab was open. Reload to continue with the new version."
-              : "This page hit an unexpected error. Your data is safe, and the rest of FlowPilot still works: try again, or pick another page from the menu."}
+              ? "Servabo was updated while this tab was open. Reload to continue with the new version."
+              : "This page hit an unexpected error. Your data is safe, and the rest of Servabo still works: try again, or pick another page from the menu."}
           </p>
           {import.meta.env.DEV && this.state.error && !stale && (
             <pre className="mb-5 max-h-32 w-full overflow-auto rounded-lg border border-border/40 bg-muted/60 p-3 text-left font-mono text-[11px] text-destructive">

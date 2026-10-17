@@ -1,5 +1,5 @@
 """
-Notifications API router for FlowPilot AI.
+Notifications API router for Servabo.
 """
 
 from __future__ import annotations

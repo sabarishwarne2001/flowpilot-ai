@@ -1,5 +1,5 @@
 """
-HttpOnly refresh cookie helpers for FlowPilot AI (ARCH-03 §B.3).
+HttpOnly refresh cookie helpers for Servabo (ARCH-03 §B.3).
 """
 
 from __future__ import annotations
@@ -11,7 +11,7 @@ from app.core.config import settings
 
 logger = logging.getLogger("app.core.cookies")
 
-REFRESH_COOKIE_NAME = "flowpilot_refresh"
+REFRESH_COOKIE_NAME = "servabo_refresh"
 
 
 def refresh_cookie_path() -> str:

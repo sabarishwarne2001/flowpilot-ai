@@ -527,7 +527,7 @@ def _record(
         cost_basis_source = None
 
     # ARCH-22 §3.3. The tenant's own provider account was billed for these
-    # tokens, so FlowPilot's supplier cost for them is genuinely zero. Revenue
+    # tokens, so Servabo's supplier cost for them is genuinely zero. Revenue
     # is deliberately NOT touched: we still charge for the platform service,
     # and `cost_micros` / `unit_price_micros` stay exactly as the price book
     # resolved them. Only the COST half becomes zero.

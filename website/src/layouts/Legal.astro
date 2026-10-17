@@ -1,0 +1,49 @@
+---
+import Base from "./Base.astro";
+import { SITE } from "../config/site";
+
+interface Props {
+  title: string;
+  description: string;
+  /** The headings of this page, for the contents list: [id, label]. */
+  contents: [string, string][];
+}
+const { title, description, contents } = Astro.props;
+const updated = new Date(`${SITE.legalUpdated}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+---
+<Base title={title} description={description}>
+  <div class="page grid gap-12 pt-16 sm:pt-20 lg:grid-cols-[15rem_1fr]">
+    <aside class="lg:order-1">
+      <nav aria-label="Legal pages" class="lg:sticky lg:top-24">
+        <p class="eyebrow">Legal</p>
+        <ul class="mt-3 space-y-1.5 text-sm">
+          {[
+            ["/legal/terms", "Terms of Service"],
+            ["/legal/privacy", "Privacy Policy"],
+            ["/legal/refunds", "Refund & Cancellation"],
+            ["/legal/acceptable-use", "Acceptable Use"],
+            ["/legal/subprocessors", "Subprocessors"],
+            ["/legal/cookies", "Cookies"],
+          ].map(([href, label]) => (
+            <li><a href={href} aria-current={Astro.url.pathname.replace(/\.html$/, "") === href ? "page" : undefined} class="text-muted-foreground hover:text-foreground aria-[current=page]:font-semibold aria-[current=page]:text-foreground">{label}</a></li>
+          ))}
+        </ul>
+        {contents.length > 0 && (
+          <>
+            <p class="eyebrow mt-8">On this page</p>
+            <ol class="mt-3 space-y-1.5 text-sm">
+              {contents.map(([id, label]) => <li><a href={`#${id}`} class="text-muted-foreground hover:text-foreground">{label}</a></li>)}
+            </ol>
+          </>
+        )}
+      </nav>
+    </aside>
+    <article class="lg:order-2">
+      <h1 class="display">{title}</h1>
+      <p class="mt-4 text-sm text-muted-foreground">Last updated <time datetime={SITE.legalUpdated}>{updated}</time></p>
+      <div class="prose mt-10">
+        <slot />
+      </div>
+    </article>
+  </div>
+</Base>

@@ -127,7 +127,7 @@ class RerankResponse(BaseModel):
     truncated: bool = False
 
 
-app = FastAPI(title="FlowPilot Reranker", version="arch11.7", docs_url=None, redoc_url=None)
+app = FastAPI(title="Servabo Reranker", version="arch11.7", docs_url=None, redoc_url=None)
 
 
 @app.on_event("startup")

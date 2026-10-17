@@ -1,5 +1,5 @@
 /**
- * The single source of truth for tenant context in the FlowPilot AI UI.
+ * The single source of truth for tenant context in the Servabo UI.
  */
 
 import { useCallback, useEffect, useMemo } from "react";

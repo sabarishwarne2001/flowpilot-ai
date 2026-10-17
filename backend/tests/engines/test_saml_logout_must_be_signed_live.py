@@ -3,7 +3,7 @@
 POST /api/v1/saml/slo is public, as single logout requires. It read the SessionIndex from the
 request and revoked every session carrying it without checking a signature, so anyone who knew a
 session index (it travels in the SAML assertion through the user's browser) could sign that
-person out of FlowPilot, as often as they liked. The request is now accepted only when its
+person out of Servabo, as often as they liked. The request is now accepted only when its
 signature verifies against a live signing certificate of the identity provider named in its
 Issuer, and only that provider's sessions are revoked.
 """

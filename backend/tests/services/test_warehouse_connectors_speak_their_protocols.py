@@ -66,7 +66,7 @@ def _no_waiting(monkeypatch: pytest.MonkeyPatch) -> None:
 # BigQuery
 # ---------------------------------------------------------------------------------------------
 
-BQ_CONFIG = {"project_id": "acme-proj", "dataset": "flowpilot", "location": "EU", "table_prefix": "fp_"}
+BQ_CONFIG = {"project_id": "acme-proj", "dataset": "servabo", "location": "EU", "table_prefix": "fp_"}
 BQ_SECRET = {"service_account_json": '{"type": "service_account"}'}
 
 
@@ -99,7 +99,7 @@ def test_bigquery_loads_each_dataset_as_an_append_job_and_reports_each_outcome(b
     assert upload["headers"]["Content-Type"].startswith("multipart/related; boundary=")
     configuration = json.loads(upload["body"].split(b"\r\n\r\n", 1)[1].split(b"\r\n--", 1)[0])
     load = configuration["configuration"]["load"]
-    assert load["destinationTable"] == {"projectId": "acme-proj", "datasetId": "flowpilot", "tableId": "fp_usage_daily"}
+    assert load["destinationTable"] == {"projectId": "acme-proj", "datasetId": "servabo", "tableId": "fp_usage_daily"}
     assert (load["writeDisposition"], load["sourceFormat"]) == ("WRITE_APPEND", "PARQUET")
     assert configuration["jobReference"]["location"] == "EU"
     assert b"PAR1USAGE_DAILYPAR1" in upload["body"]
@@ -107,14 +107,14 @@ def test_bigquery_loads_each_dataset_as_an_append_job_and_reports_each_outcome(b
 
 
 def test_bigquery_probe_reads_the_dataset_and_its_location(bq) -> None:
-    bq.request = Vendor([("GET", r"/projects/acme-proj/datasets/flowpilot$", (200, {"location": "EU"}))])
+    bq.request = Vendor([("GET", r"/projects/acme-proj/datasets/servabo$", (200, {"location": "EU"}))])
     assert bq.test_connection(config=BQ_CONFIG, credential=BQ_SECRET).ok
 
-    bq.request = Vendor([("GET", r"/datasets/flowpilot$", (200, {"location": "US"}))])
+    bq.request = Vendor([("GET", r"/datasets/servabo$", (200, {"location": "US"}))])
     moved = bq.test_connection(config=BQ_CONFIG, credential=BQ_SECRET)
     assert not moved.ok and "dataset location is US" in (moved.detail or "")
 
-    bq.request = Vendor([("GET", r"/datasets/flowpilot$", (403, {"error": {"message": "denied"}}))])
+    bq.request = Vendor([("GET", r"/datasets/servabo$", (403, {"error": {"message": "denied"}}))])
     refused = bq.test_connection(config=BQ_CONFIG, credential=BQ_SECRET)
     assert not refused.ok and refused.code == "CONNECTOR_AUTH", refused
 
@@ -130,12 +130,12 @@ DB_SECRET = {"access_token": "dapi-test-token"}
 
 def test_databricks_puts_the_file_in_the_volume_then_copies_it_into_the_table() -> None:
     connector = databricks.DatabricksConnector()
-    volume = "/Volumes/main/analytics/landing/flowpilot/run-1/usage_daily.parquet"
+    volume = "/Volumes/main/analytics/landing/servabo/run-1/usage_daily.parquet"
     vendor = Vendor([
         ("PUT", re.escape(f"https://{DB_CONFIG['host']}/api/2.0/fs/files{volume}?overwrite=true"), (204, {})),
         ("POST", r"/api/2.0/sql/statements$", (200, {"statement_id": "st-1", "status": {"state": "PENDING"}})),
         ("GET", r"/api/2.0/sql/statements/st-1$", (200, {"statement_id": "st-1", "status": {"state": "SUCCEEDED"}})),
-        ("PUT", r"/landing/flowpilot/run-1/assistant_turns\.parquet", (204, {})),
+        ("PUT", r"/landing/servabo/run-1/assistant_turns\.parquet", (204, {})),
         ("POST", r"/api/2.0/sql/statements$",
          (200, {"statement_id": "st-2", "status": {"state": "FAILED", "error": {"message": "column type mismatch"}}})),
     ])
@@ -181,7 +181,7 @@ def snowflake_key() -> str:
 def test_snowflake_stages_then_copies_with_a_key_pair_token(monkeypatch: pytest.MonkeyPatch, snowflake_key: str) -> None:
     staged: list[dict[str, Any]] = []
     monkeypatch.setattr(snowflake, "put_object_bytes", lambda **kwargs: staged.append(kwargs))
-    config = {"account": "acme-xy12345", "user": "FLOWPILOT", "warehouse": "LOAD_WH", "database": "ANALYTICS",
+    config = {"account": "acme-xy12345", "user": "SERVABO", "warehouse": "LOAD_WH", "database": "ANALYTICS",
               "db_schema": "PUBLIC", "stage_name": "FP_STAGE", "stage_bucket": "acme-stage", "stage_region": "eu-west-1",
               "stage_access_key_id": "AKIASTAGEEXAMPLE0001"}
     secret = {"private_key": snowflake_key, "stage_secret_access_key": "t" * 40}
@@ -197,15 +197,15 @@ def test_snowflake_stages_then_copies_with_a_key_pair_token(monkeypatch: pytest.
 
     assert outcome.delivered_datasets == ("USAGE_DAILY",) and outcome.failed_datasets == ("ASSISTANT_TURNS",)
     assert outcome.remote_references == {"USAGE_DAILY": "01b2-handle"}
-    assert [s["key"] for s in staged] == ["flowpilot/run-9/usage_daily.parquet", "flowpilot/run-9/assistant_turns.parquet"]
+    assert [s["key"] for s in staged] == ["servabo/run-9/usage_daily.parquet", "servabo/run-9/assistant_turns.parquet"]
     assert staged[0]["payload"] == b"PAR1USAGE_DAILYPAR1" and staged[0]["bucket"] == "acme-stage"
 
     request = vendor.sent[0]
     sent = json.loads(request["body"])
-    assert sent["statement"].startswith("COPY INTO FLOWPILOT_USAGE_DAILY FROM @FP_STAGE/flowpilot/run-9/usage_daily.parquet")
+    assert sent["statement"].startswith("COPY INTO SERVABO_USAGE_DAILY FROM @FP_STAGE/servabo/run-9/usage_daily.parquet")
     assert "FILE_FORMAT = (TYPE = PARQUET)" in sent["statement"] and "ON_ERROR = ABORT_STATEMENT" in sent["statement"]
     assert (sent["warehouse"], sent["database"], sent["schema"]) == ("LOAD_WH", "ANALYTICS", "PUBLIC")
     assert request["headers"]["X-Snowflake-Authorization-Token-Type"] == "KEYPAIR_JWT"
     claims = pyjwt.decode(request["headers"]["Authorization"].removeprefix("Bearer "), options={"verify_signature": False})
-    assert claims["sub"] == "ACME-XY12345.FLOWPILOT"
-    assert claims["iss"].startswith("ACME-XY12345.FLOWPILOT.SHA256:")
+    assert claims["sub"] == "ACME-XY12345.SERVABO"
+    assert claims["iss"].startswith("ACME-XY12345.SERVABO.SHA256:")

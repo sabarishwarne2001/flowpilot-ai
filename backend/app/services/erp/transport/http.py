@@ -215,7 +215,7 @@ class Session:
         if path_or_url.startswith("https://") and urlsplit(url).hostname != urlsplit(base_url(self.config)).hostname:
             return Response(v.OUTCOME_PERMANENT, message="a response pointed at another host; not followed")
         try:
-            all_headers = {"User-Agent": "FlowPilot-ERP/1", **(headers or {}), **self.auth_headers()}
+            all_headers = {"User-Agent": "Servabo-ERP/1", **(headers or {}), **self.auth_headers()}
         except HttpError as exc:
             return Response(exc.kind, message=str(exc))
         if write and self.csrf:

@@ -313,10 +313,10 @@ export const JitPolicyPanel: React.FC = () => {
                   )}
                 </dd>
                 <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {seatPriceQuery.data.proration_source === "STRIPE_PREVIEW"
-                    ? "Quoted by Stripe for the current period."
+                  {seatPriceQuery.data.proration_source !== "UNAVAILABLE"
+                    ? "Quoted by the payment provider for the current period."
                     : (seatPriceQuery.data.proration_unavailable_reason ??
-                      "Unavailable. It will be whatever Stripe invoices.")}
+                      "Unavailable. It will be what the payment provider charges for the rest of the period.")}
                 </p>
               </div>
             </dl>

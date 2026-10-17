@@ -2,7 +2,7 @@
 
     pytest tests/api/test_invitation_signup.py -q
 
-F-222. Someone invited who had no FlowPilot account had to leave the invitation,
+F-222. Someone invited who had no Servabo account had to leave the invitation,
 register on the general sign-up page (typing the invited address themselves),
 wait for a verification email, verify, sign in, and find their way back to the
 invitation link, whose token lived only in the first tab. The invitation already

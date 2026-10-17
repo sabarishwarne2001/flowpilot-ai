@@ -368,9 +368,9 @@ for jt in job_types:
 for loop in ("relay", "delivery", "jobs(light)", "jobs(ocr)", "jobs(enrich)", "stripe", "scheduler"):
     add("background_job", f"worker-loop:{loop}", f"python -m app.worker --loop {loop.split('(')[0]} (docker-compose service)",
         critical="billing" if loop == "stripe" else "")
-cron = (BACKEND / "deploy/cron.d/flowpilot-sweepers").read_text() + (BACKEND / "deploy/cron.d/flowpilot-backups").read_text()
+cron = (BACKEND / "deploy/cron.d/servabo-sweepers").read_text() + (BACKEND / "deploy/cron.d/servabo-backups").read_text()
 for line in cron.splitlines():
-    m = re.match(r"([0-9*/,-]+ [0-9*/,-]+ [0-9*]+ [0-9*]+ [0-9*]+)\s+\S+\s+\S+/(flowpilot-sweep(?:-watchdog)?)\s*(\S*)\s*(.*)", line)
+    m = re.match(r"([0-9*/,-]+ [0-9*/,-]+ [0-9*]+ [0-9*]+ [0-9*]+)\s+\S+\s+\S+/(servabo-sweep(?:-watchdog)?)\s*(\S*)\s*(.*)", line)
     if m:
         name = m.group(3) or "watchdog"
         crit = "data-governance" if name in ("compliance", "backup", "restore-drill", "base-backup", "pitr-drill") else ""

@@ -11,7 +11,7 @@ Each entry: key id (from `app.core.signing.key_id`) -> public key (base64, raw 3
 whether it is a production key. A NON-production key's signatures are refused when ENVIRONMENT=production, so a
 development key can live here without being able to license a production deployment.
 
-EMPTY IN THE REPOSITORY. The owner generates FlowPilot's keys once, offline, and pins the public halves:
+EMPTY IN THE REPOSITORY. The owner generates Servabo's keys once, offline, and pins the public halves:
 
     python scripts/licence_tool.py keygen --out <private-key-file>            # keep the file OFF this machine
     python scripts/licence_tool.py trust --public-key <b64> --purpose licence --production

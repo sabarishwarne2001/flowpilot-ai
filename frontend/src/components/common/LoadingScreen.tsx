@@ -5,7 +5,7 @@ import { Brand } from "@/components/branding/Brand";
 import { useOptionalTenant } from "@/routes/TenantContext";
 
 /**
- * Full-viewport, stateless application loading screen for FlowPilot AI.
+ * Full-viewport, stateless application loading screen for Servabo.
  *
  * Provides automated transitions, aligns with system design languages,
  * and complies with accessibility guidelines during startup or lazy-loads transitions.

@@ -14,7 +14,7 @@ import { formatTimestampDate } from "@/utils/displayTime";
 /** The banner shows from day 5 of the 7-day trial (three days left), as N-052 decided. */
 const BANNER_DAYS_LEFT = 3;
 
-const dismissKey = (organizationId: string): string => `flowpilot.trialEnded.seen.${organizationId}`;
+const dismissKey = (organizationId: string): string => `servabo.trialEnded.seen.${organizationId}`;
 
 const readDismissed = (organizationId: string): boolean => {
   try {

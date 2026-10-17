@@ -116,7 +116,7 @@ const SIZE_CLASSES: Record<AvatarSize, string> = {
  *
  * Splitting the email's local part on `.`, `_`, `-` and `+` turns
  * `sabarish.warne@example.com` into "SW" rather than "SA". The `+` is included
- * because plus-addressing is common and `user+flowpilot@…` should not initial
+ * because plus-addressing is common and `user+servabo@…` should not initial
  * as "UF".
  */
 export function initialsFor(

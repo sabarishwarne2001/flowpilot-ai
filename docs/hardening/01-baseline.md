@@ -1,5 +1,7 @@
 # Phase 1 — Boot and honest baseline
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 _Date: 2026-09-30. Branch `hardening/baseline`, PR #2._
 
 This is what builds, starts and passes **today**, measured by running it, not

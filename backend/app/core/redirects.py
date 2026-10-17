@@ -1,5 +1,5 @@
 """
-Post-authentication redirect validation for FlowPilot AI.
+Post-authentication redirect validation for Servabo.
 
 ARCH-06 Step 9, §B.8 Option A: carry a validated redirect path through email
 verification.
@@ -13,7 +13,7 @@ because the request body is whatever the caller chose to send. Anyone can POST
 to /auth/register directly with `redirect: "https://evil.example.com"`.
 
 The value reaching this module is embedded in a link inside an email that
-FlowPilot sends, over FlowPilot's own domain and reputation. An unvalidated
+Servabo sends, over Servabo's own domain and reputation. An unvalidated
 value there is a phishing primitive with our From header on it -- materially
 worse than an open redirect on a page the user already navigated to. So the
 server validates independently and never trusts the client's check.

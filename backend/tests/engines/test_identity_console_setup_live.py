@@ -26,7 +26,7 @@ ID = "/identity"
 
 @pytest.fixture
 def published(monkeypatch) -> dict[str, list[str]]:
-    """TXT records the 'DNS' answers with, by domain (apex and _flowpilot.<domain>)."""
+    """TXT records the 'DNS' answers with, by domain (apex and _servabo.<domain>)."""
     records: dict[str, list[str]] = {}
 
     def lookup_txt(domain: str, *, subdomain: str | None = None):
@@ -130,7 +130,7 @@ def test_a_wrong_txt_record_does_not_verify(engines: Engines, published) -> None
     engines.plan("enterprise")
     domain = f"wrong-{uuid.uuid4().hex[:6]}.example.com"
     claimed = engines.post(f"{ID}/domains", {"domain": domain}, org=True).json()
-    published[domain] = ["flowpilot-verification=not-the-token"]
+    published[domain] = ["servabo-verification=not-the-token"]
     response = engines.post(f"{ID}/domains/{claimed['id']}/verify", org=True)
     assert response.status_code == 409, response.text
     listed = engines.get(f"{ID}/domains", org=True).json()

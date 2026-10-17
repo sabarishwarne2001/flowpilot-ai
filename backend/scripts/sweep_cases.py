@@ -4,8 +4,8 @@
     python scripts/sweep_cases.py            # report what would change
     python scripts/sweep_cases.py --apply    # expire requests, re-evaluate open cases
 
-Dispatched by `flowpilot-sweep cases` (deploy/bin/flowpilot-sweep) and
-scheduled in deploy/cron.d/flowpilot-sweepers (RH-4 G14). Re-evaluation picks
+Dispatched by `servabo-sweep cases` (deploy/bin/servabo-sweep) and
+scheduled in deploy/cron.d/servabo-sweepers (RH-4 G14). Re-evaluation picks
 up documents whose fields a reviewer corrected since the case was graded.
 """
 

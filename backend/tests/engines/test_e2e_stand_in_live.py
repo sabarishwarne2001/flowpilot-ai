@@ -3,7 +3,7 @@
     pytest tests/engines/test_e2e_stand_in_live.py -q
 
 `scripts/e2e_stand_in.py` plays Stripe's side for the end-to-end journeys by handing events to
-FlowPilot's own reconcile code. This proves each command leaves FlowPilot in the state the real
+Servabo's own reconcile code. This proves each command leaves Servabo in the state the real
 event would: a subscription after checkout, a closed period and a dunning notice after a declined
 renewal, read-only once the retries run out, everything back once the card is fixed, Free after a
 cancellation, and a trial that has ended.
@@ -36,7 +36,9 @@ def stand_in(engines: Engines, tmp_path, monkeypatch: pytest.MonkeyPatch):
     def run(*args: str) -> dict:
         captured = io.StringIO()
         with redirect_stdout(captured):
-            assert module.main([*args, "--org", slug]) == 0
+            # Stripe's side: these tests were written for it (the Dodo side is the browser journeys'
+            # default, through the stand-in Dodo and the real worker).
+            assert module.main([*args, "--org", slug, "--gateway", "stripe"]) == 0
         engines.refresh()
         return json.loads(captured.getvalue().strip().splitlines()[-1])
 

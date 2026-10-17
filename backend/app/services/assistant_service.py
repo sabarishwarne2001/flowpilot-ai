@@ -1,5 +1,5 @@
 """
-AI Assistant orchestration service for FlowPilot AI.
+AI Assistant orchestration service for Servabo.
 ARCH-11.5 Step 1 & 6: Request tracing, pre-generated message IDs, and HTTP 402 quota conversions.
 ARCH-12 Step 3 & 4: Unbounded history loading with budget delegation, and unified output redaction.
 """

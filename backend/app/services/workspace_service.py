@@ -1,5 +1,5 @@
 """
-Business orchestration for Workspaces within FlowPilot AI.
+Business orchestration for Workspaces within Servabo.
 ARCH-14 Step 8 CONTRACT: Removed legacy cost parameters from workspace AI initialization.
 """
 

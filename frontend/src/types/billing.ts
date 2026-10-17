@@ -118,6 +118,12 @@ export interface InvoiceSummary {
   readonly seats_billed: number;
   readonly finalized_at: string | null;
   readonly stripe_invoice_id: string | null;
+  /** Website and payments session (C4): the gateway that took the payment. */
+  readonly gateway?: "STRIPE" | "DODO";
+  /** Who issued the tax invoice ("Dodo Payments (merchant of record)"), when not Servabo. */
+  readonly issued_by?: string | null;
+  /** Whether "Download invoice" fetches the gateway's PDF. */
+  readonly downloadable?: boolean;
 }
 
 export interface InvoiceListResponse {
@@ -173,6 +179,23 @@ export interface SubscriptionBrief {
   readonly current_period_start: string;
   readonly current_period_end: string;
   readonly cancel_at_period_end: boolean;
+  /** Website and payments session (C6): a downgrade scheduled for the renewal. */
+  readonly pending_quota_tier_key?: string | null;
+  readonly pending_seats?: number | null;
+  readonly pending_effective_at?: string | null;
+}
+
+/** Website and payments session (C6): what a plan change costs now, and when it takes effect. */
+export interface PlanChangePreview {
+  readonly direction: "UPGRADE" | "DOWNGRADE";
+  readonly effective: "NOW" | "AT_RENEWAL";
+  readonly effective_at: string;
+  readonly amount_now_micros: number;
+  readonly currency: string;
+  readonly next_renewal_micros: number;
+  readonly plan_name: string;
+  readonly seats: number;
+  readonly blockers: readonly { readonly code: string; readonly message: string }[];
 }
 
 export interface SubscriptionStateResponse {
@@ -217,6 +240,8 @@ export interface BillingAccessResponse {
   /** ARCH-30 Tranche 3 (D-11). */
   readonly subscription_status: string | null;
   readonly grace_ends_at: string | null;
+  /** Website and payments session (C5): the bank reversed a payment (a lost dispute). */
+  readonly reason?: "PAYMENT_REVERSED" | null;
 }
 
 export interface CheckoutSessionRequest {
@@ -341,7 +366,8 @@ export const limitUtilisation = (limit: UsageLimit): number | null => {
  * customer reading their invoice, not by us.
  */
 export type SeatPriceSource = "PRICE_BOOK" | "UNPRICED";
-export type SeatProrationSource = "STRIPE_PREVIEW" | "UNAVAILABLE";
+/** Website and payments session (C10): Dodo's change-plan preview quotes seats too. */
+export type SeatProrationSource = "STRIPE_PREVIEW" | "DODO_PREVIEW" | "UNAVAILABLE";
 
 export interface SeatPriceBookResponse {
   readonly organization_id: string;

@@ -96,7 +96,7 @@ def validate_endpoints(doc: dict) -> None:
         try:
             resolve_and_validate(parts.hostname, parts.port or 443)
         except SSRFClientError as exc:
-            raise IdpConfigError(f"{key} is not reachable from FlowPilot: {exc}") from exc
+            raise IdpConfigError(f"{key} is not reachable from Servabo: {exc}") from exc
 
 
 def fetch_jwks(jwks_uri: str) -> dict:

@@ -67,7 +67,7 @@ def _spawn(state: _LoopState, shutdown: ShutdownFlag) -> None:
     thread = threading.Thread(
         target=_run_once,
         args=(state, shutdown),
-        name=f"flowpilot-{state.spec.name}",
+        name=f"servabo-{state.spec.name}",
         daemon=True,
     )
     state.thread = thread

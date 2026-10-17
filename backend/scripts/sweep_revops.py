@@ -5,7 +5,7 @@
     python scripts/sweep_revops.py --apply      # enqueue ONE revops.sweep job for today (idempotent on the date)
     python scripts/sweep_revops.py --inline     # run the sweep here and commit
 
-Scheduled daily (deploy/cron.d/flowpilot-sweepers), dispatched by `flowpilot-sweep revops`. The job runs on the
+Scheduled daily (deploy/cron.d/servabo-sweepers), dispatched by `servabo-sweep revops`. The job runs on the
 LIGHT worker profile (app/workers/handlers/revops.py).
 """
 

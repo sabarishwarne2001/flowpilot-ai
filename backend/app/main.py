@@ -1,5 +1,5 @@
 """
-Main entrypoint for the FlowPilot AI Backend API.
+Main entrypoint for the Servabo Backend API.
 """
 
 import logging
@@ -23,7 +23,7 @@ from app.core.exception_handlers import (
     integrity_error_handler,
     request_validation_exception_handler,
 )
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 from sqlalchemy.exc import IntegrityError
 from app.core.logging_config import setup_logging
 from app.core.production_guard import HARDENED_ENVIRONMENTS
@@ -43,6 +43,7 @@ from app.services.branding.errors import BrandingError
 from app.services.identity.errors import IdentityError, ScimError
 from app.utils import initialize_storage
 from app.workers.handlers import register_all
+from app.core import legacy_names
 
 setup_logging()
 logger = logging.getLogger("app.main")
@@ -51,7 +52,7 @@ CORS_EXPOSED_HEADERS = [
     "WWW-Authenticate",
     "Retry-After",
     REQUEST_ID_HEADER,
-    "X-FlowPilot-API-Version",
+    "X-Servabo-API-Version",
     "Deprecation",
     "Sunset",
     "Link",
@@ -120,8 +121,9 @@ def assert_public_route_registry(app: FastAPI) -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    logger.info("Starting FlowPilot AI Backend Core...")
+    logger.info("Starting Servabo Backend Core...")
     logger.info(f"Active Environment: '{settings.ENVIRONMENT}'")
+    legacy_names.warn_once(logger)
     logger.info(f"Parsed Allowed Origin Domains: {settings.cors_origins}")
 
     try:
@@ -165,7 +167,7 @@ async def lifespan(app: FastAPI):
     except Exception:  # noqa: BLE001
         logger.exception("SLO shutdown flush failed; observations discarded.")
 
-    logger.info("Stopping FlowPilot AI Backend Core...")
+    logger.info("Stopping Servabo Backend Core...")
 
 
 # F-046. Swagger UI, ReDoc and the OpenAPI schema list every route and the exact shape of
@@ -174,7 +176,7 @@ async def lifespan(app: FastAPI):
 _serve_api_docs = settings.ENVIRONMENT not in HARDENED_ENVIRONMENTS
 
 
-class FlowPilotAPI(FastAPI):
+class ServaboAPI(FastAPI):
     """F-106. Wraps the whole built stack, outside every registered middleware.
 
     A send to a client that has hung up becomes a no-op, so the request still
@@ -187,10 +189,10 @@ class FlowPilotAPI(FastAPI):
         return ClientGoneMiddleware(super().build_middleware_stack())
 
 
-app = FlowPilotAPI(
+app = ServaboAPI(
     title=settings.API_TITLE,
     version=settings.APP_VERSION,
-    description="Backend API for FlowPilot AI",
+    description="Backend API for Servabo",
     openapi_url=f"{settings.API_V1_STR}/openapi.json" if _serve_api_docs else None,
     docs_url="/docs" if _serve_api_docs else None,
     redoc_url="/redoc" if _serve_api_docs else None,
@@ -217,7 +219,7 @@ else:
 #
 # That ordering is deliberate in both directions. Host resolution runs
 # INSIDE the rate limiters so that sweeping the vanity namespace to
-# discover which hostnames belong to FlowPilot customers is rate-limited
+# discover which hostnames belong to Servabo customers is rate-limited
 # like any other probe. It runs INSIDE RequestTrace so that every refusal
 # carries a request id and lands in the same log stream as everything
 # else, because an unmatched Host is the first thing anyone will look for
@@ -248,7 +250,7 @@ app.add_middleware(RequestTraceMiddleware)
 # Link rather than replacing it, so the gateway's rel="describedby"
 # and this layer's rel="sunset" coexist.
 app.add_middleware(DeprecationMiddleware)
-app.add_exception_handler(FlowPilotError, domain_exception_handler)
+app.add_exception_handler(ServaboError, domain_exception_handler)
 # F-021: a 422 must not echo the submitted value (it may be a secret).
 app.add_exception_handler(RequestValidationError, request_validation_exception_handler)
 # F-214: a constraint met by a concurrent duplicate is a 409, not a 500.

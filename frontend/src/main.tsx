@@ -21,7 +21,7 @@ import { assertTenantPathIntegrity } from "@/routes/tenantPaths";
 import { assertTenantReconciliationIntegrity } from "@/routes/tenantReconciliation";
 
 /**
- * Application entry point for FlowPilot AI.
+ * Application entry point for Servabo.
  *
  * ARCH-01 removed WorkspaceProvider from this tree. It sat above <App /> and
  * therefore fetched on every page load regardless of route — including the

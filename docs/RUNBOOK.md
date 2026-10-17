@@ -1,6 +1,6 @@
-# FlowPilot AI — Runbook
+# Servabo — Runbook
 
-How to run FlowPilot AI on a developer machine from a fresh clone, how to check
+How to run Servabo on a developer machine from a fresh clone, how to check
 that it works, and what to do when it does not. Every command here was run
 during hardening Phase 1 (2026-09-30) unless it is marked *(not run here)*.
 `./start_dev.sh` was proven from a fresh clone on Linux; `start_dev.ps1` has
@@ -32,14 +32,14 @@ Ports used: 5432 (Postgres), 6379 (Redis), 9000/9001 (MinIO), 8000 (API),
 ## 2. Quick start: one command
 
 ```bash
-git clone https://github.com/sabarishwarne2001/flowpilot-ai.git
-cd flowpilot-ai
+git clone https://github.com/sabarishwarne2001/flowpilot-ai.git servabo
+cd servabo
 ./start_dev.sh            # Linux / macOS
 ```
 
 ```powershell
-git clone https://github.com/sabarishwarne2001/flowpilot-ai.git
-cd flowpilot-ai
+git clone https://github.com/sabarishwarne2001/flowpilot-ai.git servabo
+cd servabo
 .\start_dev.ps1           # Windows PowerShell   (not run here: no Windows in the sandbox)
 ```
 
@@ -61,8 +61,8 @@ The launcher:
 
 Then open <http://localhost:5173> and sign in with:
 
-- email `admin@flowpilot.ai`
-- password `FlowPilot!Dev123` (the development default in
+- email `admin@servabo.app`
+- password `Servabo!Dev123` (the development default in
   `backend/scripts/seed_admin.py`; the launcher prints the real values)
 
 Stop everything with `./start_dev.sh --stop`. Start from an empty database with
@@ -75,7 +75,7 @@ Stop everything with `./start_dev.sh --stop`. Start from an empty database with
 Use this when the launcher fails and you need to see which step broke.
 
 ```bash
-cd flowpilot-ai/backend
+cd servabo/backend
 
 # 3.1 Configuration
 cp .env.example .env
@@ -139,7 +139,7 @@ flag with `$env:ARCH40_CONTRACT = '1'` before `alembic upgrade head`.
 ## 5. Running the backend tests
 
 The tests need the Postgres and Redis from §3.2. They create their own
-database (`flowpilot_test`), migrate it to head and drop it at the end, so
+database (`servabo_test`), migrate it to head and drop it at the end, so
 your development data is never touched. `pytest.ini` sets `ENVIRONMENT=test`
 and `ARCH40_CONTRACT=1` for you.
 
@@ -155,11 +155,11 @@ pytest tests/services/test_ml_stubs.py -q    # one file (this one needs no datab
   Postgres on a RAM disk and point the tests at it (about 25 minutes):
 
   ```bash
-  docker run -d --name flowpilot-testdb -p 5433:5432 \
-    -e POSTGRES_USER=flowpilot -e POSTGRES_PASSWORD=flowpilot -e POSTGRES_DB=flowpilot \
+  docker run -d --name servabo-testdb -p 5433:5432 \
+    -e POSTGRES_USER=servabo -e POSTGRES_PASSWORD=servabo -e POSTGRES_DB=servabo \
     --tmpfs /var/lib/postgresql/data:rw,size=6g pgvector/pgvector:pg16 \
     -c fsync=off -c synchronous_commit=off -c full_page_writes=off
-  POSTGRES_PORT=5433 POSTGRES_USER=flowpilot POSTGRES_PASSWORD=flowpilot pytest -q
+  POSTGRES_PORT=5433 POSTGRES_USER=servabo POSTGRES_PASSWORD=servabo pytest -q
   ```
 
 - **Do not run two pytest processes against the same Postgres.** Some tests
@@ -210,13 +210,13 @@ What it covers and what it found: `docs/hardening/03-coverage.md`.
   text. Texts that share words come out similar. This is *not* semantic search,
   and answer quality from the AI assistant means nothing with it.
 - **OCR.** Digital PDFs still use their real text layer. Images and scanned PDF
-  pages become the text `[FLOWPILOT TEST STUB OCR - NOT REAL TEXT] sha256=…`.
+  pages become the text `[SERVABO TEST STUB OCR - NOT REAL TEXT] sha256=…`.
   No pixels are read.
 - Chunks stored while stubs are on are labelled
-  `embedding_model = 'flowpilot-test-stub-embedding'`. Before turning stubs off
+  `embedding_model = 'servabo-test-stub-embedding'`. Before turning stubs off
   on a database that holds such chunks, re-process or delete those documents.
   To find them:
-  `SELECT count(*) FROM document_chunks WHERE embedding_model = 'flowpilot-test-stub-embedding';`
+  `SELECT count(*) FROM document_chunks WHERE embedding_model = 'servabo-test-stub-embedding';`
 - The app **refuses to start** with `ML_STUBS=true` and
   `ENVIRONMENT=production`.
 
@@ -233,9 +233,9 @@ uploaded through the API all reach `COMPLETED`.
 | `required variable RERANKER_INTERNAL_TOKEN is missing a value` | `backend/.env` has no token | `openssl rand -hex 32` → `RERANKER_INTERNAL_TOKEN=` in `backend/.env` |
 | `alembic upgrade head` → `RuntimeError: arch40_step3_contract_ai_settings drops columns…` | the contract flag is not set | `ARCH40_CONTRACT=1 alembic upgrade head` (dev and test databases only) |
 | `No matching distribution found for scipy==1.18.0` | Python 3.11 or older | use Python 3.12 |
-| Uploads fail with `InvalidAccessKeyId` | a MinIO data volume created before F-027 was fixed still has your shell's `AWS_ACCESS_KEY_ID` as its root user (the dev compose now uses `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, default `minioadmin`) | `docker compose rm -sf minio minio-init && docker volume rm flowpilot_minio_data && docker compose up -d minio minio-init` |
+| Uploads fail with `InvalidAccessKeyId` | a MinIO data volume created before F-027 was fixed still has your shell's `AWS_ACCESS_KEY_ID` as its root user (the dev compose now uses `MINIO_ROOT_USER` / `MINIO_ROOT_PASSWORD`, default `minioadmin`) | `docker compose rm -sf minio minio-init && docker volume rm servabo_minio_data && docker compose up -d minio minio-init` |
 | Web app shows "blocked by CORS policy" | `CORS_ORIGINS` does not list `http://localhost:5173` (the code default is only `:3000`) | keep the `CORS_ORIGINS` line from `.env.example` |
-| Login fails right after `seed_admin.py` says `already-seeded` | the script prints `(unchanged)` in place of the password | use the password from the first seed (default `FlowPilot!Dev123`) |
+| Login fails right after `seed_admin.py` says `already-seeded` | the script prints `(unchanged)` in place of the password | use the password from the first seed (default `Servabo!Dev123`) |
 | Upload ends `FAILED` with `ck_document_chunks_bbox_is_object` in the worker log | bug F-020, fixed in Phase 2 | you are running an old build: `git pull`, then restart the worker |
 | Postgres password errors after changing `backend/.env` | the data volume keeps the first user and password | `docker compose down -v` (deletes local data), then start again |
 | Launcher step 6 says `seed_… FAILED: …` | the seed script exited non-zero; the message is its last line | run the command from §3.5 by hand to see the full error |
@@ -246,7 +246,19 @@ uploaded through the API all reach `COMPLETED`.
 ## 9. Production on a VPS (Docker Compose)
 
 Read this section once, top to bottom, before your first deploy. It covers one Linux
-server running `backend/docker-compose.prod.yml` (owner decision N-007).
+server running `backend/docker-compose.prod.yml` (owner decision N-007), with Dodo Payments as the
+payment gateway and merchant of record, and the public website (`website/`) next to the app.
+Rewritten in the website and payments session (2026-10-17): Dodo is now the default gateway
+(`BILLING_GATEWAY=DODO`); Stripe remains supported for an existing Stripe account.
+
+**The pieces, and where each lives.**
+
+| Piece | Where | Address (example) |
+|---|---|---|
+| The app (web, API, workers, database) | one server (Hetzner, decided), this section | `https://app.servabo.app` |
+| The website (marketing, pricing, legal) | Cloudflare Pages, or the same server (`docs/website/DEPLOY.md`) | `https://servabo.app` |
+| Customers' documents | Cloudflare R2, EU jurisdiction (decided) | — |
+| Payments, tax, receipts | Dodo Payments (merchant of record) | Dodo's checkout and customer portal |
 
 **What was checked, and how.**
 
@@ -263,7 +275,7 @@ server running `backend/docker-compose.prod.yml` (owner decision N-007).
 Two shortcuts, used below. Run them once in each terminal session:
 
 ```bash
-cd /srv/flowpilot/backend
+cd /srv/servabo/backend
 export COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.production"
 ```
 
@@ -277,7 +289,8 @@ export COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.produc
 | Node.js | 22+, on any machine | builds the web app (`frontend/dist`), which Caddy serves |
 | File storage | AWS S3, Cloudflare R2 or Backblaze B2 (recommended), or the optional MinIO service | one server disk is not durable storage for customers' documents |
 | Outgoing email | an SMTP provider (Postmark, SES, ...) | the app **refuses to start** without one: invitations, verification and password-reset emails depend on it |
-| Payments | Stripe **test** keys and/or Dodo **test** keys | stay in test mode until you decide to go live; never put live keys on a server you are still testing |
+| Payments | a Dodo Payments account in **Test Mode**: the API key and the webhook secret | Dodo is the seller of record: it charges, adds and files tax, and sends receipts. Stay in test mode until you decide to go live; never put live keys on a server you are still testing |
+| Website | Node.js 22+ and a Cloudflare account (or the app server's Caddy) | `docs/website/DEPLOY.md`; the app links to it (`WEBSITE_URL`) for pricing, terms, privacy and refunds |
 | An AI key | `GROQ_API_KEY` from https://console.groq.com/keys | the app **refuses to start** without it: documents are read and Ask AI answers on this key (the platform serves Groq's GPT-OSS models, N-054) |
 
 Only ports 80, 443/tcp and 443/udp are published (by Caddy). Postgres, Redis, MinIO and the
@@ -288,18 +301,18 @@ API are not reachable from outside. Do not add `ports:` to them.
 **1. Prepare the server** *(not run here)*. As root:
 
 ```bash
-adduser --disabled-password --gecos "" flowpilot
-usermod -aG docker flowpilot     # the docker group is as powerful as root here: protect this user's SSH keys
-mkdir -p /srv/flowpilot /etc/flowpilot && chown flowpilot: /srv/flowpilot
+adduser --disabled-password --gecos "" servabo
+usermod -aG docker servabo     # the docker group is as powerful as root here: protect this user's SSH keys
+mkdir -p /srv/servabo /etc/servabo && chown servabo: /srv/servabo
 ```
 
 Open only SSH, 80/tcp, 443/tcp and 443/udp in the firewall.
 
-**2. Get the code** *(not run here)*. As the `flowpilot` user:
+**2. Get the code** *(not run here)*. As the `servabo` user:
 
 ```bash
-git clone <your repository URL> /srv/flowpilot
-cd /srv/flowpilot/backend
+git clone <your repository URL> /srv/servabo
+cd /srv/servabo/backend
 ```
 
 **3. Fill in the configuration.**
@@ -329,14 +342,20 @@ the credentials the app stores encrypted for customers (email, ERP and similar) 
 The app **refuses to start** and prints every problem at once if: a secret is missing, short,
 a known default or reused; `CORS_ORIGINS` is not an explicit `https://` address (no `*`, no
 localhost); the database password is weak; debug logging is on; uploads would go to the
-container's own disk; Redis, the mail server or the reranker token is missing; the Stripe or
-Dodo keys disagree with the payment mode; or staging is in live payment mode. A refusal is
+container's own disk; Redis, the mail server or the reranker token is missing; Dodo is the gateway
+(the default) without `DODO_API_KEY` or `DODO_WEBHOOK_SECRET`, or with `STRIPE_LIVEMODE=true`; the
+Stripe or Dodo keys disagree with the payment mode; or staging is in live payment mode. A refusal is
 the app protecting you: fix the line it names.
+
+Two addresses matter beyond the app's own: `FRONTEND_URL` (the app, for example
+`https://app.servabo.app`) and `WEBSITE_URL` (the website, for example `https://servabo.app`; the
+app's Pricing, Terms, Privacy and Refund links and the legal footer of emails point there). The web
+app is built with the same website address: `VITE_WEBSITE_URL=https://servabo.app npm run build`.
 
 **4. Build the web app and the images.**
 
 ```bash
-( cd /srv/flowpilot/frontend && npm ci && npm run build && node scripts/check-no-sourcemaps.mjs --dist )
+( cd /srv/servabo/frontend && npm ci && VITE_WEBSITE_URL=https://servabo.app npm run build && node scripts/check-no-sourcemaps.mjs --dist )
 $COMPOSE build      # about 10 GB and 15 to 30 minutes the first time (F-045) - not run here
 ```
 
@@ -386,10 +405,26 @@ curl -fsS https://app.example.com/api/v1/health/ready      # {"status":"ready"} 
 **8. Create the plans and the first administrator, once** *(not run here)*.
 
 Plans first. The plan names, limits and prices are defined in `backend/scripts/seed_quota_tiers.py`
-(Developer $49, Business $299 and Enterprise $799 per seat per month at the time of writing);
-**confirm them before launch (N-011)**. In your Stripe (or Dodo) dashboard, in **test mode**,
-create the three products and prices, paste their ids into `GATEWAY_PRICE_ID_DEVELOPER`,
-`GATEWAY_PRICE_ID_BUSINESS` and `GATEWAY_PRICE_ID_ENTERPRISE` in `.env.production`, then:
+(Developer $49, Business $299 and Enterprise $799 per seat per month; Developer $490 and Business
+$2,990 per seat per year; add-ons: custom domains $199 and warehouse sync $300 a month);
+**confirm them before launch (N-011)**. Each is a product in your Dodo account. In **test mode**,
+let the setup script create them and print their ids:
+
+```bash
+$COMPOSE exec -T web python scripts/dodo_setup.py --create-test-products
+```
+
+Paste the seven lines it prints (`GATEWAY_PRICE_ID_DEVELOPER`, `_BUSINESS`, `_ENTERPRISE`,
+`_DEVELOPER_YEARLY`, `_BUSINESS_YEARLY`, `DODO_ADDON_PRODUCT_CUSTOM_DOMAIN`,
+`DODO_ADDON_PRODUCT_WAREHOUSE_SYNC`) into `.env.production`, run `$COMPOSE up -d`, then check them:
+
+```bash
+$COMPOSE exec -T web python scripts/dodo_setup.py      # every line must say OK
+```
+
+(If you created products by hand in Dodo's dashboard instead: each plan product's price is the price
+of ONE seat, recurring every month or year, tax not included, tax category SaaS; the script names
+anything that differs. It works on a test account only and refuses live mode.) Then publish the plans:
 
 ```bash
 $COMPOSE up -d      # hands the ids to the containers
@@ -397,7 +432,8 @@ $COMPOSE exec -T web python scripts/seed_price_book.py --version auto
 $COMPOSE exec -T web python scripts/seed_quota_tiers.py
 ```
 
-The second command refuses a paid plan that has no price id. Do not add `--allow-unpriced` in
+The second command refuses a paid plan that has no price id. It also publishes the yearly prices when
+both `_YEARLY` ids are set; without them the plan cards simply offer monthly billing. Do not add `--allow-unpriced` in
 production: it publishes a plan nobody can buy, and a published plan version cannot be
 changed.
 
@@ -416,17 +452,29 @@ password. (The compose file deliberately does not pass these two to the running 
 
 **9. Point billing at your server (test mode)** *(not run here)*.
 
-In Stripe (Developers, Webhooks) add the endpoint `https://app.example.com/api/v1/billing/webhooks/stripe`
-for the events `checkout.session.completed`, `customer.subscription.*`, `invoice.*`,
-`payment_intent.payment_failed`, `charge.refunded` and `charge.refund.updated` (the last two record
-refunds on the customer's invoice, N-069; `invoice.*` includes `invoice.created`, which closes each
-billing period: FlowPilot adds the period's overage to the renewal before Stripe charges it, section
-9.9), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
-listed, separated by commas, while you rotate one). For Dodo the endpoint is
-`https://app.example.com/api/v1/billing/webhooks/dodo` and the secret goes in
-`DODO_WEBHOOK_SECRET`. Use the lowercase gateway name. After editing `.env.production`, run
-`$COMPOSE up -d`. The app refuses unsigned events, and refuses to start when a payment API key
-has no webhook secret.
+In Dodo's dashboard (Test Mode on): **Developer → Webhooks → Add endpoint**, URL
+`https://app.example.com/api/v1/billing/webhooks/dodo`, and subscribe to the `subscription.*`,
+`payment.*`, `refund.*` and `dispute.*` events. Copy the endpoint's signing secret (`whsec_...`) into
+`DODO_WEBHOOK_SECRET` and the test API key into `DODO_API_KEY`, keep `DODO_LIVEMODE=false`, then
+`$COMPOSE up -d`. The app refuses unsigned events and refuses to start when the key has no secret.
+`docs/billing/DODO.md` lists every event and what Servabo does with it.
+
+Then buy a plan yourself with Dodo's test card (Dodo's dashboard shows the test card numbers): the
+checkout page is Dodo's; back in Servabo the page says "Confirming your payment…" and then "Payment
+confirmed" with the plan. If it says the confirmation is late, the webhook is not arriving: check the
+endpoint URL and the secret, then `$COMPOSE logs worker-billing web`.
+
+*Stripe instead (an existing Stripe account only):* set `BILLING_GATEWAY=STRIPE`, add the endpoint
+`https://app.example.com/api/v1/billing/webhooks/stripe` for `checkout.session.completed`,
+`customer.subscription.*`, `invoice.*`, `payment_intent.payment_failed`, `charge.refunded` and
+`charge.refund.updated`, and put its secret in `STRIPE_WEBHOOK_SECRETS` (several, comma-separated,
+while you rotate one). Stripe products and prices go in the same `GATEWAY_PRICE_ID_*` settings.
+
+**9b. Put the website online.** Follow `docs/website/DEPLOY.md` (Cloudflare Pages, about fifteen
+minutes). The website and the app link to each other: the website's "Sign in" goes to the app
+(`PUBLIC_APP_URL`), and the app's pricing and legal links go to the website (`WEBSITE_URL`). Dodo
+reviews the website (pricing, terms, refund policy, contact) when it verifies your account, so it must
+be online before you apply for live payments.
 
 **10. Check it from outside** *(not run here)*.
 
@@ -459,11 +507,11 @@ Each line is `name@sha256:...`. Replace the matching `image:` lines in `docker-c
 ### 9.3 Deploying a new version
 
 ```bash
-cd /srv/flowpilot && git pull
+cd /srv/servabo && git pull
 ( cd frontend && npm ci && npm run build && node scripts/check-no-sourcemaps.mjs --dist )
 cd backend
-set -a; . /etc/flowpilot/sweepers.env; set +a
-deploy/bin/flowpilot-compose-backup       # a fresh backup first (section 9.4)
+set -a; . /etc/servabo/sweepers.env; set +a
+deploy/bin/servabo-compose-backup       # a fresh backup first (section 9.4)
 $COMPOSE build
 $COMPOSE up -d                            # the migrate service runs first; web waits for it
 $COMPOSE ps && $COMPOSE logs --tail 30 web
@@ -492,27 +540,27 @@ organizations without a live subscription pick up the new version on their own.
 
 | What | How | Where it ends up |
 |---|---|---|
-| The database (every customer's data, users, plans) | nightly encrypted `pg_dump`, read back and verified, by `deploy/bin/flowpilot-compose-backup`; the newest 7 daily and 4 weekly copies are kept | `/srv/flowpilot/backups`, plus an off-server copy if you set one up (below) |
+| The database (every customer's data, users, plans) | nightly encrypted `pg_dump`, read back and verified, by `deploy/bin/servabo-compose-backup`; the newest 7 daily and 4 weekly copies are kept | `/srv/servabo/backups`, plus an off-server copy if you set one up (below) |
 | Uploaded documents | they live in the file store, **not** in the database dump | the bucket (see "File storage" below) |
-| Secrets | `.env.production` and `/etc/flowpilot/backup.key` | your password manager |
+| Secrets | `.env.production` and `/etc/servabo/backup.key` | your password manager |
 
 Set up once *(not run here)*:
 
 ```bash
-sudo install -d -o flowpilot -g flowpilot /srv/flowpilot/backups /srv/flowpilot/logs /srv/flowpilot/locks
-sudo install -m 600 -o flowpilot -g flowpilot /dev/null /etc/flowpilot/backup.key
-openssl rand -base64 48 | sudo tee /etc/flowpilot/backup.key > /dev/null
-sudo cat /etc/flowpilot/backup.key    # copy it into your password manager NOW
+sudo install -d -o servabo -g servabo /srv/servabo/backups /srv/servabo/logs /srv/servabo/locks
+sudo install -m 600 -o servabo -g servabo /dev/null /etc/servabo/backup.key
+openssl rand -base64 48 | sudo tee /etc/servabo/backup.key > /dev/null
+sudo cat /etc/servabo/backup.key    # copy it into your password manager NOW
 ```
 
 **Without that key every backup is unreadable. Keep a copy off the server.** Then create
-`/etc/flowpilot/sweepers.env` (section 9.6, which also installs the schedule). Run a backup and a
+`/etc/servabo/sweepers.env` (section 9.6, which also installs the schedule). Run a backup and a
 restore drill by hand once, and read what they print:
 
 ```bash
-set -a; . /etc/flowpilot/sweepers.env; set +a
-deploy/bin/flowpilot-compose-backup            # ends with "backup ok: ..."
-deploy/bin/flowpilot-compose-restore-drill     # restores the newest backup into a scratch database
+set -a; . /etc/servabo/sweepers.env; set +a
+deploy/bin/servabo-compose-backup            # ends with "backup ok: ..."
+deploy/bin/servabo-compose-restore-drill     # restores the newest backup into a scratch database
 ```
 
 The drill compares row counts and the migration revision with the live database, drops the
@@ -528,9 +576,9 @@ month and note the time. Every line of section 9.6's schedule, these two include
 suite against a fresh database exactly as cron runs it (`backend/tests/operational/test_host_cron_lines.py`).
 
 **An off-server copy.** A backup that sits on the server dies with the server. Set
-`FLOWPILOT_BACKUP_MIRROR_CMD` in `sweepers.env` to any command that copies the file whose path
-arrives as `$1`, for example `aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/flowpilot/` or
-`rclone copyto "$1" remote:flowpilot/$(basename "$1")`. Use a different account or provider than
+`SERVABO_BACKUP_MIRROR_CMD` in `sweepers.env` to any command that copies the file whose path
+arrives as `$1`, for example `aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/servabo/` or
+`rclone copyto "$1" remote:servabo/$(basename "$1")`. Use a different account or provider than
 your documents bucket, with a key that can add files but not delete them. The files are already
 encrypted. If the copy fails, the run reports failure (and pings the failure address) while the
 local backup stays.
@@ -549,33 +597,33 @@ local backup stays.
 
 *(not run here: rehearse it once on a spare server before you need it.)* If the whole server is
 gone: build a new one (steps 1 to 5 of section 9.2), put your saved `.env.production` and
-`/etc/flowpilot/backup.key` back, run `$COMPOSE up -d db redis`, and restore as below. If your
-`POSTGRES_USER` or `POSTGRES_DB` is not `flowpilot`, use yours.
+`/etc/servabo/backup.key` back, run `$COMPOSE up -d db redis`, and restore as below. If your
+`POSTGRES_USER` or `POSTGRES_DB` is not `servabo`, use yours.
 
 ```bash
-BACKUP=/srv/flowpilot/backups/flowpilot-YYYYMMDDTHHMMSSZ.dump.enc     # the file you chose
+BACKUP=/srv/servabo/backups/servabo-YYYYMMDDTHHMMSSZ.dump.enc     # the file you chose
 ( cd "$(dirname "$BACKUP")" && sha256sum -c "$(basename "$BACKUP").sha256" )    # must say OK
 
 # 1. stop everything that writes
-$COMPOSE stop web worker-scheduler worker-light worker-relay worker-delivery worker-stripe worker-ocr worker-enrich
+$COMPOSE stop web worker-scheduler worker-light worker-relay worker-delivery worker-billing worker-ocr worker-enrich
 
 # 2. restore into a NEW database, leaving the current one untouched
-$COMPOSE exec -T db psql -U flowpilot -d postgres -c 'CREATE DATABASE flowpilot_restored'
-$COMPOSE exec -T db psql -U flowpilot -d flowpilot_restored -c 'CREATE EXTENSION IF NOT EXISTS vector'
-openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:/etc/flowpilot/backup.key -in "$BACKUP" \
-  | $COMPOSE exec -T db pg_restore --no-owner --exit-on-error -U flowpilot -d flowpilot_restored
+$COMPOSE exec -T db psql -U servabo -d postgres -c 'CREATE DATABASE servabo_restored'
+$COMPOSE exec -T db psql -U servabo -d servabo_restored -c 'CREATE EXTENSION IF NOT EXISTS vector'
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -pass file:/etc/servabo/backup.key -in "$BACKUP" \
+  | $COMPOSE exec -T db pg_restore --no-owner --exit-on-error -U servabo -d servabo_restored
 
 # 3. look before you swap
-$COMPOSE exec -T db psql -U flowpilot -d flowpilot_restored -c 'SELECT count(*) FROM users' -c 'SELECT version_num FROM alembic_version'
+$COMPOSE exec -T db psql -U servabo -d servabo_restored -c 'SELECT count(*) FROM users' -c 'SELECT version_num FROM alembic_version'
 
 # 4. swap it in; the old database is kept, renamed
-$COMPOSE exec -T db psql -U flowpilot -d postgres \
-  -c 'ALTER DATABASE flowpilot RENAME TO flowpilot_replaced' -c 'ALTER DATABASE flowpilot_restored RENAME TO flowpilot'
+$COMPOSE exec -T db psql -U servabo -d postgres \
+  -c 'ALTER DATABASE servabo RENAME TO servabo_replaced' -c 'ALTER DATABASE servabo_restored RENAME TO servabo'
 $COMPOSE up -d       # migrations bring an older backup up to the current version
 ```
 
 If the rename says the database is being accessed by other users, something is still connected:
-run `$COMPOSE stop` on the remaining services and try again. Delete `flowpilot_replaced` only when
+run `$COMPOSE stop` on the remaining services and try again. Delete `servabo_replaced` only when
 you are sure. The database dump does not contain uploaded documents; they come back from the
 bucket (versioning, above).
 
@@ -584,7 +632,10 @@ bucket (versioning, above).
 Two kinds of recurring work:
 
 1. **Inside the stack.** `worker-scheduler` starts usage rollups, billing dunning, certificate
-   renewal, warehouse pushes and partner revenue share; the other workers run the queued jobs.
+   renewal, warehouse pushes and partner revenue share; on Dodo also `billing.plan_changes` (every 15
+   minutes: makes at Dodo the downgrades scheduled for a renewal due within the hour) and
+   `billing.hold_notices` (hourly: reminds owners whose renewal is on hold, warns them two days
+   before read-only, and tells them when it happens); the other workers run the queued jobs.
    `$COMPOSE up -d` starts them. **Never remove `worker-scheduler`**: nothing is billed without it.
 2. **On the server, by cron.** The nightly sweeps (data retention and erasure, obligation
    reminders, ERP retries, invitation and identity clean-up, and more) and the backups. The app does
@@ -594,22 +645,22 @@ Two kinds of recurring work:
 Install once *(not run here)*:
 
 ```bash
-sudo tee /etc/flowpilot/sweepers.env > /dev/null <<'EOF'
+sudo tee /etc/servabo/sweepers.env > /dev/null <<'EOF'
 # Read by cron as a shell file: keep the quotes.
-FLOWPILOT_RUNNER="docker compose -f /srv/flowpilot/backend/docker-compose.prod.yml --env-file /srv/flowpilot/backend/.env.production run --rm --no-deps -T -e SERVICE_ROLE=sweeper worker-light python"
-FLOWPILOT_LOG_DIR=/srv/flowpilot/logs
-LOCK_DIR=/srv/flowpilot/locks
-FLOWPILOT_BACKUP_DIR=/srv/flowpilot/backups
-FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
+SERVABO_RUNNER="docker compose -f /srv/servabo/backend/docker-compose.prod.yml --env-file /srv/servabo/backend/.env.production run --rm --no-deps -T -e SERVICE_ROLE=sweeper worker-light python"
+SERVABO_LOG_DIR=/srv/servabo/logs
+LOCK_DIR=/srv/servabo/locks
+SERVABO_BACKUP_DIR=/srv/servabo/backups
+SERVABO_BACKUP_KEY_FILE=/etc/servabo/backup.key
 # Copy every backup off this server (the file path arrives as $1):
-# FLOWPILOT_BACKUP_MIRROR_CMD='aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/flowpilot/'
+# SERVABO_BACKUP_MIRROR_CMD='aws s3 cp "$1" s3://YOUR-BACKUP-BUCKET/servabo/'
 # A free Healthchecks.io account emails you when a job fails or does not run. One check per job:
 # HEARTBEAT_BASE=https://hc-ping.com
 # HEARTBEAT_UUID_COMPOSE_BACKUP=<check id>
 # HEARTBEAT_UUID_COMPOSE_RESTORE_DRILL=<check id>
 # HEARTBEAT_UUID_COMPLIANCE=<check id>
 # Is the site up? A check with a 1-minute period and a 5-minute grace (N-017):
-# FLOWPILOT_PUBLIC_URL=https://app.example.com
+# SERVABO_PUBLIC_URL=https://app.example.com
 # HEARTBEAT_UUID_UPTIME=<check id>
 # Every sweep can ping its own check too: HEARTBEAT_UUID_<NAME> (for example HEARTBEAT_UUID_ERP_POSTINGS).
 # The hourly watchdog reports any of the thirteen sweeps without a success in 26 hours; to be told,
@@ -617,23 +668,23 @@ FLOWPILOT_BACKUP_KEY_FILE=/etc/flowpilot/backup.key
 # and emails you):
 # ALERT_WEBHOOK=https://hc-ping.com/<check id>/fail
 EOF
-sudo chown root:flowpilot /etc/flowpilot/sweepers.env && sudo chmod 640 /etc/flowpilot/sweepers.env
-sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-sweepers /etc/cron.d/flowpilot-sweepers
-sudo install -m 644 /srv/flowpilot/backend/deploy/cron.d/flowpilot-compose-backups /etc/cron.d/flowpilot-compose-backups
+sudo chown root:servabo /etc/servabo/sweepers.env && sudo chmod 640 /etc/servabo/sweepers.env
+sudo install -m 644 /srv/servabo/backend/deploy/cron.d/servabo-sweepers /etc/cron.d/servabo-sweepers
+sudo install -m 644 /srv/servabo/backend/deploy/cron.d/servabo-compose-backups /etc/cron.d/servabo-compose-backups
 # The three point-in-time-recovery lines need PostgreSQL WAL archiving, which this setup does not
 # have (N-012). Switch them off:
-sudo sed -i -E 's/^([^#].*flowpilot-sweep (dr-heartbeat|base-backup|pitr-drill).*)$/# \1/' /etc/cron.d/flowpilot-sweepers
+sudo sed -i -E 's/^([^#].*servabo-sweep (dr-heartbeat|base-backup|pitr-drill).*)$/# \1/' /etc/cron.d/servabo-sweepers
 ```
 
-Do **not** install `flowpilot-backups`: that file is for a server with Python and the Postgres tools
+Do **not** install `servabo-backups`: that file is for a server with Python and the Postgres tools
 installed directly, not for Compose. Check it works now, not at 3 a.m.:
 
 ```bash
-/srv/flowpilot/backend/deploy/bin/flowpilot-sweep compliance --report    # prints each tenant's retention policy, changes nothing
-tail -n 20 /srv/flowpilot/logs/sweep_compliance.log                      # a "SWEEP_..." line and no error
+/srv/servabo/backend/deploy/bin/servabo-sweep compliance --report    # prints each tenant's retention policy, changes nothing
+tail -n 20 /srv/servabo/logs/sweep_compliance.log                      # a "SWEEP_..." line and no error
 ```
 
-After the first night, look at the logs in `/srv/flowpilot/logs` (`sweep_*.log`,
+After the first night, look at the logs in `/srv/servabo/logs` (`sweep_*.log`,
 `compose_backup.log`, `compose_restore_drill.log`), or better, let the monitor tell you.
 
 **Know when something breaks (campaign session 4).** The app emails the addresses in
@@ -652,12 +703,12 @@ The `ops.alerts` sweep runs every five minutes inside the stack (`worker-schedul
 the same alert repeats at most once an hour (`OPERATOR_ALERT_REPEAT_MINUTES`) while it keeps happening,
 with the count. Nothing to install on the host.
 
-**Know when the site is down (N-017).** `flowpilot-compose-backups` also runs
-`flowpilot-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
+**Know when the site is down (N-017).** `servabo-compose-backups` also runs
+`servabo-uptime-heartbeat` every minute: it calls `https://<your domain>/api/v1/health/ready`
 through Caddy (the API, Postgres and Redis must all answer) and pings `HEARTBEAT_UUID_UPTIME`.
 Create that check in Healthchecks.io with a **1 minute** period and a **5 minute** grace, and add
 your phone or email to it: when the site goes down you get an alert within about five minutes,
-before a customer has to tell you. Test it: `/srv/flowpilot/backend/deploy/bin/flowpilot-uptime-heartbeat; echo $?`
+before a customer has to tell you. Test it: `/srv/servabo/backend/deploy/bin/servabo-uptime-heartbeat; echo $?`
 prints nothing and `0` when the site is up.
 
 ### 9.7 What to look at when something is wrong
@@ -668,57 +719,82 @@ prints nothing and `0` when the site is up.
 | `web` restarts in a loop | `$COMPOSE logs web`: a configuration refusal lists every setting to fix |
 | Emails never arrive | `PLATFORM_SMTP_*` in `.env.production`; then `$COMPOSE logs worker-delivery` |
 | AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is wrong or out of credit (a missing one stops the app from starting) |
-| Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
+| Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-billing web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
-| A cron job seems not to run | `/srv/flowpilot/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
+| A cron job seems not to run | `/srv/servabo/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
 | People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 20 per address per 5 minutes; decided N-018), then `$COMPOSE up -d web` |
 | A Business/Enterprise tenant is refused BYOK ("included on higher plans") | the plan seed was not re-run after the Phase 5 release (section 9.3) |
 | An alert email says "could not be applied" for a payment event | open Platform admin, Background jobs; compare the organization's plan and seats with the payment dashboard; then section 9.8 if money is involved |
 
 ### 9.8 Refunds, and a customer charged twice
 
-**Refunding a payment.** Refunds are made in the payment dashboard, never in FlowPilot (a refund is a
-money decision a person takes, usually after talking to the customer). In Stripe: Payments, open the
-payment, Refund, choose the amount (all or part) and a reason. Make sure the Stripe webhook includes
-`charge.refunded` and `charge.refund.updated` (section 9.2 step 9): FlowPilot then records the refund on
-the customer's invoice ("Refunded" or "Partially refunded"), tells the organization's owners and Billing
-members by email, and shows it in Platform admin, RevOps ("Refunded in the last 30 days"). Dodo Payments
-is the merchant of record and handles refunds in its own dashboard.
+**Refunding a payment.** Refunds are made in the payment dashboard, never in Servabo (a refund is a
+money decision a person takes, usually after talking to the customer). In Dodo: **Payments**, open the
+payment, **Refund**, the amount (all or part) and a reason. Servabo receives `refund.succeeded`,
+records the refund on the customer's invoice ("Refunded" or "Partially refunded · $X"), tells the
+organization's owners and Billing members by email, and shows it in Platform admin, RevOps ("Refunded
+in the last 30 days"). The website's refund policy (`/refunds`) says what customers are promised: a
+14-day money-back guarantee on the first payment of a new subscription. (Stripe: Payments, open the
+payment, Refund; the webhook must include `charge.refunded` and `charge.refund.updated`.)
 
-**A customer charged twice (alert: "Customer charged twice").** FlowPilot refuses a new checkout while a
+**A disputed payment (chargeback; alert "Payment disputed").** The customer asked their bank to take
+the money back. Dodo handles the dispute with the bank as merchant of record; answer Dodo's emails
+with what they ask for (usually the invoice and proof the customer used the product). Servabo records
+the dispute, alerts you and tells the organization; nothing changes for the customer while it is open.
+If the dispute is **lost** (alert "Payment reversed"), the bank has taken the money back and the
+organization becomes read-only with the reason "payment reversed by your bank" until a later payment
+succeeds. If the customer pays you another way, lift it: Platform admin, RevOps, **Disputes**, the
+row, **Lift**, with a reason (recorded in the audit log). Dodo charges $30 per chargeback.
+
+**A customer charged twice (alert: "Customer charged twice").** Servabo refuses a new checkout while a
 paid subscription is live, but a checkout finished in a browser tab opened *before* the first purchase can
-still create a second subscription at the gateway. FlowPilot keeps the first one (named "recorded" in
+still create a second subscription at the gateway. Servabo keeps the first one (named "recorded" in
 the alert), does not record the second, and emails you at once. The customer is paying for both until you
 act. Within the day:
 
-1. In the Stripe Dashboard open Customers and search for the customer id in the alert. You will see two
-   active subscriptions.
-2. **Keep the recorded one.** Open the *other* one (the id the alert says is not recorded): Actions,
-   Cancel subscription, **Immediately**.
-3. On that subscription's invoice, open the payment and **Refund** it in full (reason: duplicate).
+1. In Dodo's dashboard open **Subscriptions** and search for the subscription id the alert says is
+   *not* recorded (in Stripe: Customers, the customer id). You will see two active subscriptions.
+2. **Keep the recorded one.** Cancel the *other* one immediately.
+3. Open that subscription's payment and **Refund** it in full (reason: duplicate).
 4. If the customer meant to change plan with that second purchase, change the plan of the *recorded*
-   subscription in the billing portal (N-050) instead. Never cancel the recorded one to keep the
-   duplicate: FlowPilot would then show the organization on Free until the duplicate's next event.
-5. Email the customer: "You were charged twice for your FlowPilot subscription because a second
+   subscription instead: on Dodo the owner does it on Servabo's Billing page (Change plan); on Stripe,
+   in the billing portal (N-050). Never cancel the recorded one to keep the
+   duplicate: Servabo would then show the organization on Free until the duplicate's next event.
+5. Email the customer: "You were charged twice for your Servabo subscription because a second
    checkout completed. We cancelled the duplicate and refunded {amount}; it reaches your card in 5 to
    10 business days. Nothing changes in your account."
-6. In FlowPilot, Platform admin, RevOps shows the refund; the organization's Billing page still shows
+6. In Servabo, Platform admin, RevOps shows the refund; the organization's Billing page still shows
    one subscription.
 
 ### 9.9 Billing periods, overage and replaying a payment event
 
-**What happens at the end of each billing period (nothing to do).** Stripe charges seats in advance:
+**What happens at the end of each billing period on Dodo (nothing to do).** Dodo charges the next
+period's seats in advance at each renewal; Servabo records the payment as an invoice issued by Dodo
+(the customer downloads Dodo's tax invoice from Billing, Invoices) and writes the statement for the
+month that ended. Dodo cannot take usage lines, so on Dodo the plans' allowances are **hard limits**:
+work stops at the limit and the customer adds seats or upgrades (the plan cards and the usage page say
+so); nothing is billed as overage. A downgrade the owner scheduled is made at Dodo an hour before the
+renewal, so the renewal is charged at the new price. An upgrade is charged at once for the days left,
+at the amount Dodo quoted and the owner confirmed.
+
+**A renewal declined on Dodo.** The subscription is "on hold" and the organization keeps full access
+for 13 days (`BILLING_ON_HOLD_GRACE_DAYS`) while Dodo retries the card. The owner is told at once,
+reminded a week before the end, warned two days before, and told when the organization becomes
+read-only. Updating the card in Dodo's portal (Billing, "Update payment method") charges the renewal
+and restores everything. Nothing for you to do unless the customer writes in.
+
+**Stripe (an existing Stripe account only).** Stripe charges seats in advance:
 at each period's end it opens the renewal invoice for the next month and charges it about an hour
-later. When FlowPilot receives that invoice (`invoice.created`), it writes the customer's statement for
+later. When Servabo receives that invoice (`invoice.created`), it writes the customer's statement for
 the month that just ended (Billing, Invoices: the seats, what the plan included for that many seats,
 and any overage priced from the price book) and adds each overage line to the renewal, so the customer
 pays it with the next month's seats. If that event arrives after Stripe has already charged the
 renewal, the overage goes on the following invoice instead; the statement says which. A subscription
 that ends (cancelled at period end) gets no renewal, so its last month's overage is not charged
-(N-071). Dodo cannot take usage lines yet: on Dodo, statements are written but overage is not billed.
+(N-071).
 
-**If a statement is missing.** Every hour the worker closes any period whose renewal never reached
-FlowPilot (more than two hours after it ended); its overage goes on the next invoice and the worker log
+**If a statement is missing (Stripe).** Every hour the worker closes any period whose renewal never reached
+Servabo (more than two hours after it ended); its overage goes on the next invoice and the worker log
 shows `billing.assemble_invoice_backstop`. To close the period of one Stripe invoice by hand (the
 invoice id starts with `in_`):
 
@@ -731,10 +807,12 @@ with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing
 List those events with their ids and errors:
 
 ```bash
-$COMPOSE exec -T db psql -U flowpilot -d flowpilot -c "SELECT id, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
+$COMPOSE exec -T db psql -U servabo -d servabo -c "SELECT id, gateway, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
 ```
 
-Once the cause is fixed, re-apply one by its id; a replay never charges anything twice:
+(The table keeps its historical name; it holds Dodo's events too, `gateway = 'DODO'`.) Once the cause is
+fixed, re-apply one by its id; a replay never charges anything twice, and on Dodo it re-reads the
+subscription or payment from Dodo rather than trusting the stored event:
 
 ```bash
 $COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
@@ -743,7 +821,7 @@ with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing
 
 **Checking a supplier's bill (monthly).** The authoritative check is Platform admin, COGS: enter the
 supplier's invoice and reconcile it there. An older, optional check compares Groq's usage export for a
-month with what FlowPilot metered: export the month's CSV from the Groq console and queue
+month with what Servabo metered: export the month's CSV from the Groq console and queue
 `usage.reconcile` the same way, with `payload={'provider': 'groq', 'period_start':
 '2026-09-01T00:00:00+00:00', 'period_end': '2026-10-01T00:00:00+00:00', 'fetch_options': {'csv_text':
 open('groq-2026-09.csv').read(), 'source_key': 'groq:2026-09'}}` (at least two days after the month

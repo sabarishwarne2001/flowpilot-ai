@@ -6,7 +6,7 @@ import { defineConfig, devices } from "@playwright/test";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * FlowPilot AI browser tests (Phase 3). See e2e/README.md for how to run them.
+ * Servabo browser tests (Phase 3). See e2e/README.md for how to run them.
  *
  * The backend (API, worker, Postgres, Redis) is started outside Playwright by
  * e2e/scripts/start-stack.sh; global-setup.ts checks that it answers, runs the
@@ -32,6 +32,13 @@ function productionCsp(): string | undefined {
   return match[1];
 }
 const CSP = productionCsp();
+
+/**
+ * Website session (B7). The address the bundle sends /pricing, /terms and /privacy to. A local one,
+ * so a redirect never reaches the real website; the specs answer it with page.route.
+ */
+const WEBSITE = process.env.E2E_WEBSITE_URL ?? "http://localhost:4321";
+process.env.E2E_WEBSITE_URL = WEBSITE;
 
 const webCommand =
   MODE === "dev"
@@ -76,6 +83,7 @@ export default defineConfig({
     env: {
       BROWSER: "none",
       E2E_API_PROXY: API_ORIGIN,
+      VITE_WEBSITE_URL: WEBSITE,
       ...(CSP ? { E2E_CSP_HEADER: CSP } : {}),
       ...(MODE === "dev" ? { VITE_API_URL: `${API_ORIGIN}/api/v1` } : {}),
     },

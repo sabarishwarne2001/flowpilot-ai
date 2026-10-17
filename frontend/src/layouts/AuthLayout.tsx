@@ -12,8 +12,8 @@ import type { BrandingManifest } from "@/types/branding";
  * is mounted, and restores what was there on unmount.
  *
  * ARCH-30 Tranche 1 (T4-F5). The favicon endpoint (`/api/v1/branding/favicon`)
- * shipped in ARCH-25 with no consumer. A browser tab reading "FlowPilot AI"
- * with FlowPilot's icon on `ai.acme.com/login` undoes the white-label at the
+ * shipped in ARCH-25 with no consumer. A browser tab reading "Servabo"
+ * with Servabo's icon on `ai.acme.com/login` undoes the white-label at the
  * one place a user looks before typing a password.
  *
  * Restoration matters because this layout unmounts into the authenticated

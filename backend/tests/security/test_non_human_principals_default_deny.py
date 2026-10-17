@@ -8,7 +8,7 @@ a scope. The same question for every other credential a machine holds:
 - the public gateway refuses a key that lacks the route's scope, on every gateway route, so a
   gateway route added without its scope check fails here.
 
-The partner portal has no token of its own: partner members are people signed in to FlowPilot.
+The partner portal has no token of its own: partner members are people signed in to Servabo.
 """
 
 from __future__ import annotations

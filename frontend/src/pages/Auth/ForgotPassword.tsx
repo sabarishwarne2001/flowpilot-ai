@@ -1,5 +1,5 @@
 /**
- * Password reset request page for FlowPilot AI.
+ * Password reset request page for Servabo.
  *
  * The screen shows the SAME confirmation whether or not the address matches an
  * account. The backend answers 202 either way for that reason; showing "no

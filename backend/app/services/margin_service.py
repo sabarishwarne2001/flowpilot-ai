@@ -141,6 +141,47 @@ class PlatformMarginSummary:
     currency: str
     figures: MarginFigures
     organization_count: int
+    #: Website and payments session (C12): the money received and what the provider kept.
+    payments: "PaymentFigures" = None  # type: ignore[assignment]
+
+
+@dataclass(frozen=True)
+class PaymentFigures:
+    """Payments recorded in a window (Dodo invoices paid in it) and Dodo's fees on them."""
+
+    count: int = 0
+    received_micros: int = 0
+    fees_micros: int = 0
+    refunded_micros: int = 0
+
+    @property
+    def net_micros(self) -> int:
+        return self.received_micros - self.fees_micros - self.refunded_micros
+
+
+def payment_figures(db: Session, *, period_start: datetime, period_end: datetime, currency: str = "USD") -> PaymentFigures:
+    """Dodo payments paid in the window, each charged Dodo's fee (`app.core.payment_fees`).
+
+    The fee is the planning figure (an international subscription payment), the dearest usual case;
+    Dodo's payout report is the exact one.
+    """
+    from app.core.payment_fees import dodo_fee_micros
+    from app.models.invoice import Invoice
+
+    rows = db.execute(
+        select(Invoice.amount_paid_micros, Invoice.amount_refunded_micros).where(
+            Invoice.gateway == "DODO",
+            Invoice.currency == currency,
+            Invoice.paid_at >= period_start,
+            Invoice.paid_at < period_end,
+        )
+    ).all()
+    return PaymentFigures(
+        count=len(rows),
+        received_micros=sum(int(r[0]) for r in rows),
+        fees_micros=sum(dodo_fee_micros(int(r[0])) for r in rows),
+        refunded_micros=sum(int(r[1] or 0) for r in rows),
+    )
 
 
 @dataclass(frozen=True)
@@ -311,6 +352,7 @@ def platform_summary(
         currency=currency,
         figures=figures,
         organization_count=org_count,
+        payments=payment_figures(db, period_start=period_start, period_end=period_end, currency=currency),
     )
 
 

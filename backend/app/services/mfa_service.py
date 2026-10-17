@@ -122,7 +122,7 @@ def start(db: Session, *, user: User) -> Enrolment:
     existing.recovery_code_hashes = []
     existing.last_used_step = None
     db.flush()
-    issuer = str(getattr(settings, "PROJECT_NAME", "FlowPilot AI") or "FlowPilot AI")
+    issuer = str(getattr(settings, "PROJECT_NAME", "Servabo") or "Servabo")
     return Enrolment(secret=secret, otpauth_uri=totp.provisioning_uri(secret, account=user.email, issuer=issuer))
 
 

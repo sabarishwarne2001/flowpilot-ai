@@ -1,5 +1,5 @@
 /**
- * Tenant picker for FlowPilot AI ("Choose a workspace").
+ * Tenant picker for Servabo ("Choose a workspace").
  *
  * Active organizations first, each with the workspaces the person can open; then, apart and
  * badged, archived organizations. F-131/F-132: archiving is reversible, so owners and admins see
@@ -253,7 +253,7 @@ const ArchivedOrganizationCard: React.FC<{
       <p className="text-xs leading-relaxed text-muted-foreground">
         {organization.organization_status === "ARCHIVED"
           ? "Archived: its documents are kept, but no one can open its workspaces, and its API keys, automations and integrations are off."
-          : "Suspended by FlowPilot. Its documents are kept; contact support to lift the suspension."}{" "}
+          : "Suspended by Servabo. Its documents are kept; contact support to lift the suspension."}{" "}
         {organization.organization_status === "ARCHIVED" &&
           (canRestore ? "You can restore it." : "An owner can restore it.")}
       </p>

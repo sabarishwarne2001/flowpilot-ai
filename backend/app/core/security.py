@@ -1,5 +1,5 @@
 """
-Cryptographic primitives for FlowPilot AI.
+Cryptographic primitives for Servabo.
 
 Password hashing (Argon2id, with bcrypt still accepted) and access-token
 issuance and verification.

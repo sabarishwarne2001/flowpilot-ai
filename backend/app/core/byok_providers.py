@@ -52,7 +52,7 @@ AZURE AND PLATFORM FALLBACK
 ===========================
 
 `platform_setting` is None for OPENAI, ANTHROPIC, AZURE_OPENAI and MISTRAL:
-FlowPilot holds no key of its own for any of them. That is not an oversight
+Servabo holds no key of its own for any of them. That is not an oversight
 and it has a consequence worth stating plainly — for those four providers,
 `allow_platform_fallback` cannot do anything, because there is nothing to fall
 back TO. The API surfaces this at policy-set time rather than at 3am during an
@@ -129,7 +129,7 @@ class ProviderSpec:
 
 _NO_ADAPTER_REASON = (
     "The execution layer has no adapter for this provider. The credential is "
-    "stored encrypted and can be validated, but no FlowPilot pipeline can "
+    "stored encrypted and can be validated, but no Servabo pipeline can "
     "call it yet."
 )
 
@@ -402,7 +402,7 @@ def fallback_is_possible(provider: str) -> bool:
     """Whether platform fallback could ever work for this provider.
 
     ARCH-23. `allow_platform_fallback` is a tenant policy; this is a fact
-    about the platform. FlowPilot holds no OpenAI, Anthropic, Azure or Mistral
+    about the platform. Servabo holds no OpenAI, Anthropic, Azure or Mistral
     key of its own, so for those four the policy is inert no matter what the
     tenant sets.
 

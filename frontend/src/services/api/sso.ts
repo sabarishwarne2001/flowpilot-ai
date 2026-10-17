@@ -28,7 +28,7 @@ export const emailDomain = (email: string): string | null => {
  * Does this email domain sign in through an enterprise identity provider?
  *
  * Unauthenticated and answers for any domain, which makes it an oracle for
- * "which companies use FlowPilot with SSO". That is the accepted industry
+ * "which companies use Servabo with SSO". That is the accepted industry
  * trade (Slack, Notion and Okta's own dashboard all expose the same signal) and
  * the page only calls it when the user explicitly chooses single sign-on,
  * never on each keystroke.

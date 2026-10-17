@@ -251,7 +251,7 @@ class OrganizationInvitation(Base, UUIDMixin, TimestampMixin):
         default=False,
         server_default=sa_false(),
         doc=(
-            "F-226. The current token was sent through a mail server FlowPilot does not run "
+            "F-226. The current token was sent through a mail server Servabo does not run "
             "(the organization's own SMTP), whose operator can read it, so it proves nothing "
             "about who reads the invited mailbox."
         ),

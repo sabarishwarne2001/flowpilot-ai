@@ -5,7 +5,7 @@ document is processed, and the REAL outbox relay and delivery loops run
 against a recording stand-in for the network (nothing leaves the machine):
 
 * the secret is shown once, at creation; a MEMBER may not manage endpoints;
-* the receiver gets a POST whose X-FlowPilot-Signature is
+* the receiver gets a POST whose X-Servabo-Signature is
   "t=<unix>,v1=<HMAC-SHA256(secret, '<t>.<body>')>" over the exact bytes sent;
 * a 503 is retried later (backoff), never dropped; the next attempt succeeds;
 * every attempt is listed, with the signature header redacted;
@@ -29,7 +29,7 @@ from app.models.webhook_delivery import WebhookDelivery
 from app.services import webhook_dispatch
 from tests.engines.conftest import Engines
 
-URL = "https://hooks.acme.example.com/flowpilot"
+URL = "https://hooks.acme.example.com/servabo"
 
 
 @dataclass
@@ -79,7 +79,7 @@ def _deliver() -> None:
 
 
 def _verify(secret: str, request: dict) -> dict:
-    parts = dict(p.split("=", 1) for p in request["headers"]["X-FlowPilot-Signature"].split(","))
+    parts = dict(p.split("=", 1) for p in request["headers"]["X-Servabo-Signature"].split(","))
     expected = hmac.new(secret.encode(), f"{parts['t']}.{request['body'].decode()}".encode(), hashlib.sha256).hexdigest()
     assert hmac.compare_digest(parts["v1"], expected), "signature does not verify"
     return json.loads(request["body"])
@@ -119,7 +119,7 @@ def test_a_document_event_is_signed_retried_and_delivered(engines: Engines, rece
     assert len(receiver.requests) == 2
     second = _verify(secret, receiver.requests[1])
     assert second["id"] == first["id"], "a retry must carry the same delivery id so receivers can deduplicate"
-    assert receiver.requests[1]["headers"]["X-FlowPilot-Attempt"] == "2"
+    assert receiver.requests[1]["headers"]["X-Servabo-Attempt"] == "2"
 
     delivery = engines.get(f"/webhooks/endpoints/{endpoint['id']}/deliveries", org=True).json()[0]
     assert delivery["status"] == "DELIVERED", delivery
@@ -133,7 +133,7 @@ def test_a_document_event_is_signed_retried_and_delivered(engines: Engines, rece
 
 def parts_hidden(attempt: dict) -> bool:
     headers = attempt.get("request_headers") or {}
-    return "v1=" not in str(headers.get("X-FlowPilot-Signature", ""))
+    return "v1=" not in str(headers.get("X-Servabo-Signature", ""))
 
 
 def test_send_test_event_pings_the_endpoint_through_the_signed_path(engines: Engines, receiver: _Receiver) -> None:
@@ -156,7 +156,7 @@ def test_send_test_event_pings_the_endpoint_through_the_signed_path(engines: Eng
 
 
 def _signed_by(secret: str, request: dict) -> bool:
-    pieces = [p.split("=", 1) for p in request["headers"]["X-FlowPilot-Signature"].split(",")]
+    pieces = [p.split("=", 1) for p in request["headers"]["X-Servabo-Signature"].split(",")]
     stamp = next(value for key, value in pieces if key == "t")
     expected = hmac.new(secret.encode(), f"{stamp}.{request['body'].decode()}".encode(), hashlib.sha256).hexdigest()
     return any(hmac.compare_digest(value, expected) for key, value in pieces if key == "v1")

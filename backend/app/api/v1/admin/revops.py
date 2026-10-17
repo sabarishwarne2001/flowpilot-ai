@@ -29,10 +29,12 @@ invoices is audited on the customer organization (BILLING_ACCOUNT / UPDATED with
 from __future__ import annotations
 
 import uuid
+from datetime import datetime
 
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_db, require_superadmin
@@ -188,3 +190,65 @@ def void_invoice(invoice_id: uuid.UUID, payload: InvoiceVoidIn, db: Session = De
     contract = contracts.void(db, invoice_id=invoice_id, reason=payload.reason, actor_id=user.id)
     db.commit()
     return ContractOut(**contract)
+
+
+# ---------------------------------------------------------------------------
+# Website and payments session (C5): payment disputes, and lifting a reversal's read-only hold.
+# ---------------------------------------------------------------------------
+
+
+class DisputeOut(BaseModel):
+    id: uuid.UUID
+    organization_id: uuid.UUID
+    organization_name: Optional[str] = None
+    gateway: str
+    gateway_dispute_id: str
+    gateway_payment_id: str
+    status: str
+    amount_micros: Optional[int] = None
+    currency: Optional[str] = None
+    opened_at: datetime
+    reversed_at: Optional[datetime] = None
+    cleared_at: Optional[datetime] = None
+    cleared_reason: Optional[str] = None
+    holding_read_only: bool
+
+
+class DisputeLiftIn(BaseModel):
+    reason: str = Field(min_length=3, max_length=500)
+
+
+@router.get("/disputes", response_model=list[DisputeOut])
+def list_disputes(db: Session = Depends(get_db)) -> list[DisputeOut]:
+    """Every recorded dispute, the ones holding an organization read-only first."""
+    from sqlalchemy import select
+
+    from app.models.billing_dispute import BillingDispute
+    from app.models.organization import Organization
+    from app.services.billing import dispute_service
+
+    rows = db.execute(
+        select(BillingDispute, Organization)
+        .join(Organization, Organization.id == BillingDispute.organization_id)
+        .order_by(BillingDispute.cleared_at.is_(None).desc(), BillingDispute.created_at.desc())
+        .limit(200)
+    ).all()
+    views = [DisputeOut(**dispute_service.view(d, o)) for d, o in rows]
+    return sorted(views, key=lambda v: not v.holding_read_only)
+
+
+@router.post("/disputes/{dispute_id}/lift", response_model=DisputeOut)
+def lift_dispute(dispute_id: uuid.UUID, payload: DisputeLiftIn, db: Session = Depends(get_db),
+                 user: User = Depends(require_superadmin)) -> DisputeOut:
+    from fastapi import HTTPException
+
+    from app.models.billing_dispute import BillingDispute
+    from app.models.organization import Organization
+    from app.services.billing import dispute_service
+
+    dispute = db.get(BillingDispute, dispute_id)
+    if dispute is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No such dispute.")
+    dispute_service.lift(db, dispute=dispute, actor_user_id=user.id, reason=payload.reason)
+    db.commit()
+    return DisputeOut(**dispute_service.view(dispute, db.get(Organization, dispute.organization_id)))

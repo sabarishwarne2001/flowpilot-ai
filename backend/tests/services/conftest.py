@@ -26,7 +26,7 @@ from fastapi.testclient import TestClient
 from app.core.config import settings
 from app.models.user import User
 
-TEST_DB_NAME = os.environ.get("SERVICE_TEST_DB_NAME", "flowpilot_svc_test")
+TEST_DB_NAME = os.environ.get("SERVICE_TEST_DB_NAME", "servabo_svc_test")
 
 
 @pytest.fixture(scope="session")

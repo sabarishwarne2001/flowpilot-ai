@@ -107,7 +107,7 @@ test.describe("Analytics and BI egress", () => {
     await page.getByRole("textbox", { name: "Label" }).fill(label);
     await page.getByRole("textbox", { name: "Bucket" }).fill("caretakers-e2e-bucket");
     await page.getByRole("textbox", { name: "Region" }).fill("eu-west-2");
-    await page.getByRole("textbox", { name: "Key prefix" }).fill("flowpilot/");
+    await page.getByRole("textbox", { name: "Key prefix" }).fill("servabo/");
     await page.getByRole("textbox", { name: "Access key ID" }).fill("AKIAE2ETESTONLY0000");
     await page.getByRole("textbox", { name: "Secret access key" }).fill("e2e-secret-not-real");
     await page.getByRole("button", { name: "Add destination" }).last().click();

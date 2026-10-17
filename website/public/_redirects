@@ -1,0 +1,6 @@
+# Cloudflare Pages redirects. www is redirected at the DNS/Pages level (docs/website/DEPLOY.md).
+/legal /legal/terms 301
+/terms /legal/terms 301
+/privacy /legal/privacy 301
+/refunds /legal/refunds 301
+/refund-policy /legal/refunds 301

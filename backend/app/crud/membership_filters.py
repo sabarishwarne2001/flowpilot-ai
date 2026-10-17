@@ -1,5 +1,5 @@
 """
-Shared membership status filters for the FlowPilot AI persistence layer.
+Shared membership status filters for the Servabo persistence layer.
 
 Defined once and imported by every CRUD module that filters on membership
 status. Four independent copies of the same tuple would be free to drift, and

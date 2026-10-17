@@ -42,10 +42,10 @@ WHAT MAKES A BACKUP TRUSTWORTHY HERE
 WHERE IT GOES
 =============
 
-`FLOWPILOT_BACKUP_DIR` (default `backend/.flowpilot_backups`, git-ignored).
-Set `FLOWPILOT_BACKUP_S3_BUCKET` to mirror each backup to an S3-compatible
+`SERVABO_BACKUP_DIR` (default `backend/.servabo_backups`, git-ignored).
+Set `SERVABO_BACKUP_S3_BUCKET` to mirror each backup to an S3-compatible
 bucket as well. The mirror has its OWN endpoint and credentials
-(`FLOWPILOT_BACKUP_S3_ENDPOINT`, `..._ACCESS_KEY`, `..._SECRET_KEY`) on purpose:
+(`SERVABO_BACKUP_S3_ENDPOINT`, `..._ACCESS_KEY`, `..._SECRET_KEY`) on purpose:
 a backup that lives only in the application's own MinIO, on the same host,
 is lost in exactly the event it exists for. Point it at a second machine or
 disk.
@@ -53,7 +53,7 @@ disk.
 THE KEY
 =======
 
-`FLOWPILOT_BACKUP_KEY` is 32 random bytes, base64. Generate it once with
+`SERVABO_BACKUP_KEY` is 32 random bytes, base64. Generate it once with
 `--generate-key` and keep a copy OFF this machine. It is deliberately not
 derived from any application secret: rotating an application key must not make
 last month's backups unreadable, and a leaked application secret must not open
@@ -82,12 +82,18 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 BACKEND = Path(__file__).resolve().parents[1]
+if str(BACKEND) not in sys.path:
+    sys.path.insert(0, str(BACKEND))
+from app.core import legacy_names  # noqa: E402  (standard library only; one release of the pre-rename names)
 
-FORMAT = "flowpilot-backup-floor/1"
+FORMAT = "servabo-backup-floor/1"
+#: Formats this release can read: its own, and backups written before the rename to Servabo.
+READABLE_FORMATS = frozenset({FORMAT, legacy_names.LEGACY_BACKUP_FORMAT})
+STEMS = ("servabo", legacy_names.LEGACY_STEM)
 MAGIC = b"FPBK1\n"
 CHUNK = 4 * 1024 * 1024
 NONCE_PREFIX_BYTES = 7
-FILE_PATTERN = re.compile(r"^flowpilot-(\d{8}T\d{6}Z)\.fpbk$")
+FILE_PATTERN = re.compile(rf"^({'|'.join(STEMS)})-(\d{{8}}T\d{{6}}Z)\.fpbk$")
 KEEP_DAILY = 7
 KEEP_WEEKLY = 4
 
@@ -102,27 +108,27 @@ class BackupError(RuntimeError):
 
 
 def backup_dir(explicit: Optional[str] = None) -> Path:
-    raw = explicit or os.environ.get("FLOWPILOT_BACKUP_DIR") or str(BACKEND / ".flowpilot_backups")
+    raw = explicit or legacy_names.env("BACKUP_DIR") or str(legacy_names.local_directory(BACKEND, ".servabo_backups"))
     path = Path(raw).expanduser().resolve()
     path.mkdir(parents=True, exist_ok=True)
     return path
 
 
 def load_key() -> bytes:
-    raw = os.environ.get("FLOWPILOT_BACKUP_KEY", "").strip()
+    raw = legacy_names.env("BACKUP_KEY", "").strip()
     if not raw:
         raise BackupError(
-            "FLOWPILOT_BACKUP_KEY is not set. Generate one with "
+            "SERVABO_BACKUP_KEY is not set. Generate one with "
             "`python scripts/backup_floor.py --generate-key`, store a copy off "
             "this machine, and set it in the environment."
         )
     try:
         key = base64.b64decode(raw, validate=True)
     except Exception as exc:  # noqa: BLE001
-        raise BackupError("FLOWPILOT_BACKUP_KEY is not valid base64.") from exc
+        raise BackupError("SERVABO_BACKUP_KEY is not valid base64.") from exc
     if len(key) != 32:
         raise BackupError(
-            f"FLOWPILOT_BACKUP_KEY must decode to 32 bytes; it decodes to {len(key)}."
+            f"SERVABO_BACKUP_KEY must decode to 32 bytes; it decodes to {len(key)}."
         )
     return key
 
@@ -259,7 +265,7 @@ def decrypt_stream(source: BinaryIO, key: bytes) -> Iterator[bytes]:
     from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
     if _read_full(source, len(MAGIC)) != MAGIC:
-        raise BackupError("Not a FlowPilot backup file (bad magic).")
+        raise BackupError("Not a Servabo backup file (bad magic).")
     header_len = int.from_bytes(_read_full(source, 4), "big")
     if not 0 < header_len < 4096:
         raise BackupError("Backup header length is implausible; the file is damaged.")
@@ -268,11 +274,11 @@ def decrypt_stream(source: BinaryIO, key: bytes) -> Iterator[bytes]:
         meta = json.loads(header)
     except ValueError as exc:
         raise BackupError("Backup header is not readable; the file is damaged.") from exc
-    if meta.get("format") != FORMAT:
+    if meta.get("format") not in READABLE_FORMATS:
         raise BackupError(f"Unsupported backup format {meta.get('format')!r}.")
     if meta.get("key_id") != key_id(key):
         raise BackupError(
-            "This backup was encrypted with a different FLOWPILOT_BACKUP_KEY "
+            "This backup was encrypted with a different SERVABO_BACKUP_KEY "
             f"(key id {meta.get('key_id')}, current key id {key_id(key)})."
         )
     prefix = bytes.fromhex(meta["nonce_prefix"])
@@ -353,8 +359,8 @@ def run_backup(dest: Path, *, database_url: Optional[str] = None) -> BackupResul
     params = connection_params(database_url)
     pg_dump = pg_tool("pg_dump")
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    final_path = dest / f"flowpilot-{stamp}.fpbk"
-    partial = dest / f".flowpilot-{stamp}.fpbk.partial"
+    final_path = dest / f"servabo-{stamp}.fpbk"
+    partial = dest / f".servabo-{stamp}.fpbk.partial"
     started = time.monotonic()
 
     conn = connect(params)
@@ -424,7 +430,7 @@ def run_backup(dest: Path, *, database_url: Optional[str] = None) -> BackupResul
         "table_counts": facts["table_counts"],
         "duration_seconds": round(time.monotonic() - started, 3),
     }
-    manifest_path = dest / f"flowpilot-{stamp}.manifest.json"
+    manifest_path = dest / f"servabo-{stamp}.manifest.json"
     manifest_path.write_text(json.dumps(manifest_data, indent=2, sort_keys=True), encoding="utf-8")
     return BackupResult(final_path, manifest_path, manifest_data)
 
@@ -459,7 +465,7 @@ def stamps_to_keep(stamps: list[str]) -> set[str]:
 
 def prune(dest: Path) -> list[str]:
     stamps = [
-        match.group(1)
+        match.group(2)
         for entry in dest.iterdir()
         if (match := FILE_PATTERN.match(entry.name))
     ]
@@ -468,7 +474,7 @@ def prune(dest: Path) -> list[str]:
     for stamp in stamps:
         if stamp in keep:
             continue
-        for name in (f"flowpilot-{stamp}.fpbk", f"flowpilot-{stamp}.manifest.json"):
+        for name in [f"{stem}-{stamp}{suffix}" for stem in STEMS for suffix in (".fpbk", ".manifest.json")]:
             target = dest / name
             if target.exists():
                 target.unlink()
@@ -477,7 +483,11 @@ def prune(dest: Path) -> list[str]:
 
 
 def latest_manifest(dest: Path) -> Path:
-    manifests = sorted(dest.glob("flowpilot-*.manifest.json"))
+    # Newest first by the time in the name, whichever stem wrote it (the rename kept the format).
+    manifests = sorted(
+        (p for stem in STEMS for p in dest.glob(f"{stem}-*.manifest.json")),
+        key=lambda p: p.name.split("-", 1)[1],
+    )
     if not manifests:
         raise BackupError(f"No backup manifest found in {dest}.")
     return manifests[-1]
@@ -507,13 +517,13 @@ def verify_file(dest: Path, manifest_path: Path) -> dict[str, Any]:
 
 
 def mirror(result: BackupResult) -> Optional[str]:
-    bucket = os.environ.get("FLOWPILOT_BACKUP_S3_BUCKET", "").strip()
+    bucket = legacy_names.env("BACKUP_S3_BUCKET", "").strip()
     if not bucket:
         return None
     import boto3
 
     # ARCH50-S1:egress-backup. The mirror goes through the egress gate (BACKUP is an operator channel: in deny
-    # mode only FLOWPILOT_BACKUP_S3_ENDPOINT's host, or a declared EGRESS_OPERATOR_HOSTS entry, is reachable).
+    # mode only SERVABO_BACKUP_S3_ENDPOINT's host, or a declared EGRESS_OPERATOR_HOSTS entry, is reachable).
     # If the gate cannot be loaded, the mirror runs only when the deployment is not in deny mode.
     gate = None
     try:
@@ -525,13 +535,13 @@ def mirror(result: BackupResult) -> Optional[str]:
             raise RuntimeError(f"the egress gate is unavailable ({exc}); refusing the off-host mirror in deny mode")
     client = boto3.client(
         "s3",
-        endpoint_url=os.environ.get("FLOWPILOT_BACKUP_S3_ENDPOINT") or None,
-        aws_access_key_id=os.environ.get("FLOWPILOT_BACKUP_S3_ACCESS_KEY") or None,
-        aws_secret_access_key=os.environ.get("FLOWPILOT_BACKUP_S3_SECRET_KEY") or None,
+        endpoint_url=legacy_names.env("BACKUP_S3_ENDPOINT") or None,
+        aws_access_key_id=legacy_names.env("BACKUP_S3_ACCESS_KEY") or None,
+        aws_secret_access_key=legacy_names.env("BACKUP_S3_SECRET_KEY") or None,
     )
     if gate is not None:
         gate.attach_boto(client, gate.BACKUP)
-    prefix = os.environ.get("FLOWPILOT_BACKUP_S3_PREFIX", "flowpilot-backups/").lstrip("/")
+    prefix = legacy_names.env("BACKUP_S3_PREFIX", "servabo-backups/").lstrip("/")
     for path in (result.file, result.manifest):
         client.upload_file(str(path), bucket, f"{prefix}{path.name}")
     return f"s3://{bucket}/{prefix}"
@@ -543,8 +553,8 @@ def mirror(result: BackupResult) -> Optional[str]:
 
 
 def main(argv: Optional[list[str]] = None) -> int:
-    parser = argparse.ArgumentParser(description="FlowPilot encrypted backup floor (ARCH-41)")
-    parser.add_argument("--dest", help="backup directory (default FLOWPILOT_BACKUP_DIR)")
+    parser = argparse.ArgumentParser(description="Servabo encrypted backup floor (ARCH-41)")
+    parser.add_argument("--dest", help="backup directory (default SERVABO_BACKUP_DIR)")
     parser.add_argument("--no-prune", action="store_true")
     parser.add_argument("--verify-latest", action="store_true")
     parser.add_argument("--generate-key", action="store_true")

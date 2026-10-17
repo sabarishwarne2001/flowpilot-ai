@@ -205,13 +205,13 @@ const UNHANDLED_REJECTION_SCRIPT = () => {
   });
 };
 
-const AUTH_STORAGE_KEY = "flowpilot_auth_session";
+const AUTH_STORAGE_KEY = "servabo_auth_session";
 
 export async function signInContext(page: Page, userKey: UserKey): Promise<ApiSession> {
   const session = await loginAs(userKey);
   await page.context().addCookies([
     {
-      name: "flowpilot_refresh",
+      name: "servabo_refresh",
       value: session.refreshToken,
       domain: new URL(BROWSER_API_ORIGIN).hostname,
       path: "/api/v1/auth",

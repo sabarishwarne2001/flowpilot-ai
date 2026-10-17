@@ -3,7 +3,7 @@
 The organization's legal name is what Stripe prints on its invoices and receipts: the customer is
 created with `legal_name or name`. It was sent only when the customer was first created, so an
 organization that corrected or registered its legal name afterwards kept being invoiced under the
-old one, while every FlowPilot screen showed the new one. Decided (campaign session 4): a later
+old one, while every Servabo screen showed the new one. Decided (campaign session 4): a later
 change must update the provider's customer too.
 
 Stripe is a recording stand-in installed with `stripe_gateway.set_gateway` (as in the other

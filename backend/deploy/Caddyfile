@@ -1,5 +1,5 @@
 # =============================================================================
-# FlowPilot AI — Caddy ingress.
+# Servabo — Caddy ingress.
 #
 # Mounted read-only at /etc/caddy/Caddyfile by docker-compose.prod.yml.
 # Caddy handles ACME itself: no certbot, no cron renewal, no manual steps.

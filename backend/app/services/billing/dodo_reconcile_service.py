@@ -166,20 +166,24 @@ def _addon_key_for(snapshot: DodoSubscriptionSnapshot) -> Optional[str]:
 
 
 def _tier_key_for(db: Session, snapshot: DodoSubscriptionSnapshot) -> str:
+    """The plan a Dodo subscription is on: the product Dodo bills, else the checkout's metadata.
+
+    Website and payments session (C1). The metadata is what Servabo's checkout declared, and Dodo
+    keeps it after a plan change; reading it first put every upgraded organization back on the plan
+    it checked out with as soon as Dodo's own webhooks arrived. The product is what Dodo charges for
+    now, so it decides; the metadata only names a plan whose product is not configured here.
+    """
+    from app.services.revops import price_books
+
+    if snapshot.product_id:
+        # HM-S1: a gateway price identifies a PLAN, and every version of that plan may carry it
+        # (migration hm1_tier_price_per_key); plan price books (yearly prices, C11) are read first.
+        key = price_books.tier_for_gateway_price(db, snapshot.product_id)
+        if key:
+            return str(key)
     declared = (snapshot.metadata or {}).get(subscription_service.TIER_METADATA_KEY)
     if declared:
         return str(declared).strip()
-    if snapshot.product_id:
-        # HM-S1: a gateway price identifies a PLAN, and every version of that
-        # plan may carry it (migration hm1_tier_price_per_key); the trigger it
-        # installs keeps one price on one key, so DISTINCT is at most one row.
-        key = db.execute(
-            select(QuotaTier.key)
-            .where(QuotaTier.gateway_price_id == snapshot.product_id)
-            .distinct()
-        ).scalar_one_or_none()
-        if key:
-            return str(key)
     raise ReconcileRefused(
         f"Dodo subscription {snapshot.id} carries no "
         f"metadata.{subscription_service.TIER_METADATA_KEY} and its product "
@@ -327,10 +331,177 @@ def reconcile_subscription_event(db: Session, row: StripeInboundEvent) -> Reconc
     organization_id = _organization_for(db, snapshot)
     addon_key = _addon_key_for(snapshot)
     if addon_key is not None:
-        return _reconcile_addon(
+        outcome = _reconcile_addon(
             db, row=row, snapshot=snapshot, organization_id=organization_id, addon_key=addon_key
         )
-    return _reconcile_plan(db, row=row, snapshot=snapshot, organization_id=organization_id)
+    else:
+        outcome = _reconcile_plan(db, row=row, snapshot=snapshot, organization_id=organization_id)
+    if row.event_type == "payment.succeeded" and outcome.handled:
+        _record_invoice(db, row=row, organization_id=organization_id, addon_key=addon_key, outcome=outcome)
+    return outcome
+
+
+def apply_snapshot(
+    db: Session, *, snapshot: DodoSubscriptionSnapshot, organization_id: uuid.UUID, source: str
+) -> ReconcileOutcome:
+    """Apply a subscription Servabo just changed at Dodo (a plan change), as a webhook would.
+
+    The same guarded upsert as an event (D-9: `state_version` orders it against webhooks), so the
+    change shows at once and a later event for the same state changes nothing.
+    """
+    from types import SimpleNamespace
+
+    origin = SimpleNamespace(gateway_event_id=f"app:{source}", event_type=source)
+    return _reconcile_plan(db, row=origin, snapshot=snapshot, organization_id=organization_id)  # type: ignore[arg-type]
+
+
+def _record_invoice(
+    db: Session,
+    *,
+    row: StripeInboundEvent,
+    organization_id: uuid.UUID,
+    addon_key: Optional[str],
+    outcome: ReconcileOutcome,
+) -> None:
+    """Website and payments session (C4): the payment becomes a paid invoice row.
+
+    Re-fetched (D-9): the payment's amount, tax and refunds come from `GET /payments/{id}`.
+    """
+    from app.services.billing import dodo_invoice_service
+
+    payment_id = str(_data(row).get("payment_id") or "")
+    if not payment_id:
+        raise ReconcileRefused(f"Dodo event {row.gateway_event_id} (payment.succeeded) names no payment.")
+    payment = get_dodo_gateway().fetch_payment(payment_id)
+    addon_name = entitlement_service.offer_for(addon_key).display_name if addon_key else None
+    invoice = dodo_invoice_service.record_payment(
+        db, organization_id=organization_id, payment=payment, addon_name=addon_name
+    )
+    if invoice is not None:
+        outcome.detail["invoice_number"] = invoice.number
+    # C5: a payment that succeeded after a reversed one lifts the read-only hold.
+    from app.services.billing import dispute_service
+
+    lifted = dispute_service.clear_on_payment(db, organization_id=organization_id, paid_at=payment.created_at)
+    if lifted:
+        outcome.detail["reversals_lifted"] = lifted
+
+
+def _payment_organization(db: Session, payment) -> uuid.UUID:
+    """The organization a payment belongs to: its subscription's, else its customer's."""
+    if payment.subscription_id:
+        found = db.execute(
+            select(BillingAccount.organization_id)
+            .join(Subscription, Subscription.billing_account_id == BillingAccount.id)
+            .where(Subscription.gateway == GATEWAY_NAME,
+                   Subscription.gateway_subscription_id == payment.subscription_id)
+        ).scalar_one_or_none()
+        if found is not None:
+            return found
+        by_addon = db.execute(
+            select(OrganizationAddon.organization_id).where(
+                OrganizationAddon.gateway == GATEWAY_NAME,
+                OrganizationAddon.gateway_subscription_id == payment.subscription_id,
+            )
+        ).scalar_one_or_none()
+        if by_addon is not None:
+            return by_addon
+    by_customer = db.execute(
+        select(BillingAccount.organization_id).where(
+            BillingAccount.gateway == GATEWAY_NAME,
+            BillingAccount.gateway_customer_id == payment.customer_id,
+        )
+    ).scalar_one_or_none()
+    if by_customer is not None:
+        return by_customer
+    claimed = _uuid_or_none(((payment.raw or {}).get("metadata") or {}).get("organization_id"))
+    if claimed is not None and db.get(Organization, claimed) is not None:
+        return claimed
+    raise ReconcileRefused(
+        f"Dodo payment {payment.id} maps to no organization (subscription {payment.subscription_id}, "
+        f"customer {payment.customer_id}); replay it once its subscription is reconciled."
+    )
+
+
+def reconcile_refund_event(db: Session, row: StripeInboundEvent) -> ReconcileOutcome:
+    """C5. A refund on a payment: re-fetch the payment, record its refunded total on the invoice.
+
+    The figure is Dodo's running total of succeeded refunds, so a replayed, late or failed refund
+    event converges on the same number (`invoice_service.record_refund` sets, never adds).
+    """
+    from app.services import organization_notification_service as notices
+    from app.services.billing import dodo_invoice_service, invoice_service
+
+    payment_id = str(_data(row).get("payment_id") or "")
+    if not payment_id:
+        raise ReconcileRefused(f"Dodo event {row.gateway_event_id} ({row.event_type}) names no payment.")
+    payment = get_dodo_gateway().fetch_payment(payment_id)
+    organization_id = _payment_organization(db, payment)
+    invoice = dodo_invoice_service.existing(db, payment_id=payment.id)
+    if invoice is None:
+        # The refund came before the payment's own event: record the payment (with its refunds) now.
+        invoice = dodo_invoice_service.record_payment(db, organization_id=organization_id, payment=payment)
+        if invoice is None:
+            return ReconcileOutcome.ignored("refund_without_invoice", payment_id=payment.id)
+        change = int(invoice.amount_refunded_micros or 0)
+    else:
+        change = invoice_service.record_refund(
+            db, invoice=invoice, amount_refunded_micros=payment.refunded_micros
+        )
+    if change > 0:
+        notices.notify_refund_recorded(
+            db,
+            organization_id=organization_id,
+            invoice_number=invoice.number,
+            amount_micros=change,
+            currency=invoice.currency,
+            fully_refunded=invoice.amount_refunded_micros >= invoice.amount_paid_micros,
+        )
+    return ReconcileOutcome.processed(
+        organization_id=organization_id,
+        payment_id=payment.id,
+        invoice_number=invoice.number,
+        amount_refunded_micros=int(invoice.amount_refunded_micros),
+        change_micros=change,
+    )
+
+
+def reconcile_dispute_event(db: Session, row: StripeInboundEvent) -> ReconcileOutcome:
+    """C5. A dispute on a payment: recorded at Dodo's current status, the operator and organization
+    told, and a reversed payment (lost or accepted) holds the organization read-only."""
+    from app.services.billing import dispute_service, dodo_invoice_service
+
+    data = _data(row)
+    payment_id = str(data.get("payment_id") or "")
+    dispute_id = str(data.get("dispute_id") or "")
+    if not payment_id or not dispute_id:
+        raise ReconcileRefused(f"Dodo event {row.gateway_event_id} ({row.event_type}) names no payment or dispute.")
+    payment = get_dodo_gateway().fetch_payment(payment_id)
+    organization_id = _payment_organization(db, payment)
+    current = next((d for d in payment.disputes if d["id"] == dispute_id), None)
+    status = (current or {}).get("status") or str(data.get("dispute_status") or "").lower()
+    invoice = dodo_invoice_service.existing(db, payment_id=payment.id)
+    dispute, changes = dispute_service.record(
+        db,
+        organization_id=organization_id,
+        gateway=GATEWAY_NAME,
+        dispute_id=dispute_id,
+        payment_id=payment.id,
+        status=status,
+        amount_micros=payment.total_micros,
+        currency=payment.currency,
+        opened_at=(current or {}).get("created_at"),
+        invoice_id=invoice.id if invoice is not None else None,
+    )
+    return ReconcileOutcome.processed(
+        organization_id=organization_id,
+        dispute_id=dispute_id,
+        status=dispute.status,
+        reversed=dispute.reversed_at is not None,
+        holding_read_only=dispute.reversed_at is not None and dispute.cleared_at is None,
+        opened_now=changes["opened"],
+        reversed_now=changes["reversed"],
+    )
 
 
 def upsert_statement(values: dict[str, Any]):
@@ -353,6 +524,59 @@ def upsert_statement(values: dict[str, Any]):
     ).returning(table.c.id)
 
 
+def _duplicate_of_live_subscription(
+    db: Session,
+    *,
+    organization_id: uuid.UUID,
+    snapshot: DodoSubscriptionSnapshot,
+    existing: Optional[Subscription],
+    now: datetime,
+) -> Optional[ReconcileOutcome]:
+    """A second live Dodo subscription for an organization that already has one (website and
+    payments session, C3).
+
+    One live subscription per organization (`uq_subscriptions_live_account`). Two checkouts
+    completed in two tabs make two at Dodo, and both charge the customer. Writing the second
+    violated the unique index on every attempt until the event dead-lettered, and nobody was told.
+    As on the Stripe path, it is not written, the event settles as ignored, and the operator is
+    alerted at once to cancel and refund it (RUNBOOK §9.8).
+    """
+    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES
+
+    if existing is not None:
+        return None
+    status, _, _ = map_status(snapshot, None, now)
+    if status not in LIVE_SUBSCRIPTION_STATUSES:
+        return None
+    live = subscription_service.live_subscription_for_organization(db, organization_id=organization_id)
+    if live is None or live.gateway_subscription_id == snapshot.id:
+        return None
+
+    from app.services import operator_alert_service
+
+    recorded = str(live.gateway_subscription_id or live.stripe_subscription_id)
+    operator_alert_service.duplicate_subscription(
+        db,
+        organization_id=organization_id,
+        gateway=GATEWAY_NAME,
+        customer_id=snapshot.customer_id,
+        recorded_subscription_id=recorded,
+        duplicate_subscription_id=snapshot.id,
+        duplicate_status=str(snapshot.status),
+    )
+    logger.warning(
+        "billing.duplicate_live_subscription",
+        extra={"organization_id": str(organization_id), "recorded_subscription_id": recorded,
+               "duplicate_subscription_id": snapshot.id, "gateway": GATEWAY_NAME},
+    )
+    return ReconcileOutcome.ignored(
+        "duplicate_live_subscription",
+        organization_id=str(organization_id),
+        gateway_subscription_id=snapshot.id,
+        recorded_subscription_id=recorded,
+    )
+
+
 def _reconcile_plan(
     db: Session,
     *,
@@ -361,8 +585,14 @@ def _reconcile_plan(
     organization_id: uuid.UUID,
 ) -> ReconcileOutcome:
     now = entitlement_service.utcnow()
-    account = _adopt_account(db, organization_id=organization_id, snapshot=snapshot)
     existing = _existing(db, snapshot.id)
+    # Before adoption: a racing checkout may also have made a second Dodo customer.
+    duplicate = _duplicate_of_live_subscription(
+        db, organization_id=organization_id, snapshot=snapshot, existing=existing, now=now
+    )
+    if duplicate is not None:
+        return duplicate
+    account = _adopt_account(db, organization_id=organization_id, snapshot=snapshot)
     previous_status = existing.status if existing is not None else None
     previous_tier_key = existing.quota_tier_key if existing is not None else None
 
@@ -547,22 +777,23 @@ RECONCILERS: dict[str, Handler] = {
     # whole reconciliation. A one-off payment names none and is ignored.
     "payment.succeeded": reconcile_subscription_event,
     "payment.failed": reconcile_subscription_event,
+    # Website and payments session (C5): the merchant of record answers refunds and disputes;
+    # Servabo records them, tells people, and holds a reversed payment read-only.
+    "refund.succeeded": reconcile_refund_event,
+    "refund.failed": reconcile_refund_event,
+    "dispute.opened": reconcile_dispute_event,
+    "dispute.challenged": reconcile_dispute_event,
+    "dispute.accepted": reconcile_dispute_event,
+    "dispute.cancelled": reconcile_dispute_event,
+    "dispute.expired": reconcile_dispute_event,
+    "dispute.won": reconcile_dispute_event,
+    "dispute.lost": reconcile_dispute_event,
 }
 
-#: Deliberately not acted on, with the reason. Under a Merchant of Record the
-#: vendor owns refunds and disputes as the legal seller.
+#: Deliberately not acted on, with the reason.
 KNOWN_UNHANDLED: dict[str, str] = {
     "payment.processing": "transient_state",
     "payment.cancelled": "no_state_to_reconcile",
-    "refund.succeeded": "merchant_of_record_owned",
-    "refund.failed": "merchant_of_record_owned",
-    "dispute.opened": "merchant_of_record_owned",
-    "dispute.expired": "merchant_of_record_owned",
-    "dispute.accepted": "merchant_of_record_owned",
-    "dispute.cancelled": "merchant_of_record_owned",
-    "dispute.challenged": "merchant_of_record_owned",
-    "dispute.won": "merchant_of_record_owned",
-    "dispute.lost": "merchant_of_record_owned",
     "license_key.created": "not_sold",
 }
 

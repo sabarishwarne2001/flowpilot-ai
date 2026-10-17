@@ -37,7 +37,7 @@ def isolated_store(monkeypatch):
 @pytest.fixture()
 def account(db) -> User:
     user = User(
-        email=f"sec1-lock-{uuid.uuid4().hex[:8]}@flowpilot.test",
+        email=f"sec1-lock-{uuid.uuid4().hex[:8]}@servabo.test",
         hashed_password=security.get_password_hash(PASSWORD),
         is_active=True,
         email_verified_at=datetime.now(timezone.utc),
@@ -75,7 +75,7 @@ class TestPolicyShape:
 
 class TestDistributedAttack:
     def test_distributed_attack_is_throttled_by_the_account_scope(self):
-        email = "victim@flowpilot.test"
+        email = "victim@servabo.test"
 
         for n in range(POLICY_LOGIN_ACCOUNT.threshold + 4):
             backoff.record_login_failure(f"203.0.113.{n}", email)
@@ -85,7 +85,7 @@ class TestDistributedAttack:
         assert fresh_ip_status.delay_ms > 0
 
     def test_pair_scope_still_stops_a_single_grinder(self):
-        email = "victim@flowpilot.test"
+        email = "victim@servabo.test"
         ip = "203.0.113.9"
 
         for _ in range(POLICY_LOGIN_ACCOUNT_IP.threshold + 2):
@@ -96,7 +96,7 @@ class TestDistributedAttack:
         assert status.retry_after_seconds > 0
 
     def test_a_refused_pair_does_not_refuse_other_addresses(self):
-        email = "victim@flowpilot.test"
+        email = "victim@servabo.test"
         for _ in range(POLICY_LOGIN_ACCOUNT_IP.threshold + 2):
             backoff.record_login_failure("203.0.113.9", email)
 
@@ -105,14 +105,14 @@ class TestDistributedAttack:
         )
 
     def test_account_scope_never_refuses_however_many_failures(self):
-        email = "victim@flowpilot.test"
+        email = "victim@servabo.test"
         for n in range(200):
             backoff.record_login_failure(f"203.0.113.{n % 250}", email)
 
         assert backoff.check_login_backoff("198.51.100.1", email).is_backed_off is False
 
     def test_success_clears_both_scopes(self):
-        email = "victim@flowpilot.test"
+        email = "victim@servabo.test"
         ip = "203.0.113.9"
         for _ in range(POLICY_LOGIN_ACCOUNT_IP.threshold + 2):
             backoff.record_login_failure(ip, email)
@@ -131,7 +131,7 @@ class TestDistributedAttack:
 
 class TestAntiEnumeration:
     def test_ladder_climbs_for_identifiers_that_do_not_exist(self):
-        unknown = f"nobody-{uuid.uuid4().hex[:8]}@flowpilot.test"
+        unknown = f"nobody-{uuid.uuid4().hex[:8]}@servabo.test"
 
         for n in range(POLICY_LOGIN_ACCOUNT.threshold + 4):
             backoff.record_login_failure(f"203.0.113.{n}", unknown)
@@ -140,7 +140,7 @@ class TestAntiEnumeration:
 
     def test_known_and_unknown_identifiers_ladder_identically(self, account):
         known = account.email
-        unknown = f"nobody-{uuid.uuid4().hex[:8]}@flowpilot.test"
+        unknown = f"nobody-{uuid.uuid4().hex[:8]}@servabo.test"
 
         for n in range(POLICY_LOGIN_ACCOUNT.threshold + 3):
             backoff.record_login_failure(f"203.0.113.{n}", known)
@@ -153,14 +153,14 @@ class TestAntiEnumeration:
         assert known_status.is_backed_off == unknown_status.is_backed_off
 
     def test_counter_keys_do_not_contain_the_address(self, isolated_store):
-        email = "someone@flowpilot.test"
+        email = "someone@servabo.test"
         backoff.record_login_failure("203.0.113.1", email)
 
         keys = list(isolated_store._data.keys())
         assert keys
         for key in keys:
             assert "someone" not in key
-            assert "flowpilot.test" not in key
+            assert "servabo.test" not in key
 
     def test_redis_outage_does_not_refuse_every_login(self, monkeypatch):
         backoff.set_store(None)
@@ -168,7 +168,7 @@ class TestAntiEnumeration:
             "app.services.login_backoff_service.get_redis_client", lambda: None
         )
 
-        status = backoff.check_login_backoff("203.0.113.1", "someone@flowpilot.test")
+        status = backoff.check_login_backoff("203.0.113.1", "someone@servabo.test")
         assert status.is_backed_off is False
 
 
@@ -188,7 +188,7 @@ class TestUnifiedFailureResponse:
     ):
         wrong = self._login(client, account.email, "not-the-password")
         unknown = self._login(
-            client, f"nobody-{uuid.uuid4().hex[:8]}@flowpilot.test", PASSWORD
+            client, f"nobody-{uuid.uuid4().hex[:8]}@servabo.test", PASSWORD
         )
 
         assert wrong.status_code == unknown.status_code == 401
@@ -288,14 +288,14 @@ class TestRecoveryPathExemption:
 
 class TestLadder:
     def test_ladder_is_flat_below_the_threshold(self):
-        email = "quiet@flowpilot.test"
+        email = "quiet@servabo.test"
         for _ in range(POLICY_LOGIN_ACCOUNT_IP.threshold - 1):
             backoff.record_login_failure("203.0.113.1", email)
 
         assert backoff.check_login_backoff("203.0.113.1", email).is_backed_off is False
 
     def test_ladder_is_capped(self):
-        email = "ground@flowpilot.test"
+        email = "ground@servabo.test"
         for n in range(300):
             backoff.record_login_failure(f"203.0.113.{n % 250}", email)
 

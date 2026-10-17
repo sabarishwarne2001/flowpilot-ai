@@ -9,6 +9,7 @@ from pydantic import (
     Field,
     field_validator,
     SecretStr,
+    ValidationInfo,
     model_validator,
 )
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -18,6 +19,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 # rather than at the first encrypted assertion.
 from typing import Literal  # noqa: E402
 from app.core.constants import APP_VERSION
+from app.core.legacy_names import LEGACY_PREFIX
+from app.core.legacy_names import rebrand as legacy_rebrand
 from app.core.production_guard import (
     HARDENED_ENVIRONMENTS,
     UnsafeConfigurationError,
@@ -37,9 +40,16 @@ _KEYLESS_ENVIRONMENTS: frozenset[str] = frozenset({"test", "development"})
 
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "FlowPilot AI"
+    PROJECT_NAME: str = "Servabo"
     APP_VERSION: str = APP_VERSION
-    API_TITLE: str = "FlowPilot AI Core API"
+    API_TITLE: str = "Servabo Core API"
+
+    @field_validator("PROJECT_NAME", "API_TITLE", "PLATFORM_SMTP_FROM_NAME", mode="after")
+    @classmethod
+    def _show_the_new_product_name(cls, value: str, info) -> str:
+        # A .env copied from the template before the rename names the old product; people see
+        # Servabo, and start-up warns once so the file gets updated (app/core/legacy_names.py).
+        return legacy_rebrand(info.field_name, value)
     ENVIRONMENT: str = "development"
     API_V1_STR: str = "/api/v1"
     
@@ -51,7 +61,7 @@ class Settings(BaseSettings):
 
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "postgres"
-    POSTGRES_DB: str = "flowpilot"
+    POSTGRES_DB: str = "servabo"
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
 
@@ -195,8 +205,8 @@ class Settings(BaseSettings):
     PLATFORM_SMTP_USERNAME: str = ""
     PLATFORM_SMTP_PASSWORD: SecretStr | None = None
     PLATFORM_SMTP_ENCRYPTION: str = "TLS"
-    PLATFORM_SMTP_FROM_EMAIL: str = "noreply@flowpilot.ai"
-    PLATFORM_SMTP_FROM_NAME: str = "FlowPilot AI"
+    PLATFORM_SMTP_FROM_EMAIL: str = "noreply@servabo.app"
+    PLATFORM_SMTP_FROM_NAME: str = "Servabo"
 
     # ---- Campaign session 4 (§C.4): alerts for whoever runs the deployment ----
     #: Who is emailed (through the platform relay) about dead background jobs, gateway events
@@ -215,6 +225,9 @@ class Settings(BaseSettings):
         return [part.strip() for part in (self.OPERATOR_ALERT_EMAILS or "").split(",") if part.strip()]
 
     FRONTEND_URL: str = "http://localhost:3000"
+    # Website session (B7): the public website (pricing, terms, privacy, refunds). Emails link
+    # its legal pages; the fallback domain is https://getservabo.com.
+    WEBSITE_URL: str = "https://servabo.app"
     EMAIL_ENCRYPTION_KEYS: Optional[SecretStr] = None
 
     RATE_LIMIT_ENABLED: bool = True
@@ -371,7 +384,7 @@ class Settings(BaseSettings):
     # falling back to S3_BUCKET: a silent fallback would place EU-resident
     # personal data in the default bucket and make the policy decorative.
     #
-    #   S3_REGIONAL_BUCKETS='{"EU":"flowpilot-eu","US":"flowpilot-us"}'
+    #   S3_REGIONAL_BUCKETS='{"EU":"servabo-eu","US":"servabo-us"}'
     S3_REGIONAL_BUCKETS: dict[str, str] = {}
 
     # ======================================================================
@@ -485,7 +498,7 @@ class Settings(BaseSettings):
     # local caching resolver).
     DNS_RESOLVERS: str = "1.1.1.1,8.8.8.8"
     DNS_TIMEOUT_S: float = 5.0
-    DOMAIN_VERIFICATION_TXT_PREFIX: str = "flowpilot-site-verification"
+    DOMAIN_VERIFICATION_TXT_PREFIX: str = "servabo-site-verification"
     DOMAIN_VERIFICATION_TOKEN_TTL_DAYS: int = 30
 
     # ---- Custom domains ------------------------------------------------
@@ -501,7 +514,7 @@ class Settings(BaseSettings):
     # stops a tenant claiming the platform's own origin and having every
     # session cookie in the estate delivered to a page they control.
     #
-    #   PLATFORM_RESERVED_HOSTS='["flowpilot.ai","app.flowpilot.ai"]'
+    #   PLATFORM_RESERVED_HOSTS='["servabo.app","app.servabo.app"]'
     #
     # Empty is a DEPLOYMENT ERROR, not a permissive default: domain_service
     # refuses every claim while this is empty rather than allowing all of
@@ -588,8 +601,8 @@ class Settings(BaseSettings):
     # OPERATOR's: environment only, never a database column and never an API
     # field, so no tenant can widen egress or point the local model elsewhere.
     #
-    #   FLOWPILOT_EDITION      saas (the hosted service) | sovereign (on-premise /
-    #                          air-gapped; needs a licence signed by FlowPilot's
+    #   SERVABO_EDITION      saas (the hosted service) | sovereign (on-premise /
+    #                          air-gapped; needs a licence signed by Servabo's
     #                          Ed25519 key, verified offline)
     #   EGRESS_MODE            open | deny. deny: nothing leaves except the
     #                          destinations the operator declared -- the ones its
@@ -603,7 +616,18 @@ class Settings(BaseSettings):
     #                          fallback (used when the configured provider fails
     #                          or is refused) | exclusive (every completion and
     #                          stream, whatever a tenant selected)
-    FLOWPILOT_EDITION: str = "saas"
+    # Renamed with the product on 2026-10-16; the pre-rename name is read for one
+    # release (app/core/legacy_names.py) and start-up warns when it is still set.
+    SERVABO_EDITION: str = Field(
+        default="saas",
+        validation_alias=AliasChoices("SERVABO_EDITION", LEGACY_PREFIX + "EDITION"),
+    )
+    # A sovereign licence may be bound to one deployment: this deployment's id (any string the
+    # operator chooses, written into the licence when it is issued). Renamed with the product.
+    SERVABO_DEPLOYMENT_ID: str = Field(
+        default="",
+        validation_alias=AliasChoices("SERVABO_DEPLOYMENT_ID", LEGACY_PREFIX + "DEPLOYMENT_ID"),
+    )
     EGRESS_MODE: str = "open"
     EGRESS_OPERATOR_HOSTS: str = ""
     LOCAL_LLM_MODE: str = "off"
@@ -621,7 +645,7 @@ class Settings(BaseSettings):
     AI_CONNECTION_TEST_DEADLINE_SECONDS: float = 20.0
     # HARDENING-T1:D23. Tenant-supplied SMTP hosts may not resolve to private,
     # loopback, link-local, CGNAT or metadata addresses. An enterprise that
-    # self-hosts FlowPilot next to an internal relay lists that relay here
+    # self-hosts Servabo next to an internal relay lists that relay here
     # (hostnames or CIDRs). Tenants cannot set this; only the operator can.
     SMTP_PRIVATE_HOST_ALLOWLIST: list[str] = []
     # Development only: local catchers (Mailpit, MailHog) run on localhost.
@@ -797,7 +821,9 @@ class Settings(BaseSettings):
     # than inferred from which credentials happen to be present: a deployment
     # carrying both Stripe and Dodo keys during migration must not have its
     # payment routing decided by import order.
-    BILLING_GATEWAY: str = "STRIPE"
+    # Website and payments session (C2): Dodo Payments, the merchant of record, is the gateway
+    # customers see. The Stripe adapter stays, switched off.
+    BILLING_GATEWAY: str = "DODO"
 
     DODO_API_KEY: SecretStr | None = None
     DODO_WEBHOOK_SECRET: SecretStr | None = None
@@ -992,14 +1018,13 @@ class Settings(BaseSettings):
             )
         return normalized
 
-    @field_validator("FRONTEND_URL")
+    @field_validator("FRONTEND_URL", "WEBSITE_URL")
     @classmethod
-    def validate_frontend_url(cls, v: str) -> str:
+    def validate_frontend_url(cls, v: str, info: ValidationInfo) -> str:
         cleaned = v.strip().rstrip("/")
         if not cleaned.startswith(("http://", "https://")):
-            raise ValueError(
-                "FRONTEND_URL must include a scheme, e.g. https://app.flowpilot.ai"
-            )
+            example = "https://servabo.app" if info.field_name == "WEBSITE_URL" else "https://app.servabo.app"
+            raise ValueError(f"{info.field_name} must include a scheme, e.g. {example}")
         return cleaned
 
     @model_validator(mode="after")
@@ -1187,7 +1212,7 @@ class Settings(BaseSettings):
     _DEV_S3_ACCESS_KEY_ID = "minioadmin"
     _DEV_S3_SECRET_ACCESS_KEY = "minioadmin"
     _DEV_S3_ENDPOINT_URL = "http://localhost:9000"
-    _DEV_S3_BUCKET = "flowpilot-dev"
+    _DEV_S3_BUCKET = "servabo-dev"
 
     @model_validator(mode="after")
     def _resolve_storage_credentials(self) -> "Settings":

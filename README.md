@@ -1,7 +1,7 @@
-# FlowPilot AI
+# Servabo
 
 Multi-tenant B2B document intelligence and workflow automation. Customers
-upload documents (PDFs, scans, images). FlowPilot extracts the text and
+upload documents (PDFs, scans, images). Servabo extracts the text and
 fields, lets people review and correct them, answers questions about them
 with an AI assistant, and runs automations on the results.
 
@@ -19,13 +19,16 @@ with an AI assistant, and runs automations on the results.
 You need Docker, Python 3.12, Node.js 22 and about 15 GB of disk.
 
 ```bash
-git clone https://github.com/sabarishwarne2001/flowpilot-ai.git
-cd flowpilot-ai
+git clone https://github.com/sabarishwarne2001/flowpilot-ai.git servabo
+cd servabo
 ./start_dev.sh          # Windows: .\start_dev.ps1
 ```
 
-Open <http://localhost:5173> and sign in as `admin@flowpilot.ai` with the
-password the launcher prints (development default `FlowPilot!Dev123`).
+Open <http://localhost:5173> and sign in as `admin@servabo.app` with the
+password the launcher prints (development default `Servabo!Dev123`).
+The public website (`website/`, the pages at <https://servabo.app>) runs too with
+`./start_dev.sh --website` (Windows: `.\start_dev.ps1 -Website`) at
+<http://localhost:4321>; the app's Pricing, Terms and Privacy links go there.
 API health: <http://localhost:8000/api/v1/health>. API schema (development
 only; production and staging do not serve it):
 <http://localhost:8000/api/v1/openapi.json>.
@@ -33,6 +36,23 @@ only; production and staging do not serve it):
 No internet access to the model hosts? Put `ML_STUBS=true` in `backend/.env`
 to use labelled test stubs in place of OCR and embeddings (never in
 production).
+
+### Local data from before the rename
+
+Servabo was renamed Servabo on 2026-10-16. A laptop set up before that keeps working:
+
+- **Your `backend/.env`** keeps its database name and passwords; only the defaults for new setups
+  changed (`servabo`, `servabo_e2e`, `servabo_test`).
+- **Settings named `SERVABO_*`** still work for this release. The API, the worker and the
+  scripts print one warning listing each one to rename to `SERVABO_*`.
+- **Docker data**: the launchers notice volumes named `servabo_*` and keep using them (the
+  containers are recreated under their new names; the data is untouched). To move to the new
+  names once, when you have nothing to lose (this deletes the old local data): `cd backend &&
+  docker compose -p servabo down -v`, then start again with `./start_dev.sh`.
+- **Signed in again once**: the sign-in cookie and the browser storage keys were renamed, and API
+  keys now start with `svb_` (re-create any local key). CHANGELOG.md lists every renamed name.
+- **The development administrator** is `admin@servabo.local`; one created before the rename keeps
+  its old address and password.
 
 **Full instructions, manual steps, test commands and troubleshooting:
 [docs/RUNBOOK.md](docs/RUNBOOK.md).**
@@ -63,6 +83,8 @@ backend/            FastAPI app, workers, Alembic migrations, tests, scripts
   docker-compose.yml       local development services
   docker-compose.prod.yml  production stack
 frontend/           React web app; e2e/ holds the Playwright browser suite
+website/            the public website (Astro, static): pricing, legal pages, product tour
+brand/              the Servabo mark, colours and fonts shared by the app and the website
 docs/               RUNBOOK, configuration reference, hardening campaign records
 archive/            historical development records (not used to run anything)
 start_dev.sh/.ps1   one-command local development launchers

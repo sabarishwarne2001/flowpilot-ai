@@ -1,0 +1,221 @@
+{
+  "groups": [
+    {
+      "id": "capture",
+      "title": "Capture and understand",
+      "lede": "Every invoice, order, receipt, contract and statement your team already receives, read into fields you can trust.",
+      "engines": [
+        {
+          "id": "extraction",
+          "name": "Document reading",
+          "result": "Fields, line items and totals read from PDFs, scans and photos, each with the page it came from.",
+          "detail": "Upload by drag and drop, through the API, or from a supplier through a request link you send. Servabo reads the text (OCR for scans), classifies the document and extracts its fields. Anything it is unsure of goes to a person in the review queue, with the evidence highlighted on the page.",
+          "capability": null,
+          "shot": "extraction"
+        },
+        {
+          "id": "assistant",
+          "name": "Ask your documents",
+          "result": "Answers to questions about your documents, with a citation to the page for every claim.",
+          "detail": "The workspace assistant searches your own documents and answers with numbered citations you can click. It only ever reads your organization's documents.",
+          "capability": null
+        },
+        {
+          "id": "tables",
+          "name": "Table intelligence",
+          "result": "Tables that run across pages, rotate or lose their rules, rebuilt and checked, ready as CSV or Excel.",
+          "detail": "Line items, rate cards and statements are rebuilt into one table, and totals are checked against the rows so a misread figure is caught before it reaches a spreadsheet.",
+          "capability": "capability.table_intelligence"
+        },
+        {
+          "id": "cases",
+          "name": "Case files and bundle splitting",
+          "result": "A scanned bundle split into its documents, and related documents gathered into one case.",
+          "detail": "A 40-page scan of invoices, delivery notes and a contract is cut into separate documents automatically. Documents about the same matter are grouped, and missing ones can be requested from the sender with a link.",
+          "capability": "capability.case_intelligence"
+        },
+        {
+          "id": "memory",
+          "name": "Extraction memory",
+          "result": "Fewer corrections each month: what your reviewers fix is learned per supplier layout.",
+          "detail": "When a person corrects a field, Servabo learns how that layout is written. A learned rule is tried before it is trusted and withdrawn if it drifts.",
+          "capability": "capability.extraction_memory",
+          "shot": "memory"
+        }
+      ]
+    },
+    {
+      "id": "verify",
+      "title": "Verify and match",
+      "lede": "Documents checked against each other, so a wrong price, a duplicate or a changed bank account is stopped before it is paid.",
+      "engines": [
+        {
+          "id": "matching",
+          "name": "Three-way matching",
+          "result": "Each invoice matched to its purchase order and goods receipt, line by line, within the tolerances you set.",
+          "detail": "Quantities and prices are compared with what was ordered and received. A difference opens one case per invoice (copies of the same invoice are listed on it, never opened twice) for a person to approve or dispute.",
+          "capability": "capability.reconciliation",
+          "shot": "matching"
+        },
+        {
+          "id": "radar",
+          "name": "Duplicate and anomaly radar",
+          "result": "Duplicate invoices, changed supplier bank details and unusual amounts flagged with the evidence.",
+          "detail": "The radar compares every new document with your history and explains each flag in words, with the documents side by side.",
+          "capability": "capability.anomaly_radar",
+          "shot": "radar"
+        },
+        {
+          "id": "entities",
+          "name": "One record per supplier and customer",
+          "result": "Every document about the same company or person tied to one record, however its name was written.",
+          "detail": "\"Acme Pvt Ltd\", \"ACME PRIVATE LIMITED\" and the GSTIN on its invoices become one supplier, with every document and payment about it in one place.",
+          "capability": "capability.entity_graph"
+        },
+        {
+          "id": "truthmesh",
+          "name": "TruthMesh",
+          "result": "Conflicts between documents found across the whole workspace: a contract price that no invoice honours.",
+          "detail": "TruthMesh links documents that talk about the same thing and shows where they disagree. Ask \"what if\" a figure changes, and it shows which other documents it would affect.",
+          "capability": "capability.truthmesh",
+          "shot": "truthmesh"
+        },
+        {
+          "id": "corroborator",
+          "name": "Document comparison",
+          "result": "Two to five versions of a contract or policy compared clause by clause, with a downloadable report.",
+          "detail": "Each clause is lined up with its counterpart in the other documents and every difference is listed in a matrix, so a changed term is never missed between drafts.",
+          "capability": "capability.universal_corroborator"
+        },
+        {
+          "id": "assertions",
+          "name": "Clause checks",
+          "result": "Rules your contracts must meet, checked on every new contract: a liability cap, a notice period, a governing law.",
+          "detail": "Write a check once as a sentence; every contract that arrives is checked against it and the result is shown with the clause it rests on.",
+          "capability": "capability.semantic_assertions"
+        }
+      ]
+    },
+    {
+      "id": "promises",
+      "title": "Track promises and obligations",
+      "lede": "What each document commits you to, and what it commits others to, with the date it falls due.",
+      "engines": [
+        {
+          "id": "helm",
+          "name": "Helm",
+          "result": "Every promise in your documents in one ledger, your rules kept true, and a plan of what to pay, hold and chase.",
+          "detail": "Helm is the flagship engine. You state the outcomes once (never pay above the agreed price, keep cash above a floor, pay small suppliers on time); Helm plans and checks every step against them, and a person approves.",
+          "capability": "capability.helm",
+          "shot": "helm-cockpit",
+          "link": "/helm"
+        },
+        {
+          "id": "obligations",
+          "name": "Obligations and deadlines",
+          "result": "Renewals, notice periods, payment dates and certificate expiries read from documents, with reminders.",
+          "detail": "Each obligation has an owner and a due date in your workspace's time zone. Reminders go out before it falls due, and a calendar feed puts them in Google or Outlook.",
+          "capability": "capability.obligations",
+          "shot": "obligations"
+        }
+      ]
+    },
+    {
+      "id": "automate",
+      "title": "Automate and post",
+      "lede": "The routine steps done the same way every time, and the results posted where your team already works.",
+      "engines": [
+        {
+          "id": "automations",
+          "name": "Automations",
+          "result": "Rules that act as documents arrive: route, tag, notify, request review or call your systems.",
+          "detail": "Build a rule from a trigger, conditions and actions, or install a ready workflow from the marketplace. Every run is logged with what it did and why.",
+          "capability": "capability.automations"
+        },
+        {
+          "id": "erp",
+          "name": "Posting to your ERP",
+          "result": "Approved bills, orders, receipts and journals posted to your ERP exactly once, even when a connection drops.",
+          "detail": "QuickBooks, Zoho Books, Business Central, SAP, NetSuite, Tally, EDI X12, UBL and SFTP. Values are mapped to your ERP's codes, and a posting that cannot be confirmed is shown as such, never sent twice.",
+          "capability": "capability.erp_posting"
+        },
+        {
+          "id": "batches",
+          "name": "Batch operations",
+          "result": "Hundreds of documents processed, reviewed and exported together, with a package anyone can verify.",
+          "detail": "Exports are packaged with a manifest and SHA-256 checksums, so an auditor can prove nothing was changed after it left Servabo.",
+          "capability": "capability.batch_dispatch"
+        },
+        {
+          "id": "api",
+          "name": "API and webhooks",
+          "result": "Your own systems upload documents and receive results, with keys you scope and signed events.",
+          "detail": "API keys carry only the scopes you give them. Webhooks are signed, retried with backoff and shown with every delivery attempt.",
+          "capability": "capability.developer_api"
+        },
+        {
+          "id": "process",
+          "name": "Process intelligence",
+          "result": "Where documents wait and why, and which ones are about to miss their deadline.",
+          "detail": "Servabo maps how documents actually move through your team, predicts which ones will breach their service level, and an exception agent proposes a fix: applied only when a person approves it, or within an error bound you set.",
+          "capability": "capability.process_intelligence",
+          "shot": "process"
+        },
+        {
+          "id": "warehouse",
+          "name": "Analytics warehouse sync",
+          "result": "Extracted data delivered to Snowflake, BigQuery, Databricks or S3 for your own reporting.",
+          "detail": "Choose the destination and the schedule; each delivery is recorded and can be replayed.",
+          "capability": "addon.warehouse_sync"
+        }
+      ]
+    },
+    {
+      "id": "govern",
+      "title": "Govern and audit",
+      "lede": "Who did what, who may do what, and where your data may go.",
+      "engines": [
+        {
+          "id": "audit",
+          "name": "Audit log",
+          "result": "Every sensitive change recorded with who, what and when, in a log no one can edit.",
+          "detail": "The database refuses to change or delete an audit entry. Keep the log for as long as you choose (at least 400 days) and export it whenever you need.",
+          "capability": null,
+          "shot": "audit"
+        },
+        {
+          "id": "review",
+          "name": "Review together, live",
+          "result": "A shared review queue where everyone sees who is looking at what, with item locks and discussions.",
+          "detail": "Two people never decide the same item at once, and a discussion stays anchored to the paragraph it is about.",
+          "capability": "capability.collaborative_review",
+          "shot": "review"
+        },
+        {
+          "id": "redaction",
+          "name": "Redaction",
+          "result": "Personal data removed from the page itself, not hidden behind a black box that can be lifted.",
+          "detail": "Names, account numbers and other identifiers are cut out of the file's image and text layer, and the redacted copy is sealed.",
+          "capability": "capability.redaction",
+          "shot": "redaction"
+        },
+        {
+          "id": "identity",
+          "name": "Single sign-on and SCIM",
+          "result": "People sign in with Okta, Entra ID or Google, and joiners and leavers follow your directory.",
+          "detail": "SAML and OpenID Connect, a verified domain, required single sign-on and two-factor, and SCIM provisioning that respects your seats.",
+          "capability": "capability.enterprise_identity",
+          "shot": "identity"
+        },
+        {
+          "id": "egress",
+          "name": "Egress lockdown",
+          "result": "Every connection made for your organization confined to the destinations you allow.",
+          "detail": "Webhooks, warehouses, ERP, mail and AI providers can only reach the hosts on your list; every refusal is recorded and audited.",
+          "capability": "capability.egress_lockdown",
+          "shot": "egress"
+        }
+      ]
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 """
-Audit log read contracts for FlowPilot AI (ARCH-07 Step 4, ARCH-08 Step 2, Step 8).
+Audit log read contracts for Servabo (ARCH-07 Step 4, ARCH-08 Step 2, Step 8).
 """
 
 from __future__ import annotations

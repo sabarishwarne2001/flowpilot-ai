@@ -1,5 +1,5 @@
 """
-Workspace logo upload and authenticated streaming router for FlowPilot AI.
+Workspace logo upload and authenticated streaming router for Servabo.
 
 ARCH-06 Step 1b, ARCH-07 Steps 3, 5, 6, 7. ARCH-08 Step 1.
 Includes authenticated streaming route GET /workspaces/{workspace_id}/logo with

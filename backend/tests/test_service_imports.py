@@ -1,5 +1,5 @@
 """
-Import-graph regression tests for FlowPilot AI.
+Import-graph regression tests for Servabo.
 
 Asserts that clean-interpreter imports of application modules do NOT pull
 heavy ML dependencies into sys.modules.

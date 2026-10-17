@@ -1,5 +1,5 @@
 """
-Database representation of the Work Item entity for FlowPilot AI.
+Database representation of the Work Item entity for Servabo.
 """
 
 from __future__ import annotations
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
 class WorkItem(Base, UUIDMixin, TimestampMixin):
     """
-    Persistent representation of a business document (Work Item) within FlowPilot AI.
+    Persistent representation of a business document (Work Item) within Servabo.
     """
     __tablename__ = "work_items"
 

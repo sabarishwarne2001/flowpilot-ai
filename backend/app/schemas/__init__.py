@@ -1,5 +1,5 @@
 """
-Data serialization and request validation schemas for FlowPilot AI.
+Data serialization and request validation schemas for Servabo.
 
 Unifies and exports all schema representations to simplify cross-package imports.
 """

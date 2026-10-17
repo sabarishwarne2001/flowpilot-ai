@@ -22,7 +22,15 @@ export const BACKEND_DIR = path.join(REPO_ROOT, "backend");
 export const STATE_FILE = path.join(E2E_DIR, ".state", "seed.json");
 export const MAIL_DIR = process.env.E2E_MAIL_DIR ?? path.join(E2E_DIR, ".mail");
 
-export const PASSWORD = "E2e-FlowPilot-Pass-2026!";
+export const PASSWORD = "E2e-Servabo-Pass-2026!";
+
+/**
+ * The payment gateway the journeys bill through (website and payments session, C1): Dodo, the
+ * production gateway, unless E2E_GATEWAY=stripe. start-stack.sh reads the same variable.
+ */
+export const GATEWAY: "dodo" | "stripe" = (process.env.E2E_GATEWAY ?? "dodo").toLowerCase() === "stripe" ? "stripe" : "dodo";
+/** Where start-stack.sh serves the stand-in Dodo (its checkout page and customer portal). */
+export const DODO_ORIGIN = process.env.E2E_DODO_URL ?? `http://127.0.0.1:${process.env.E2E_DODO_PORT ?? 8790}`;
 
 export type UserKey =
   | "A.owner"
@@ -64,7 +72,7 @@ export const TENANTS: Record<TenantKey, { org: string; ws: string; name: string;
   A: { org: "e2e-devco", ws: "main", name: "DevCo Labs", plan: "developer" },
   B: { org: "e2e-bizco", ws: "main", name: "BizCo Holdings", plan: "business" },
   C: { org: "caretakers-global", ws: "operations", name: "Caretakers Global Inc", plan: "enterprise" },
-  P: { org: "e2e-platform-ops", ws: "ops", name: "FlowPilot Platform Ops", plan: "free" },
+  P: { org: "e2e-platform-ops", ws: "ops", name: "Servabo Platform Ops", plan: "free" },
   S: { org: "e2e-trial-ending", ws: "main", name: "Soon Ending Trial Co", plan: "free" },
   T: { org: "e2e-trial-ended", ws: "main", name: "Trial Ended Co", plan: "free" },
 };

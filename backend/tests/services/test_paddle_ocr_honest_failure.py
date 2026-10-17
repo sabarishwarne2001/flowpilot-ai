@@ -5,7 +5,7 @@
 When the PaddleOCR engine raised an error mentioning
 ``ConvertPirAttribute2RuntimeAttribute`` or ``onednn_instruction`` (a known
 Paddle-on-CPU crash), ``PaddleOCRProvider._run_engine`` swallowed it and
-returned a made-up result: the text "FLOWPILOT GATE INVOICE 12345" at
+returned a made-up result: the text "SERVABO GATE INVOICE 12345" at
 confidence 0.99. That text was then extracted, embedded and shown as the
 customer's own document. A crash has to become a failed job, so the user knows
 the document was NOT read.
@@ -21,7 +21,7 @@ from PIL import Image
 from app.services.ocr.base import OCRError
 from app.services.ocr.paddle import PaddleOCRProvider
 
-FAKE_TEXT = "FLOWPILOT GATE INVOICE 12345"
+FAKE_TEXT = "SERVABO GATE INVOICE 12345"
 
 # The real messages Paddle raises on the affected machines.
 PIR_ERROR = (

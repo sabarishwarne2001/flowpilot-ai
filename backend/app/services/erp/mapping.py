@@ -18,7 +18,7 @@ saved (`validate`), with the location of every problem.
         {"to": "VendorRef.value", "value": {"path": "vendor.entity_id",
                                             "transforms": [{"op": "lookup", "table": "vendor_ids"}]},
          "required": true},
-        {"to": "PrivateNote", "value": {"concat": [{"const": "FlowPilot "}, {"path": "source.label"}]}}
+        {"to": "PrivateNote", "value": {"concat": [{"const": "Servabo "}, {"path": "source.label"}]}}
       ],
       "lines": {"to": "Line", "fields": [
         {"to": "Amount", "value": {"path": "line.amount", "transforms": [{"op": "number", "decimals": 2}]}},

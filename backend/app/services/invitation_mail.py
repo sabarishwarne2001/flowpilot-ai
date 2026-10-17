@@ -85,7 +85,7 @@ RenderedMessage = tuple[str, str, str]
 
 
 def _mark_delivered_off_platform(invitation_id: uuid.UUID) -> None:
-    """F-226. Record that this invitation's token is leaving through a server FlowPilot does not run.
+    """F-226. Record that this invitation's token is leaving through a server Servabo does not run.
 
     Committed BEFORE the send, so there is no moment when the token is out and
     not yet marked: whoever runs that server could otherwise use it at once.

@@ -1,7 +1,6 @@
 import React, { useEffect } from "react";
-import { Link } from "react-router-dom";
-
 import { Brand } from "@/components/branding/Brand";
+import { WEBSITE, WEBSITE_HOST } from "@/config/website";
 import { PUBLIC_PAGE_LINKS } from "@/constants/routes";
 import { usePublicBrandingManifest } from "@/hooks/usePublicBrandingManifest";
 import { isHexColour } from "@/utils/brandTheme";
@@ -12,9 +11,9 @@ import { AUTH_MUTED_LINK } from "./authStyles";
  * Chrome for every page before sign-in: the form on an elevated card on the
  * left, the product on the right (desktop only).
  *
- * On a verified tenant custom domain with branding enabled, the FlowPilot
+ * On a verified tenant custom domain with branding enabled, the Servabo
  * marketing pane is replaced with the tenant's name and, when set, their
- * support address. A white-labelled login that still advertises FlowPilot
+ * support address. A white-labelled login that still advertises Servabo
  * beside the tenant's logo tells the tenant's employees which vendor they are
  * typing their password into — which is the thing white-label is sold to hide.
  *
@@ -29,7 +28,7 @@ import { AUTH_MUTED_LINK } from "./authStyles";
 export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ children }) => {
   const manifest = usePublicBrandingManifest({ enabled: true });
   const custom = manifest?.has_custom_branding ? manifest : null;
-  const brandLabel = custom?.brand_name ?? "FlowPilot AI";
+  const brandLabel = custom?.brand_name ?? "Servabo";
   const year = new Date().getFullYear();
   const scheme = custom?.color_scheme ?? "SYSTEM";
 
@@ -84,13 +83,17 @@ export const AuthShell: React.FC<{ readonly children: React.ReactNode }> = ({ ch
 
         <footer className="relative z-10 flex flex-col items-center gap-2 text-center text-xs text-muted-foreground">
           {/* Campaign session 4: pricing, terms and privacy, on the platform's own address only.
-              On a white-labelled domain FlowPilot's pages would name the vendor the tenant hides. */}
+              On a white-labelled domain Servabo's pages would name the vendor the tenant hides.
+              Website session (B7): they are the website's pages, with a way back to its home. */}
           {custom ? null : (
             <nav aria-label="Pricing and legal" className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1">
+              <a href={WEBSITE.home} className={AUTH_MUTED_LINK}>
+                Back to {WEBSITE_HOST}
+              </a>
               {PUBLIC_PAGE_LINKS.map((link) => (
-                <Link key={link.to} to={link.to} className={AUTH_MUTED_LINK}>
+                <a key={link.href} href={link.href} className={AUTH_MUTED_LINK}>
                   {link.label}
-                </Link>
+                </a>
               ))}
             </nav>
           )}

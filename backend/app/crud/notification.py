@@ -1,5 +1,5 @@
 """
-Database operations layer for Notifications in FlowPilot AI.
+Database operations layer for Notifications in Servabo.
 
 ARCH-07 Step 10: Preserves all 7 existing CRUD functions and adds
 list_organization_scoped_for_user.

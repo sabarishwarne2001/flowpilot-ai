@@ -132,7 +132,7 @@ dropping it is a cleanup for a later session (HANDOFF).
 | Document retention (days) | Blocks deleting younger documents; the purge removes older ones when auto-purge is on | `backend/tests/api/test_legal_hold_enforcement.py`, `tests/engines/test_retention_purge_releases_file_live.py` | Proven |
 | Conversation retention (days) | The purge, when auto-purge is on | none | Reader, unproven |
 | Audit log retention (days) | The nightly audit sweep, per organization; blank keeps the log (N-067) | `backend/tests/scripts/test_audit_retention_follows_the_policy.py` | Fixed (F-304) |
-| Automatic purging | The compliance sweep acts only on organizations that opt in. Runs from the host cron (`deploy/cron.d/flowpilot-sweepers`), not the in-app scheduler | `tests/engines/test_retention_purge_releases_file_live.py` | Proven (needs the cron installed: HANDOFF) |
+| Automatic purging | The compliance sweep acts only on organizations that opt in. Runs from the host cron (`deploy/cron.d/servabo-sweepers`), not the in-app scheduler | `tests/engines/test_retention_purge_releases_file_live.py` | Proven (needs the cron installed: HANDOFF) |
 | Legal hold | Blocks deletion and purge | `backend/tests/api/test_legal_hold_enforcement.py` | Proven |
 
 ## Organization > Identity and security policy

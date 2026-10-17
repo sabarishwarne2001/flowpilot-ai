@@ -316,21 +316,12 @@ def update_billing_email(
 
     if push_to_stripe:
         # Deliberately after the local flush and outside any assumption of
-        # success: if Stripe is unreachable the local row is still correct and
-        # the next reconcile re-asserts it. The reverse ordering would leave
-        # Stripe holding an address our database never accepted.
-        try:
-            stripe_gateway.get_gateway().update_customer_email(
-                customer_id=account.stripe_customer_id, email=email
-            )
-        except stripe_gateway.StripeGatewayError as exc:
-            logger.warning(
-                "billing_account.email_push_failed",
-                extra={
-                    "organization_id": str(organization_id),
-                    "error": str(exc),
-                },
-            )
+        # success: if the provider is unreachable the local row is still correct
+        # and the next reconcile re-asserts it. The reverse ordering would leave
+        # the provider holding an address our database never accepted.
+        # Website and payments session (C9): the account's own gateway, never
+        # Stripe for a Dodo customer.
+        _push_customer(account, email=email)
 
     logger.info(
         "billing_account.email_changed",
@@ -349,33 +340,57 @@ def customer_name(organization: Organization) -> str:
 
 
 def push_customer_name(db: Session, *, organization: Organization) -> bool:
-    """Campaign session 4 (F-365). Bring the Stripe customer's name in line with the organization.
+    """Campaign session 4 (F-365). Bring the payment customer's name in line with the organization.
 
-    The customer is created with `customer_name` (ensure_billing_account); a later change of the
-    legal name (or of the name, when no legal name is set) is sent here, so invoices and receipts
-    stop printing the old one. Only a Stripe customer is updated: under Dodo (merchant of record)
-    the customer record is the vendor's, and FlowPilot never set its name. Like the billing email,
-    the local change stands if Stripe cannot be reached; the failure is logged. Returns whether the
-    provider accepted the new name.
+    The customer is created with `customer_name`; a later change of the legal name (or of the
+    name, when no legal name is set) is sent here, so invoices and receipts stop printing the old
+    one. Website and payments session (C9): a Dodo customer is updated too (Dodo prints the name on
+    the tax invoice it issues as merchant of record). Like the billing email, the local change
+    stands if the provider cannot be reached; the failure is logged. Returns whether the provider
+    accepted the new name.
     """
     account = get_for_organization(db, organization_id=organization.id)
-    if account is None or account.gateway != "STRIPE" or not account.stripe_customer_id:
+    if account is None:
         return False
+    pushed = _push_customer(account, name=customer_name(organization))
+    if pushed:
+        logger.info(
+            "billing_account.name_pushed",
+            extra={"organization_id": str(organization.id), "gateway": account.gateway},
+        )
+    return pushed
+
+
+def _push_customer(account: BillingAccount, *, email: Optional[str] = None, name: Optional[str] = None) -> bool:
+    """Send a billing email or a name to the account's own gateway customer; whether it was accepted.
+
+    Website and payments session (C9): a Dodo account updates its Dodo customer
+    (`PATCH /customers/{id}`) and never reaches Stripe; a Stripe account its Stripe customer.
+    """
+    from app.services.billing.payment_gateway import GatewayPermanentError, GatewayTransientError
+
     try:
-        stripe_gateway.get_gateway().update_customer_name(
-            customer_id=account.stripe_customer_id, name=customer_name(organization)
-        )
-    except stripe_gateway.StripeGatewayError as exc:
+        if account.gateway == "DODO":
+            if not account.gateway_customer_id:
+                return False
+            from app.services.billing.dodo_gateway import get_dodo_gateway
+
+            get_dodo_gateway().update_customer(customer_id=account.gateway_customer_id, email=email, name=name)
+            return True
+        if not account.stripe_customer_id:
+            return False
+        if email is not None:
+            stripe_gateway.get_gateway().update_customer_email(customer_id=account.stripe_customer_id, email=email)
+        if name is not None:
+            stripe_gateway.get_gateway().update_customer_name(customer_id=account.stripe_customer_id, name=name)
+        return True
+    except (stripe_gateway.StripeGatewayError, GatewayPermanentError, GatewayTransientError) as exc:
         logger.warning(
-            "billing_account.name_push_failed",
-            extra={"organization_id": str(organization.id), "error": str(exc)},
+            "billing_account.customer_push_failed",
+            extra={"organization_id": str(account.organization_id), "gateway": account.gateway,
+                   "field": "email" if email is not None else "name", "error": str(exc)},
         )
         return False
-    logger.info(
-        "billing_account.name_pushed",
-        extra={"organization_id": str(organization.id), "stripe_customer_id": account.stripe_customer_id},
-    )
-    return True
 
 
 def adopt_customer(

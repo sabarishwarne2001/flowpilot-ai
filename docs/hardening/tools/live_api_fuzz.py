@@ -20,7 +20,7 @@ import json, os, random, re, sys, time, uuid
 import httpx
 
 BASE = os.environ.get("FUZZ_API_ORIGIN", "http://127.0.0.1:8000")
-PW = os.environ.get("E2E_PASSWORD", "E2e-FlowPilot-Pass-2026!")
+PW = os.environ.get("E2E_PASSWORD", "E2e-Servabo-Pass-2026!")
 HERE = os.path.dirname(__file__)
 SPEC = json.load(open(os.path.join(HERE, "openapi.json")))
 IDS: dict = {}  # email -> (organization_id, workspace_id), resolved at sign-in

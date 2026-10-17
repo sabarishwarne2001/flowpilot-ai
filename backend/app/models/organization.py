@@ -1,5 +1,5 @@
 """
-Database representation of the Organization tenant root for FlowPilot AI.
+Database representation of the Organization tenant root for Servabo.
 ARCH-14 Step 4: Quota tier version foreign key pointer.
 ARCH-20: Data residency region.
 """

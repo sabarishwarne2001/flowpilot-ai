@@ -1,5 +1,5 @@
 """
-Per-organization SMTP configuration for FlowPilot AI.
+Per-organization SMTP configuration for Servabo.
 
 ARCH-06 Step 8, §B.5 Option B: a NEW table, with the workspace-level
 `email_settings` table left entirely untouched.

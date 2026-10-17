@@ -3,13 +3,13 @@
     pytest tests/engines/test_billing_jobs_live.py -q
 
 Session 2 left `billing.seat_sync`, `billing.assemble_invoice`, `billing.reconcile`, `usage.reconcile`
-and the `--loop stripe` worker blocked for want of a payment gateway. With the fake gateway (no
+and the `--loop billing` worker blocked for want of a payment gateway. With the fake gateway (no
 network, nothing leaves the machine) and signed test events, each runs here as the worker runs it,
 against committed rows:
 
 * the daily seat-drift sweep finds more members than paid seats and queues `billing.seat_sync`,
   which sets the subscription's quantity at the gateway (with proration) and records it;
-* a signed renewal (`invoice.created`) posted to the webhook is applied by the `--loop stripe`
+* a signed renewal (`invoice.created`) posted to the webhook is applied by the `--loop billing`
   worker: the period closes and its overage goes onto the renewal (F-339); `billing.reconcile`
   replays one named event (charging nothing twice) and drains what is pending;
 * the hourly `billing.assemble_invoice` backstop closes a period whose renewal never arrived (its
@@ -107,7 +107,7 @@ def test_seat_drift_queues_a_seat_sync_that_bills_the_extra_members(db, gateway,
 def test_the_stripe_worker_closes_a_period_and_the_reconcile_job_replays_it(
     db, client, gateway, billing_org  # noqa: F811
 ) -> None:
-    from app.worker import run_stripe_inbound_loop
+    from app.worker import run_billing_inbound_loop
 
     install_subscription(db, billing_org, gateway, seats=2)
     add_usage(db, billing_org["organization"].id, quantity=2_500_000)
@@ -116,7 +116,7 @@ def test_the_stripe_worker_closes_a_period_and_the_reconcile_job_replays_it(
 
     row = _deliver(client, "invoice.created", "in_live")
     shutdown = SimpleNamespace(requested=False)
-    worker = threading.Thread(target=run_stripe_inbound_loop, daemon=True,
+    worker = threading.Thread(target=run_billing_inbound_loop, daemon=True,
                               kwargs={"shutdown": shutdown, "batch_size": 10, "lease_seconds": 60,
                                       "idle_sleep_seconds": 0.05})
     worker.start()

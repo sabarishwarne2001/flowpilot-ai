@@ -1,5 +1,5 @@
 /**
- * Actor-scoped API service for FlowPilot AI.
+ * Actor-scoped API service for Servabo.
  *
  * Answers "who am I and what can I reach" without naming a tenant.
  *

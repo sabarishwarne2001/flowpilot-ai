@@ -14,6 +14,7 @@ backup_*.sql
 expand.sql
 contract.sql
 flowpilot-*.sql
+servabo-*.sql
 
 # Environment files
 .env
@@ -45,7 +46,9 @@ backend/.env.production.*
 # ARCH46-S1:gitignore. ARCH-46 apply backups.
 **/.arch46_apply_backup/
 .flowpilot_backups/
+.servabo_backups/
 **/.flowpilot_backups/
+**/.servabo_backups/
 *.fpbk
 *.fpbk.partial
 
@@ -65,3 +68,12 @@ backend/.env.production.*
 *.keystore
 
 docs/hardening/tools/openapi.json
+
+# Point-in-time recovery working directories (scripts/dr_pitr.py), before and after the rename.
+.servabo_wal_archive/
+.servabo_basebackups/
+.flowpilot_wal_archive/
+.flowpilot_basebackups/
+
+# A local Redis snapshot (redis-server started from the repository folder)
+dump.rdb

@@ -80,12 +80,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -119,14 +119,14 @@ jobs:
       - name: Migrate the test database
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_test
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -140,14 +140,14 @@ jobs:
       - name: pytest
         working-directory: backend
         env:
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_test
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_test
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_test
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_test
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -188,12 +188,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_migrate
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_migrate
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -217,14 +217,14 @@ jobs:
       - name: Exactly one head
         working-directory: backend
         env: &migrate_env
-          DATABASE_URL: postgresql+psycopg://flowpilot:flowpilot@localhost:5432/flowpilot_migrate
+          DATABASE_URL: postgresql+psycopg://servabo:servabo@localhost:5432/servabo_migrate
           # app.core.config builds the database URI from POSTGRES_*; DATABASE_URL
           # is read only by the backup scripts.
           POSTGRES_HOST: localhost
           POSTGRES_PORT: "5432"
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_migrate
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_migrate
           # Fresh, throwaway database: the lossy ARCH-40 contract step has
           # nothing to lose here, and the models already assume it ran.
           ARCH40_CONTRACT: "1"
@@ -370,12 +370,12 @@ jobs:
       postgres:
         image: pgvector/pgvector:pg16
         env:
-          POSTGRES_USER: flowpilot
-          POSTGRES_PASSWORD: flowpilot
-          POSTGRES_DB: flowpilot_e2e
+          POSTGRES_USER: servabo
+          POSTGRES_PASSWORD: servabo
+          POSTGRES_DB: servabo_e2e
         ports: ["5432:5432"]
         options: >-
-          --health-cmd "pg_isready -U flowpilot"
+          --health-cmd "pg_isready -U servabo"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
@@ -392,9 +392,9 @@ jobs:
       ENVIRONMENT: development
       POSTGRES_HOST: localhost
       POSTGRES_PORT: "5432"
-      POSTGRES_USER: flowpilot
-      POSTGRES_PASSWORD: flowpilot
-      POSTGRES_DB: flowpilot_e2e
+      POSTGRES_USER: servabo
+      POSTGRES_PASSWORD: servabo
+      POSTGRES_DB: servabo_e2e
       REDIS_URL: redis://localhost:6379/0
       ARCH40_CONTRACT: "1"
       JWT_SECRET_KEY: ci-only-not-a-real-secret-0123456789abcdef0123456789
@@ -461,6 +461,19 @@ jobs:
           CI: "1"
         run: npx playwright test -c e2e
 
+      # Website and payments session (C1): the journeys above bill through the stand-in Dodo, the
+      # production gateway. The Stripe journeys are kept: the same journeys again on Stripe's side,
+      # and the billing page with no gateway configured (no Stripe key here).
+      - name: Run the customer journeys on Stripe
+        working-directory: frontend
+        env:
+          CI: "1"
+          E2E_GATEWAY: stripe
+        run: |
+          ../frontend/e2e/scripts/start-stack.sh
+          npx playwright test -c e2e tests/6
+          npx playwright test -c e2e tests/20-organization.spec.ts -g "Billing"
+
       - name: Name the failing browser tests
         # Same reason as in the pytest job: annotations are readable where the raw log is not.
         if: failure()
@@ -478,6 +491,56 @@ jobs:
           retention-days: 14
 
   # ---------------------------------------------------------------------
+  # The public website (website/, Astro, static). Website and payments session: it must build,
+  # type-check, link, validate and pass axe in both themes and Lighthouse >= 95 on home, pricing
+  # and Helm before it can ship. Required through the aggregate job below.
+  # ---------------------------------------------------------------------
+  website:
+    name: Website
+    runs-on: ubuntu-latest
+    needs: encoding
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Chromium for the checks
+        run: npx playwright install --with-deps chromium
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+
+      - name: No broken internal links
+        run: npm run check:links
+
+      - name: HTML validates
+        run: npm run check:html
+
+      - name: Accessibility in both themes, no sideways scroll, no console errors under the CSP
+        run: npm run check:a11y
+
+      - name: Lighthouse at least 95 on home, pricing and Helm
+        run: npm run check:lighthouse
+
+      - name: npm audit (shipped dependencies)
+        run: npm audit --omit=dev --audit-level=high
+
+  # ---------------------------------------------------------------------
   # Aggregate status. Branch protection points at this one job, so adding a
   # job above does not require editing the protection rule.
   # ---------------------------------------------------------------------
@@ -485,7 +548,7 @@ jobs:
     name: CI
     runs-on: ubuntu-latest
     if: always()
-    needs: [encoding, backend-tests, migrations, frontend, e2e]
+    needs: [encoding, backend-tests, migrations, frontend, e2e, website]
     steps:
       - name: Fail if any upstream job failed
         # Expressions accept only single-quoted strings. A double-quoted ","

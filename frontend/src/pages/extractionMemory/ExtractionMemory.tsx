@@ -101,7 +101,7 @@ const LockedView: React.FC<{ readonly workspaceId: string; readonly canChangePla
         </h2>
       </div>
       <p className="text-sm text-muted-foreground">
-        Every correction your reviewers make teaches FlowPilot how documents of that layout are written. Memory is
+        Every correction your reviewers make teaches Servabo how documents of that layout are written. Memory is
         applied only after a trial on your own documents shows it reduces corrections.
       </p>
       {potential.data && potential.data.corrected_fields > 0 ? (

@@ -34,7 +34,7 @@
 import http from "node:http";
 
 const PORT = Number(process.env.E2E_LLM_PORT ?? 11434);
-const MODEL = process.env.E2E_LLM_MODEL ?? "flowpilot-e2e-local";
+const MODEL = process.env.E2E_LLM_MODEL ?? "servabo-e2e-local";
 
 /* ------------------------------------------------------------------ text */
 
@@ -409,7 +409,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   if (req.method === "GET" && /\/models$/.test(url.pathname)) {
-    send(res, 200, { object: "list", data: [{ id: MODEL, object: "model", owned_by: "flowpilot-e2e" }] });
+    send(res, 200, { object: "list", data: [{ id: MODEL, object: "model", owned_by: "servabo-e2e" }] });
     return;
   }
   if (req.method !== "POST" || !/\/chat\/completions$/.test(url.pathname)) {

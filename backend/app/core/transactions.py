@@ -79,9 +79,9 @@ def rollback_and_log_error(
         The exception passed as `exc`.
     """
     db.rollback()
-    from app.core.exceptions import FlowPilotError
+    from app.core.exceptions import ServaboError
 
-    if isinstance(exc, (IntegrityError, FlowPilotError)):
+    if isinstance(exc, (IntegrityError, ServaboError)):
         # An expected refusal (a domain rule, or a constraint met by a
         # concurrent duplicate, answered 409 by the global handler): a warning,
         # not an error with a traceback.

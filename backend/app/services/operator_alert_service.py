@@ -102,7 +102,7 @@ def duplicate_subscription(
         body=(
             f"{who} already has a live subscription, {recorded_subscription_id}, and {gateway.title()} "
             f"reports a second one, {duplicate_subscription_id} (status {duplicate_status}, customer "
-            f"{customer_id}). FlowPilot does not record the second (one live subscription per "
+            f"{customer_id}). Servabo does not record the second (one live subscription per "
             "organization), but the customer is being charged for it. In the payment dashboard: "
             f"cancel {duplicate_subscription_id} now and refund what it charged, then tell the "
             "customer. Step by step: RUNBOOK section 9.8."
@@ -169,7 +169,7 @@ def scan(db: Session, *, now: Optional[datetime] = None) -> int:
                 f"{count} {gateway_name} {event_type} {'event' if count == 1 else 'events'} failed every "
                 "attempt in the last 24 hours: a subscription, invoice or refund may be out of step with "
                 f"the payment dashboard. Latest error: {error or '(none recorded)'}. Compare the "
-                "organization's plan in FlowPilot with the dashboard (RUNBOOK section 9.7); once the "
+                "organization's plan in Servabo with the dashboard (RUNBOOK section 9.7); once the "
                 "cause is fixed, replay them (section 9.9)."
             ),
         )
@@ -243,7 +243,7 @@ def send_due(db: Session, *, now: Optional[datetime] = None) -> int:
             first_seen_at=alert.first_seen_at,
             last_seen_at=alert.last_seen_at,
             console_url=console_url,
-            brand_name=settings.PLATFORM_SMTP_FROM_NAME or "FlowPilot",
+            brand_name=settings.PLATFORM_SMTP_FROM_NAME or "Servabo",
         )
         delivered = False
         for recipient in recipients:

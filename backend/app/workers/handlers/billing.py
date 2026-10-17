@@ -317,9 +317,7 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
     was never renewed here: its statement is assembled and its overage goes on the subscription's
     next invoice. Before, nothing queued this job and it assembled without billing overage.
     """
-    from sqlalchemy import select
-
-    from app.models.subscription import LIVE_SUBSCRIPTION_STATUSES, Subscription
+    from app.models.subscription import Subscription
     from app.services.billing import invoice_service, period_close_service
 
     limit = _int(payload, "limit", 100)
@@ -344,21 +342,7 @@ def handle_billing_assemble_invoice(payload: dict[str, Any]) -> dict[str, Any]:
                 targets = [subscription_id]
             else:
                 cutoff = datetime.now(timezone.utc) - ASSEMBLE_BACKSTOP_GRACE
-                targets = list(
-                    db.execute(
-                        select(Subscription.id)
-                        .where(
-                            Subscription.status.in_(LIVE_SUBSCRIPTION_STATUSES),
-                            Subscription.current_period_end <= cutoff,
-                            # One set to end does not renew: its period closes with no invoice.
-                            Subscription.cancel_at_period_end.is_(False),
-                        )
-                        .order_by(Subscription.current_period_end.asc())
-                        .limit(limit)
-                    )
-                    .scalars()
-                    .all()
-                )
+                targets = period_close_service.backstop_targets(db, cutoff=cutoff, limit=limit)
 
     assembled: list[dict[str, Any]] = []
     skipped = 0
@@ -436,6 +420,44 @@ def handle_billing_dunning_sweep(payload: dict[str, Any]) -> dict[str, Any]:
         "detail": advanced[:50],
     }
     logger.info("billing.dunning_sweep_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
+# billing.plan_changes (website and payments session, C6)
+# ============================================================================
+
+
+def handle_billing_plan_changes(payload: dict[str, Any]) -> dict[str, Any]:
+    """Make at Dodo the downgrades whose renewal is within the hour (`plan_change_service.apply_due`)."""
+    from app.services.billing import plan_change_service
+
+    limit = _int(payload, "limit", 100)
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.plan_changes"):
+            with db.begin():
+                applied = plan_change_service.apply_due(db, limit=limit)
+    outcome = {"applied": len(applied), "detail": [{k: str(v) for k, v in a.items()} for a in applied[:50]]}
+    logger.info("billing.plan_changes_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
+# billing.hold_notices (website and payments session, C1)
+# ============================================================================
+
+
+def handle_billing_hold_notices(payload: dict[str, Any]) -> dict[str, Any]:
+    """Remind, warn and tell owners of Dodo holds by the clock (`hold_notice_service.send_due`)."""
+    from app.services.billing import hold_notice_service
+
+    limit = _int(payload, "limit", 500)
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.hold_notices"):
+            with db.begin():
+                sent = hold_notice_service.send_due(db, limit=limit)
+    outcome = {"sent": len(sent), "detail": [{k: str(v) for k, v in s.items()} for s in sent[:50]]}
+    logger.info("billing.hold_notices_complete", extra=outcome)
     return outcome
 
 

@@ -6423,7 +6423,7 @@ export interface components {
         };
         /**
          * BYOKSavingsResponse
-         * @description What BYOK has removed from FlowPilot's supplier bill.
+         * @description What BYOK has removed from Servabo's supplier bill.
          *
          *     `platform_cost_micros` is the cost of events the platform DID pay for, and
          *     `byok_events` counts those it did not. There is deliberately no
@@ -6545,7 +6545,7 @@ export interface components {
             /**
              * Table Prefix
              * @description Prepended to the lowercased dataset name to form the target table.
-             * @default flowpilot_
+             * @default servabo_
              */
             table_prefix: string;
             /**
@@ -7569,7 +7569,7 @@ export interface components {
             volume: string;
             /**
              * Table Prefix
-             * @default flowpilot_
+             * @default servabo_
              */
             table_prefix: string;
             /** Access Token */
@@ -10256,7 +10256,7 @@ export interface components {
             key_prefix?: string | null;
             /**
              * Platform Key Available
-             * @description True when FlowPilot holds its own key for this provider. When false, allow_platform_fallback cannot do anything even if set.
+             * @description True when Servabo holds its own key for this provider. When false, allow_platform_fallback cannot do anything even if set.
              */
             platform_key_available: boolean;
             /** Suggested Models */
@@ -11369,7 +11369,7 @@ export interface components {
             /**
              * Prefix
              * @description Key prefix inside the tenant's bucket.
-             * @default flowpilot/
+             * @default servabo/
              */
             prefix: string;
             /**
@@ -11712,7 +11712,7 @@ export interface components {
             stage_region: string;
             /**
              * Stage Prefix
-             * @default flowpilot/
+             * @default servabo/
              */
             stage_prefix: string;
             /** Stage Endpoint Url */
@@ -11720,7 +11720,7 @@ export interface components {
             /**
              * Table Prefix
              * @description Prepended to the dataset name to form the target table.
-             * @default FLOWPILOT_
+             * @default SERVABO_
              */
             table_prefix: string;
             /**
@@ -21085,7 +21085,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                flowpilot_refresh?: string | null;
+                servabo_refresh?: string | null;
             };
         };
         requestBody?: never;
@@ -21116,7 +21116,7 @@ export interface operations {
             header?: never;
             path?: never;
             cookie?: {
-                flowpilot_refresh?: string | null;
+                servabo_refresh?: string | null;
             };
         };
         requestBody?: never;

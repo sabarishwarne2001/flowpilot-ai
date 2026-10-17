@@ -166,7 +166,7 @@ def test_a_garbage_token_is_refused(client) -> None:
     response = client.get(
         f"{GATEWAY}/documents",
         params={"workspace_id": str(uuid.uuid4())},
-        headers=_auth("fp_test_NOTAREALKEY_nope"),
+        headers=_auth("svb_test_NOTAREALKEY_nope"),
     )
     assert response.status_code == status.HTTP_401_UNAUTHORIZED
 
@@ -416,7 +416,7 @@ def test_the_version_endpoint_reports_only_this_keys_scopes(
         "public_documents:read",
         "public_query:write",
     }
-    assert response.headers["X-FlowPilot-API-Version"] == body["version"]
+    assert response.headers["X-Servabo-API-Version"] == body["version"]
 
 
 def test_the_version_endpoint_is_authenticated(client) -> None:
@@ -706,8 +706,8 @@ def test_the_explorer_returns_snippets_in_three_languages(
     for operation in operations:
         snippets = operation["snippets"]
         assert set(snippets) == {"curl", "python", "typescript"}
-        assert "$FLOWPILOT_API_KEY" in snippets["curl"]
-        assert "FLOWPILOT_API_KEY" in snippets["python"]
+        assert "$SERVABO_API_KEY" in snippets["curl"]
+        assert "SERVABO_API_KEY" in snippets["python"]
         assert operation["required_scope"] in ALL_PUBLIC_SCOPES
 
 
@@ -727,7 +727,7 @@ def test_issuing_a_key_returns_the_token_exactly_once(
     assert response.status_code == status.HTTP_201_CREATED
     body = response.json()
     token = body["token"]
-    assert token.startswith(("fp_live_", "fp_test_"))
+    assert token.startswith(("svb_live_", "svb_test_"))
     assert body["api_key"]["is_public_api_enabled"] is True
     assert body["api_key"]["tier_key"] == "FREE"
 

@@ -62,7 +62,7 @@ def test_blank_replica_url_is_treated_as_unset(monkeypatch) -> None:
 def test_distinct_replica_url_is_honoured(monkeypatch) -> None:
     from pydantic import SecretStr
 
-    replica = "postgresql://u:p@standby.internal:5432/flowpilot"
+    replica = "postgresql://u:p@standby.internal:5432/servabo"
     monkeypatch.setattr(settings, "DATABASE_REPLICA_URL", SecretStr(replica))
 
     assert settings.sqlalchemy_replica_uri == replica

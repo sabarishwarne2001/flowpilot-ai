@@ -840,7 +840,7 @@ def run_worker_loop(poll_interval: float = 1.0) -> None:
     logger.info(
         "================================================================="
     )
-    logger.info(f"FlowPilot AI Background Worker Initialized [{identity}]")
+    logger.info(f"Servabo Background Worker Initialized [{identity}]")
     logger.info(f"Registered {len(registered)} job handlers:")
     for jt in registered:
         logger.info(f"  -> {jt}")

@@ -15,7 +15,7 @@ import {
   parseQuantity,
 } from "@/types/billing";
 import type { UsageGranularity, UsageLimit } from "@/types/billing";
-import { entitlementRank, meterLabel, overageLabel, unitFor } from "@/types/planEntitlements";
+import { HARD_LIMIT_NOTE, entitlementRank, meterLabel, overageLabel, unitFor } from "@/types/planEntitlements";
 
 const GRANULARITIES: readonly UsageGranularity[] = ["HOUR", "DAY", "MONTH"];
 
@@ -332,7 +332,7 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
         {limit.hard_stop ? (
           <span className="inline-flex items-center gap-1">
             <AlertTriangle className="h-3 w-3" aria-hidden="true" />
-            Hard stop — requests are refused past this
+            {limit.source === "ORGANIZATION" ? "Hard stop — requests are refused past this" : HARD_LIMIT_NOTE}
           </span>
         ) : (
           <span>{overageLabel(limit.overage_policy)}</span>
@@ -350,7 +350,9 @@ const LimitRow: React.FC<LimitRowProps> = ({ limit, currency }) => {
         <div className="mt-1.5 flex flex-wrap items-center gap-2">
           <p className="text-xs font-medium text-destructive">
             {limit.hard_stop
-              ? "Limit reached. Requests against this limit are being refused."
+              ? limit.source === "ORGANIZATION"
+                ? "Limit reached. Requests against this limit are being refused."
+                : "Limit reached: this is a hard monthly limit. Add seats or upgrade for more."
               : limit.overage_policy.toUpperCase() === "ALLOW_AND_WARN"
                 ? "Over the included amount. Still allowed on your plan, at no extra charge."
                 : "Over the included amount. Overage is billed at the price-book rate."}

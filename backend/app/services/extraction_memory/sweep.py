@@ -1,6 +1,6 @@
 """ARCH41-S2:sweep — the nightly pass: merge layouts, learn and promote rules,
 start and judge trials, withdraw what drifted. Run by
-scripts/sweep_extraction_memory.py through deploy/bin/flowpilot-sweep."""
+scripts/sweep_extraction_memory.py through deploy/bin/servabo-sweep."""
 
 from __future__ import annotations
 

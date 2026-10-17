@@ -6,16 +6,18 @@ signature specification.
 WHY DODO AND NOT STRIPE
 =======================
 
-Not because Stripe India is closed — it is not. Stripe's own RBI compliance
-documentation describes an onboarding path for sole proprietorships that are not
-registered, and the original premise that it is invite-only was inaccurate.
+Two reasons, recorded so the next reader does not re-litigate them.
 
-The reason is tax. Under Stripe, FlowPilot is the seller of record and the
-operator personally owes GST registration in India, VAT registration across the
-EU past threshold, and US state sales-tax nexus analysis — a recurring
-compliance job for a solo founder. Under a Merchant of Record, Dodo is the legal
-seller and remits on our behalf. For a one-person company selling B2B SaaS
-internationally, that difference is worth considerably more than the fee delta.
+Access: Stripe India has accepted new accounts by invitation only since 2024, so a sole
+proprietor in India cannot count on opening one. (An earlier version of this comment said the
+opposite; it was out of date.)
+
+Tax: even with a Stripe account, Servabo would be the seller of record and the operator would
+personally owe GST registration in India, VAT registration across the EU past threshold, and US
+state sales-tax nexus analysis, a recurring compliance job for a solo founder. Under a Merchant of
+Record, Dodo is the legal seller, issues the tax invoice and remits on our behalf. For a
+one-person company selling B2B SaaS internationally, that is worth more than the fee difference.
+The Stripe adapter stays in the code, switched off (BILLING_GATEWAY=DODO is the default).
 
 THE SIGNATURE SCHEME — READ THIS BEFORE CHANGING `verify_webhook_signature`
 ==========================================================================
@@ -66,19 +68,14 @@ later than that arrive as gateway-side replays with fresh signatures.
 WHAT THIS ADAPTER DELIBERATELY DOES NOT DO
 ==========================================
 
-No seat proration. `GatewayCapabilities.supports_seat_proration` is False
-because Stripe's subscription-item proration is not a universal concept and I
-have not verified Dodo's equivalent semantics. A stub that guessed would
-type-check clean and mis-bill.
+No usage billing. `GatewayCapabilities.supports_usage_billing` is False, and that is the owner's
+decision (website and payments session, NEEDS-OWNER): on Dodo every plan has hard monthly limits
+instead of billed overage, and `scripts/seed_quota_tiers.py` publishes each ALLOW_AND_BILL limit as
+REFUSE when the gateway cannot bill usage. Flipping the flag would let the overage path run and
+produce invoices that silently omit consumption.
 
-`supports_usage_billing` is likewise False PENDING VERIFICATION. FlowPilot
-prices seats plus metered consumption; if Dodo's usage API cannot accept
-`usage_rollups` as reported quantities at the granularity the overage model
-needs, the metered half of the pricing model does not survive this migration.
-That is a commercial question to settle with Dodo before switching
-`BILLING_GATEWAY` in production, not something to assert here. Flipping this
-flag without checking would let the overage path run and produce invoices that
-silently omit consumption.
+Seat and plan changes go through `POST /subscriptions/{id}/change-plan` (with its preview first):
+`set_subscription_seats`, `change_plan`, `preview_change_plan`.
 """
 
 from __future__ import annotations
@@ -91,6 +88,7 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from typing import Any, Mapping, Optional
 from urllib.parse import quote
 
@@ -139,6 +137,10 @@ EVENT_TYPE_MAP: dict[str, str] = {
     "refund.succeeded": "refund.succeeded",
     "refund.failed": "refund.failed",
     "dispute.opened": "dispute.opened",
+    "dispute.challenged": "dispute.challenged",
+    "dispute.accepted": "dispute.accepted",
+    "dispute.cancelled": "dispute.cancelled",
+    "dispute.expired": "dispute.expired",
     "dispute.won": "dispute.won",
     "dispute.lost": "dispute.lost",
     "subscription.active": "subscription.active",
@@ -210,6 +212,36 @@ class DodoSubscriptionSnapshot:
     window_normalised: bool = False
     metadata: dict[str, str] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class DodoPaymentSnapshot:
+    """One Dodo payment, as of one fetch (website and payments session, C4/C5).
+
+    Amounts are converted from Dodo's smallest currency unit to micros (x10_000, as in
+    `preview_change_plan`). `total_micros` includes tax, as Dodo's `total_amount` does.
+    `refunded_micros` is the sum of the payment's succeeded refunds, so a repeated or late event
+    converges on the same figure.
+    """
+
+    id: str
+    status: str
+    subscription_id: Optional[str]
+    customer_id: str
+    currency: str
+    total_micros: int
+    tax_micros: int
+    created_at: datetime
+    refunded_micros: int
+    disputes: tuple[dict[str, Any], ...] = ()
+    raw: dict[str, Any] = field(default_factory=dict)
+
+
+def _minor_to_micros(value: Any) -> int:
+    try:
+        return int(Decimal(str(value or 0))) * 10_000
+    except (InvalidOperation, ValueError) as exc:
+        raise DodoGatewayError(f"Dodo amount {value!r} is not a whole number of minor units") from exc
 
 
 def _parse_instant(value: Any) -> Optional[datetime]:
@@ -397,6 +429,9 @@ class DodoGateway:
                 f"{response.text[:500]}"
             )
 
+        if not response.content.strip():
+            # Some calls answer 200 with no body (change-plan); the caller re-fetches what it needs.
+            return {}
         try:
             payload = response.json()
         except Exception as exc:  # noqa: BLE001
@@ -514,6 +549,38 @@ class DodoGateway:
         )
         return self.fetch_subscription(subscription_id)
 
+    def change_plan(
+        self,
+        *,
+        subscription_id: str,
+        product_id: str,
+        quantity: int,
+        proration_mode: str,
+        on_payment_failure: str = "prevent_change",
+    ) -> DodoSubscriptionSnapshot:
+        """`POST /subscriptions/{id}/change-plan` — another product (plan), then re-fetch (D-9).
+
+        Website and payments session (C6). `on_payment_failure: prevent_change` keeps the old
+        plan when the immediate charge fails, so an upgrade is never granted unpaid.
+        """
+        if int(quantity) < 1:
+            raise DodoGatewayError("Dodo subscriptions need at least one unit.")
+        if proration_mode not in {"prorated_immediately", "full_immediately", "difference_immediately", "do_not_bill"}:
+            raise DodoGatewayError(f"Unknown Dodo proration mode {proration_mode!r}.")
+        if on_payment_failure not in {"prevent_change", "apply_change"}:
+            raise DodoGatewayError(f"Unknown on_payment_failure {on_payment_failure!r}.")
+        self._request(
+            "POST",
+            f"/subscriptions/{quote(str(subscription_id), safe='')}/change-plan",
+            {
+                "product_id": product_id,
+                "quantity": int(quantity),
+                "proration_billing_mode": proration_mode,
+                "on_payment_failure": on_payment_failure,
+            },
+        )
+        return self.fetch_subscription(subscription_id)
+
     # ARCH30-T4F:dodo-preview-change-plan — A7.
     def preview_change_plan(
         self,
@@ -614,6 +681,86 @@ class DodoGateway:
             ),
             raw=raw,
         )
+
+    # -- payments, invoices and customers (website and payments session) -----
+
+    def fetch_payment(self, payment_id: str) -> DodoPaymentSnapshot:
+        """`GET /payments/{id}` — the payment with its refunds and disputes (D-9: current truth)."""
+        if not payment_id:
+            raise DodoGatewayError("No payment id to fetch.")
+        raw = self._request("GET", f"/payments/{quote(str(payment_id), safe='')}")
+        customer = raw.get("customer") if isinstance(raw.get("customer"), dict) else {}
+        created = _parse_instant(raw.get("created_at"))
+        if created is None:
+            raise DodoGatewayError(f"Dodo payment {payment_id} has no created_at.")
+        refunds = raw.get("refunds") if isinstance(raw.get("refunds"), list) else []
+        refunded = sum(
+            _minor_to_micros(r.get("amount"))
+            for r in refunds
+            if isinstance(r, dict) and str(r.get("status") or "").lower() == "succeeded"
+        )
+        disputes = tuple(
+            {
+                "id": str(d.get("dispute_id") or ""),
+                "status": str(d.get("dispute_status") or "").lower(),
+                "amount_micros": _minor_to_micros(d.get("amount")),
+                "created_at": _parse_instant(d.get("created_at")),
+            }
+            for d in (raw.get("disputes") if isinstance(raw.get("disputes"), list) else [])
+            if isinstance(d, dict) and d.get("dispute_id")
+        )
+        return DodoPaymentSnapshot(
+            id=str(raw.get("payment_id") or payment_id),
+            status=str(raw.get("status") or "").lower(),
+            subscription_id=(str(raw["subscription_id"]) if raw.get("subscription_id") else None),
+            customer_id=str(customer.get("customer_id") or raw.get("customer_id") or ""),
+            currency=str(raw.get("currency") or "USD").upper(),
+            total_micros=_minor_to_micros(raw.get("total_amount")),
+            tax_micros=_minor_to_micros(raw.get("tax")),
+            created_at=created,
+            refunded_micros=refunded,
+            disputes=disputes,
+            raw=dict(raw),
+        )
+
+    def fetch_invoice_pdf(self, payment_id: str) -> bytes:
+        """`GET /invoices/payments/{payment_id}` — the tax invoice Dodo issues as merchant of record."""
+        from app.core import egress
+
+        if not payment_id:
+            raise DodoGatewayError("No payment id for an invoice.")
+        url = f"{self._api_base}/invoices/payments/{quote(str(payment_id), safe='')}"
+        try:
+            with egress.httpx_client(egress.BILLING, timeout=self._timeout) as client:
+                response = client.get(url, headers={"Authorization": f"Bearer {self._resolved_key()}"})
+        except egress.EgressDenied:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise GatewayTransientError(f"Dodo API unreachable for an invoice: {exc}") from exc
+        if response.status_code >= 500 or response.status_code == 429:
+            raise GatewayTransientError(f"Dodo API returned {response.status_code} for an invoice")
+        if response.status_code == 404:
+            raise DodoObjectNotFoundError(f"Dodo has no invoice for payment {payment_id}")
+        if response.status_code >= 400:
+            raise DodoGatewayError(f"Dodo API refused the invoice with {response.status_code}")
+        if not response.content.startswith(b"%PDF"):
+            raise DodoGatewayError("Dodo's invoice is not a PDF.")
+        return response.content
+
+    def update_customer(
+        self, *, customer_id: str, email: Optional[str] = None, name: Optional[str] = None
+    ) -> dict[str, Any]:
+        """`PATCH /customers/{id}` — the billing email or legal name, where Dodo keeps them."""
+        if not customer_id:
+            raise GatewayPermanentError("No Dodo customer to update.")
+        body: dict[str, Any] = {}
+        if email is not None:
+            body["email"] = email
+        if name is not None:
+            body["name"] = name
+        if not body:
+            raise GatewayPermanentError("Nothing to change on the Dodo customer.")
+        return self._request("PATCH", f"/customers/{quote(str(customer_id), safe='')}", body)
 
     # -- checkout ---------------------------------------------------------
 
@@ -815,6 +962,7 @@ __all__ = [
     "DodoGateway",
     "DodoGatewayError",
     "DodoObjectNotFoundError",
+    "DodoPaymentSnapshot",
     "DodoSubscriptionSnapshot",
     "EVENT_TYPE_MAP",
     "GATEWAY_NAME",

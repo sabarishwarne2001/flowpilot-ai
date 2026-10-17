@@ -1,5 +1,5 @@
 /**
- * Tenancy type contract for FlowPilot AI.
+ * Tenancy type contract for Servabo.
  */
 
 export type OrganizationRole = "OWNER" | "ADMIN" | "BILLING" | "MEMBER";

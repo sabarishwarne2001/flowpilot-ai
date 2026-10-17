@@ -144,7 +144,7 @@ def _endpoint_is_safe(endpoint: str, *, provider: str) -> str:
     suffix = endpoint_suffix_for(provider)
     if suffix and not host.endswith(suffix):
         raise ValueError(
-            f"The resource endpoint must be a {suffix} host. FlowPilot's "
+            f"The resource endpoint must be a {suffix} host. Servabo's "
             f"server connects to this address, so it is restricted to the "
             f"provider's own domain — an arbitrary host here would let this "
             f"field reach internal services."
@@ -187,7 +187,7 @@ class ProviderCatalogEntry(BaseModel):
     key_prefix: Optional[str] = None
     platform_key_available: bool = Field(
         description=(
-            "True when FlowPilot holds its own key for this provider. When "
+            "True when Servabo holds its own key for this provider. When "
             "false, allow_platform_fallback cannot do anything even if set."
         )
     )
@@ -363,7 +363,7 @@ class ProviderCredentialResponse(BaseModel):
     is_shape_complete: bool = True
 
     #: ARCH-23 B3. False for OPENAI, ANTHROPIC, AZURE_OPENAI and MISTRAL,
-    #: where FlowPilot holds no key of its own. The console greys out the
+    #: where Servabo holds no key of its own. The console greys out the
     #: fallback toggle rather than letting a tenant enable a safety net that
     #: cannot exist.
     fallback_is_possible: bool = True
@@ -487,7 +487,7 @@ class TaskCatalogEntry(BaseModel):
 
 
 class BYOKSavingsResponse(BaseModel):
-    """What BYOK has removed from FlowPilot's supplier bill.
+    """What BYOK has removed from Servabo's supplier bill.
 
     `platform_cost_micros` is the cost of events the platform DID pay for, and
     `byok_events` counts those it did not. There is deliberately no

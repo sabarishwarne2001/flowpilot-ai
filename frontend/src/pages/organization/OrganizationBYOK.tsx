@@ -98,13 +98,13 @@ const SavingsCard: React.FC<{ overview: BYOKOverviewResponse }> = ({ overview })
           </dd>
         </div>
         <div>
-          <dt className={HINT}>FlowPilot-billed events</dt>
+          <dt className={HINT}>Servabo-billed events</dt>
           <dd className="text-2xl font-semibold tabular-nums">
             {formatNumber(savings.platform_events)}
           </dd>
         </div>
         <div>
-          <dt className={HINT}>FlowPilot supplier cost</dt>
+          <dt className={HINT}>Servabo supplier cost</dt>
           <dd className="text-2xl font-semibold tabular-nums">
             {formatMicros(savings.platform_cost_micros)}
           </dd>
@@ -346,11 +346,11 @@ const ProviderCard: React.FC<{
               onChange={(e) => fallback.mutate(e.target.checked)}
             />
             <span>
-              <span className={LABEL}>Allow fallback to FlowPilot account</span>
+              <span className={LABEL}>Allow fallback to Servabo account</span>
               <span className={`${HINT} mt-1 block`}>
                 {credential.fallback_is_possible
-                  ? "If your key fails or is rate-limited, execute request on FlowPilot's provider account."
-                  : "FlowPilot holds no platform key for this provider, so fallback is unavailable."}
+                  ? "If your key fails or is rate-limited, execute request on Servabo's provider account."
+                  : "Servabo holds no platform key for this provider, so fallback is unavailable."}
               </span>
             </span>
           </label>
@@ -501,7 +501,7 @@ const RouteRow: React.FC<{
               route.effective_tenant_key ? "text-emerald-700" : "text-muted-foreground"
             }`}
           >
-            {route.effective_tenant_key ? "Running on your key" : "Running on FlowPilot account"}
+            {route.effective_tenant_key ? "Running on your key" : "Running on Servabo account"}
           </span>
         )}
       </td>
@@ -685,9 +685,9 @@ const OrganizationBYOK: React.FC = () => {
         <div className="max-w-3xl rounded-lg border border-border/60 bg-muted/40 p-3 text-sm">
           <p className="font-medium text-foreground">Seat fees still apply</p>
           <p className="mt-1 text-muted-foreground">
-            Your FlowPilot subscription covers seats and platform features whether or not you
+            Your Servabo subscription covers seats and platform features whether or not you
             use your own keys. Requests made with your keys are billed to you directly by that
-            provider, and FlowPilot records them at $0.00 provider cost, so you are never
+            provider, and Servabo records them at $0.00 provider cost, so you are never
             charged twice for the same tokens.
           </p>
         </div>

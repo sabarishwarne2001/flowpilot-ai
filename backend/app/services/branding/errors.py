@@ -1,6 +1,6 @@
 """ARCH-25 — branding and custom domain failures.
 
-Every class here subclasses `FlowPilotError`. Status code and error codes are
+Every class here subclasses `ServaboError`. Status code and error codes are
 stored as class attributes and instance attributes for clean inspection by
 FastAPI exception handlers.
 
@@ -10,7 +10,7 @@ WHY `HostNotClaimedError` IS 404 AND NOT 403
 An unrecognised `Host` gets "not found", never "forbidden". 403 confirms the
 hostname is known to the platform and merely off-limits, which turns the
 middleware into a hostname oracle: an attacker sweeping a customer's DNS
-namespace could distinguish `ai.acme.com` (a FlowPilot tenant) from
+namespace could distinguish `ai.acme.com` (a Servabo tenant) from
 `ai.example.com` (not one) by status code alone. 404 tells them nothing.
 """
 
@@ -18,10 +18,10 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 
-class BrandingError(FlowPilotError):
+class BrandingError(ServaboError):
     """Base class for every ARCH-25 failure."""
 
     status_code: int = 400

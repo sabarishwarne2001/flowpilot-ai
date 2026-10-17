@@ -390,6 +390,12 @@ def access_state(db: Session, *, organization_id: uuid.UUID) -> BillingAccessSta
         return BillingAccessState.SUSPENDED
     if row:
         return BillingAccessState.RESTRICTED
+    # Website and payments session (C5): a payment the bank reversed (a lost dispute) holds the
+    # organization read-only until a later payment succeeds or the operator lifts it.
+    from app.services.billing import dispute_service
+
+    if dispute_service.reversal_holding(db, organization_id=organization_id) is not None:
+        return BillingAccessState.RESTRICTED
     # The stricter of the two sources wins; with no restrictive dunning step,
     # the subscription's own state decides.
     return _subscription_access_state(db, organization_id=organization_id)

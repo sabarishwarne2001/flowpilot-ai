@@ -23,7 +23,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core import egress
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 MAX_RULES_PER_ORGANIZATION = 200
 MAX_NOTE_CHARS = 200
@@ -33,7 +33,7 @@ REFUSAL_RETENTION_DAYS = 90
 _BY_CODE: dict[tuple[str, int], type] = {}
 
 
-class EgressPolicyError(FlowPilotError):
+class EgressPolicyError(ServaboError):
     """The domain exception handler maps by CLASS, so each (code, status) gets a subclass carrying them (a 422
     INVALID_PATTERN renders as 422 INVALID_PATTERN, not 409 EGRESS_POLICY_CONFLICT)."""
 

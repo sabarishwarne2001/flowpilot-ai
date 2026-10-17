@@ -89,7 +89,7 @@ def test_the_application_module_gunicorn_serves_imports() -> None:
 
 #: Images this project builds itself are tagged by IMAGE_TAG; everything else must
 #: name a specific version, never a floating tag such as `latest` or `7`.
-_OWN_IMAGE = re.compile(r"^flowpilot/")
+_OWN_IMAGE = re.compile(r"^servabo/")
 
 
 def _third_party_images() -> list[str]:

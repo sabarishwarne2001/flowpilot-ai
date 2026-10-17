@@ -69,12 +69,23 @@ class MarginFiguresResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class PaymentFiguresResponse(BaseModel):
+    """Website and payments session (C12): payments received and Dodo Payments' fees on them."""
+
+    count: int = 0
+    received_micros: int = 0
+    fees_micros: int = 0
+    refunded_micros: int = 0
+    net_micros: int = 0
+
+
 class PlatformMarginSummaryResponse(BaseModel):
     period_start: datetime
     period_end: datetime
     currency: str
     organization_count: int
     figures: MarginFiguresResponse
+    payments: PaymentFiguresResponse = PaymentFiguresResponse()
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -98,11 +98,14 @@ NOT_SETTINGS: dict[str, tuple[str, str]] = {
     "ARCH40_CONTRACT": ("backend/alembic/versions/arch40_step3_contract_ai_settings.py", "ARCH40_CONTRACT"),
     # One-off and host commands
     "GATEWAY_PRICE_ID_DEVELOPER": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_DEVELOPER"),
+    # Website and payments session (C11): yearly products, read by the same seed.
+    "GATEWAY_PRICE_ID_DEVELOPER_YEARLY": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_DEVELOPER_YEARLY"),
+    "GATEWAY_PRICE_ID_BUSINESS_YEARLY": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_BUSINESS_YEARLY"),
     "GATEWAY_PRICE_ID_BUSINESS": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_BUSINESS"),
     "GATEWAY_PRICE_ID_ENTERPRISE": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_ENTERPRISE"),
     "SEED_ADMIN_EMAIL": ("backend/scripts/seed_admin.py", "SEED_ADMIN_EMAIL"),
     "SEED_ADMIN_PASSWORD": ("backend/scripts/seed_admin.py", "SEED_ADMIN_PASSWORD"),
-    "FLOWPILOT_BACKUP_KEY": ("backend/scripts/backup_floor.py", "FLOWPILOT_BACKUP_KEY"),
+    "SERVABO_BACKUP_KEY": ("backend/scripts/backup_floor.py", "SERVABO_BACKUP_KEY"),
 }
 
 # ---------------------------------------------------------------------------------------
@@ -133,6 +136,8 @@ REQUIRED_IN_PRODUCTION: dict[str, dict[str, str]] = {
     "S3_SECRET_ACCESS_KEY": {"STORAGE_BACKEND": "s3"},
     "STRIPE_WEBHOOK_SECRETS": {"STRIPE_SECRET_KEY": _STRIPE_TEST_KEY},
     "DODO_WEBHOOK_SECRET": {"BILLING_GATEWAY": "DODO", "DODO_API_KEY": _DODO_KEY},
+    # Website and payments session (C2): Dodo Payments is the gateway; no one can subscribe without it.
+    "DODO_API_KEY": {"BILLING_GATEWAY": "DODO"},
 }
 
 #: Further settings a production deployment sets for itself (its own addresses, its payment
@@ -141,8 +146,7 @@ PRODUCTION_SETS_ITSELF = {
     "ENVIRONMENT", "LOG_LEVEL", "POSTGRES_USER", "POSTGRES_DB", "STORAGE_BACKEND", "S3_REGION",
     "S3_ENDPOINT_URL", "ACME_CONTACT_EMAIL", "PUBLIC_API_URL", "PLATFORM_RESERVED_HOSTS",
     "TRUSTED_PROXY_HOPS", "TRUSTED_PROXY_HOPS_CONFIRMED", "RERANKER_ENABLED", "BILLING_GATEWAY",
-    "STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_LIVEMODE", "DODO_API_KEY",
-    "DODO_LIVEMODE", "PLATFORM_SMTP_PORT", "PLATFORM_SMTP_USERNAME", "PLATFORM_SMTP_PASSWORD",
+    "STRIPE_SECRET_KEY", "STRIPE_PUBLISHABLE_KEY", "STRIPE_LIVEMODE", "DODO_LIVEMODE", "PLATFORM_SMTP_PORT", "PLATFORM_SMTP_USERNAME", "PLATFORM_SMTP_PASSWORD",
     "PLATFORM_SMTP_ENCRYPTION", "PLATFORM_SMTP_FROM_EMAIL", "PLATFORM_SMTP_FROM_NAME",
 }
 
@@ -394,12 +398,14 @@ def test_each_non_setting_variable_has_its_reader(name: str) -> None:
 
 
 def test_the_frontend_template_names_only_what_the_web_app_reads() -> None:
-    """F-010: the web app reads VITE_API_URL alone; VITE_APP_NAME, VITE_APP_VERSION and
-    VITE_ENVIRONMENT were listed and never read."""
+    """F-010: the web app reads VITE_API_URL and (website session) VITE_WEBSITE_URL;
+    VITE_APP_NAME, VITE_APP_VERSION and VITE_ENVIRONMENT were listed and never read."""
     names = _template_names(FRONTEND_EXAMPLE)
-    assert names == {"VITE_API_URL"}, names
+    assert names == {"VITE_API_URL", "VITE_WEBSITE_URL"}, names
     client = (REPO / "frontend" / "src" / "services" / "api" / "client.ts").read_text(encoding="utf-8")
     assert "import.meta.env.VITE_API_URL" in client
+    website = (REPO / "frontend" / "src" / "config" / "website.ts").read_text(encoding="utf-8")
+    assert "import.meta.env.VITE_WEBSITE_URL" in website
 
 
 # ---------------------------------------------------------------------------------------
@@ -419,7 +425,7 @@ def good_production_env() -> dict[str, str]:
         "CORS_ORIGINS": "https://app.example.com",
         "FRONTEND_URL": "https://app.example.com",
         "STORAGE_BACKEND": "s3",
-        "S3_BUCKET": "flowpilot-prod",
+        "S3_BUCKET": "servabo-prod",
         "S3_ACCESS_KEY_ID": "AKIA" + secrets.token_hex(8).upper(),
         "S3_SECRET_ACCESS_KEY": secrets.token_urlsafe(30),
         "REDIS_URL": "redis://redis:6379/0",
@@ -430,6 +436,7 @@ def good_production_env() -> dict[str, str]:
         "GROQ_API_KEY": "gsk_" + secrets.token_hex(24),
         "STRIPE_WEBHOOK_SECRETS": "whsec_" + secrets.token_hex(16),
         "DODO_WEBHOOK_SECRET": "whsec_" + secrets.token_hex(16),
+        "DODO_API_KEY": _DODO_KEY,
     }
 
 

@@ -1,5 +1,5 @@
 """
-System observability router for FlowPilot AI.
+System observability router for Servabo.
 
 Two probes, on purpose:
 

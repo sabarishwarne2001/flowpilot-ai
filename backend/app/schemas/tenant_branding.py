@@ -14,8 +14,8 @@ learns by loading the page: what colour the login button is.
 
 That omission is not a nice-to-have. `HostTenantMiddleware` maps a header to a
 tenant; if the manifest echoed the tenant's identity, the endpoint would
-become an oracle turning "is ai.acme.com a FlowPilot customer?" into "which
-FlowPilot organization is ai.acme.com, and what is its id" — and an
+become an oracle turning "is ai.acme.com a Servabo customer?" into "which
+Servabo organization is ai.acme.com, and what is its id" — and an
 organization id is the parameter half the platform's other endpoints take.
 
 verify_arch25.py G12 asserts the field set of this model directly, so adding

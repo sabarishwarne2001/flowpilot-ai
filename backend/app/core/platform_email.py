@@ -1,13 +1,13 @@
 """
-Platform identity email for FlowPilot AI.
+Platform identity email for Servabo.
 
 Workspace SMTP sends mail *on behalf of a tenant*: notifications, automation
 actions, anything a workspace generates about its own data. Those credentials
 live in `email_settings`, scoped to a workspace, and are resolved through
 `app.core.smtp.resolve_smtp_config`.
 
-Platform SMTP sends mail *on behalf of FlowPilot*: email verification, password
-reset, and the password-changed notice. These are messages FlowPilot writes to
+Platform SMTP sends mail *on behalf of Servabo*: email verification, password
+reset, and the password-changed notice. These are messages Servabo writes to
 a person, not messages a tenant writes to a member. They occur when the actor
 has no workspace — by definition, since verification gates workspace access and
 password reset happens from a logged-out state.
@@ -66,7 +66,7 @@ def platform_smtp_config() -> SMTPConfig:
     """
     Builds the platform relay configuration from environment settings only.
 
-    This is the single definition of "who FlowPilot is when it sends mail".
+    This is the single definition of "who Servabo is when it sends mail".
     `resolve_smtp_config` delegates its no-workspace branch here so that the
     platform credentials are not defined twice and cannot drift apart.
 
@@ -117,7 +117,7 @@ def send_platform_email(
     Args:
         ...
         reply_to: Optional address a reply should reach. ARCH-04 D1.2 --
-            invitation mail sends as FlowPilot but should reply to the human
+            invitation mail sends as Servabo but should reply to the human
             who sent it. Identity mail (verification, reset) leaves this None:
             there is nobody to reply to, and inviting a reply to an automated
             security message is worse than not.

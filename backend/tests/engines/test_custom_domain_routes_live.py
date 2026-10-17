@@ -34,7 +34,7 @@ def _custom_domains_on(monkeypatch, engines: Engines):
     from app.core.config import settings
 
     monkeypatch.setattr(settings, "CUSTOM_DOMAINS_ENABLED", True, raising=False)
-    monkeypatch.setattr(settings, "PLATFORM_RESERVED_HOSTS", ["flowpilot.ai", "app.flowpilot.ai"], raising=False)
+    monkeypatch.setattr(settings, "PLATFORM_RESERVED_HOSTS", ["servabo.app", "app.servabo.app"], raising=False)
     engines.plan("enterprise")  # custom domains and branding files are plan features
 
 

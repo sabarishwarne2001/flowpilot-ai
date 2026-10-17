@@ -10,6 +10,7 @@ import PasswordStrengthMeter from "@/components/auth/PasswordStrengthMeter";
 
 import { authApi } from "@/services/api/auth";
 import { ApiError } from "@/services/api/client";
+import { WEBSITE } from "@/config/website";
 import { ROUTES } from "@/constants/routes";
 import { isSafeRedirectPath } from "@/routes/tenantPaths";
 import {
@@ -80,7 +81,7 @@ export const Register: React.FC = () => {
       // unwrap() is the request itself, and rejects when it does.
       await toast
         .promise(authApi.registerRequest(payload), {
-          loading: "Creating your FlowPilot account...",
+          loading: "Creating your Servabo account...",
 
           success: () => "Check your email to continue.",
 
@@ -225,6 +226,19 @@ export const Register: React.FC = () => {
             </p>
           )}
         </div>
+
+        {/* Website session (B7): what creating an account agrees to, before the button that does it. */}
+        <p data-testid="register-consent" className="text-[13px] leading-relaxed text-muted-foreground">
+          By creating an account you agree to the{" "}
+          <a href={WEBSITE.terms} className={AUTH_LINK}>
+            Terms of Service
+          </a>{" "}
+          and the{" "}
+          <a href={WEBSITE.privacy} className={AUTH_LINK}>
+            Privacy Policy
+          </a>
+          .
+        </p>
 
         <button type="submit" disabled={isSubmitting} className={`${AUTH_PRIMARY} mt-2`}>
           {isSubmitting ? (

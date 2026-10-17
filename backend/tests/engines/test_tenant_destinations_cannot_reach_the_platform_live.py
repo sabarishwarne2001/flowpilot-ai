@@ -65,7 +65,7 @@ def test_an_erp_sftp_target_cannot_reach_the_platform(engines: Engines, sockets:
         bare = host.strip("[]")
         status, text = _erp_target(
             engines, transport="SFTP",
-            config={"sftp": {"host": bare, "port": 22, "username": "flowpilot", "directory": "/inbox",
+            config={"sftp": {"host": bare, "port": 22, "username": "servabo", "directory": "/inbox",
                              "host_key_sha256": "SHA256:" + "A" * 43}},
         )
         # An address literal is refused for the address; an IPv6 literal earlier, as not a host name.
@@ -85,7 +85,7 @@ def _destination(engines: Engines, credential: dict) -> tuple[int, str]:
 def test_a_warehouse_destination_cannot_reach_the_platform(engines: Engines, sockets: list) -> None:
     engines.plan("enterprise")
     for host in HOSTILE_HOSTS:
-        s3 = {"kind": "S3", "bucket": "acme-analytics", "region": "eu-west-1", "prefix": "flowpilot/",
+        s3 = {"kind": "S3", "bucket": "acme-analytics", "region": "eu-west-1", "prefix": "servabo/",
               "access_key_id": "AKIAEXAMPLE0000000000", "secret_access_key": "s" * 40,
               "endpoint_url": f"https://{host}"}
         status, text = _destination(engines, s3)

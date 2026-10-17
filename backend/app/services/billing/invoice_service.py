@@ -119,7 +119,7 @@ def canonical_payload(
     with.
     """
     return {
-        "schema": "flowpilot.invoice.v1",
+        "schema": "servabo.invoice.v1",
         "number": invoice.number,
         "currency": invoice.currency,
         "period_start": _as_utc(invoice.period_start).isoformat(),

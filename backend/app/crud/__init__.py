@@ -1,5 +1,5 @@
 """
-Database transaction operations registry for FlowPilot AI.
+Database transaction operations registry for Servabo.
 """
 
 from app.crud.user import (

@@ -8,14 +8,21 @@
  * The owner updates the card in the billing portal, the open invoice is paid, and everything is
  * back at once.
  *
- * The gateway's side (the declined renewal, its retries, the card fixed) is played by
- * `backend/scripts/e2e_stand_in.py` through FlowPilot's own reconcile code; the portal page itself
- * is the gateway's and is stood in at the network edge.
+ * On Dodo (the default) the stand-in Dodo declines the renewal and its webhooks reach Servabo's
+ * real endpoint and worker; the subscription is on hold for a grace window, and the clock is moved
+ * through it (`e2e_stand_in.py payment-fails-again` / `mark-unpaid`) so the hourly reminders, the
+ * final notice and read-only come due. The owner then updates the card in the stand-in Dodo's
+ * customer portal, reached from Servabo's own "Update payment method" button.
+ *
+ * On Stripe (E2E_GATEWAY=stripe) the gateway's side (the declined renewal, its retries, the card
+ * fixed) is played by `backend/scripts/e2e_stand_in.py` through Servabo's own reconcile code; the
+ * portal page itself is the gateway's and is stood in at the network edge.
  */
 import type { Page } from "@playwright/test";
 
 import { test, expect, expectHealthyPage } from "../support/fixtures";
 import { api } from "../support/api";
+import { DODO_ORIGIN, GATEWAY } from "../support/env";
 import { waitForMail } from "../support/mail";
 import { documents, invoicePdf, newCustomer, signInAs, standIn, uploadInBrowser } from "../support/journey";
 
@@ -38,14 +45,14 @@ test.describe("Journey: a payment fails and is fixed", () => {
     const customer = await newCustomer("dunning-journey", "Dunning Journey Ltd");
     standIn("subscribe", customer.orgSlug, "--plan", "developer", "--seats", "1");
     await signInAs(page, customer.email);
-    const portal = await portalStandsIn(page);
+    const portal = GATEWAY === "stripe" ? await portalStandsIn(page) : null;
     await uploadInBrowser(page, customer, invoicePdf("dunning-before"));
     await expect.poll(async () => (await documents(customer)).length, { timeout: 60_000 }).toBe(1);
 
     // The renewal is declined: the owner is emailed, and the app says so straight away.
     let since = Date.now() - 1_000;
     standIn("renewal-fails", customer.orgSlug);
-    await waitForMail(customer.email, /Payment could not be processed/, since, 90_000);
+    await waitForMail(customer.email, GATEWAY === "dodo" ? /Payment failed/ : /Payment could not be processed/, since, 90_000);
     await page.goto(customer.ws());
     const notice = page.getByRole("status").filter({ hasText: "Payment failed." });
     await expect(notice).toBeVisible({ timeout: 15_000 });
@@ -72,9 +79,17 @@ test.describe("Journey: a payment fails and is fixed", () => {
 
     // The owner fixes the card in the billing portal; the gateway retries and the invoice is paid.
     await alert.getByRole("button", { name: "Update payment method" }).click();
-    await expect(page).toHaveURL(/__billing-portal__/);
-    expect(portal.opened).toBe(1);
-    standIn("card-fixed", customer.orgSlug);
+    if (GATEWAY === "dodo") {
+      await expect(page).toHaveURL(new RegExp(`^${DODO_ORIGIN.replace(/\./g, "\\.")}/portal/`), { timeout: 20_000 });
+      await page.getByRole("button", { name: "Update card" }).click();
+      await expect(page.getByRole("status")).toContainText("Card updated");
+      await expect.poll(async () => (await api<{ state: string }>(customer.session, "GET",
+        `/organizations/${customer.orgId}/billing/access-summary`)).body.state, { timeout: 60_000 }).toBe("ACTIVE");
+    } else {
+      await expect(page).toHaveURL(/__billing-portal__/);
+      expect(portal?.opened).toBe(1);
+      standIn("card-fixed", customer.orgSlug);
+    }
     await page.goto(customer.ws());
     await expect(page.getByRole("alert").filter({ hasText: "read-only" })).toHaveCount(0, { timeout: 15_000 });
     await expect(page.getByRole("status").filter({ hasText: "Payment failed." })).toHaveCount(0);

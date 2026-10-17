@@ -1,0 +1,227 @@
+/* Self-hosted type (no third-party requests): Inter for words, JetBrains Mono for figures. */
+@import "@fontsource-variable/inter/wght.css";
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+/* The brand's colours, shared with the app. */
+@import "../../../brand/tokens.css";
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* A grid column may shrink below its content's width (long words, tables), so no page
+     scrolls sideways on a phone. */
+  .grid > * {
+    min-width: 0;
+  }
+  html {
+    color-scheme: light;
+    -webkit-text-size-adjust: 100%;
+    text-rendering: optimizeLegibility;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+    font-feature-settings: "cv11", "ss01", "ss03";
+  }
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+  }
+  :focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  /* Links in running text are always underlined: colour is never the only signal. */
+  .prose a,
+  a.link {
+    @apply font-medium text-primary underline decoration-primary/40 underline-offset-[3px] hover:decoration-primary;
+  }
+  .dark .prose a,
+  .dark a.link {
+    color: hsl(var(--primary-on-dark));
+    text-decoration-color: hsl(var(--primary-on-dark) / 0.5);
+  }
+}
+
+@layer components {
+  .page {
+    @apply mx-auto w-full max-w-page px-4 sm:px-6 lg:px-8;
+  }
+  .eyebrow {
+    @apply font-mono text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground;
+  }
+  .display {
+    @apply text-balance font-semibold tracking-tightest text-foreground;
+    font-size: clamp(2.25rem, 1.4rem + 3.6vw, 4rem);
+    line-height: 1.04;
+  }
+  .h2 {
+    @apply text-balance font-semibold tracking-tight text-foreground;
+    font-size: clamp(1.625rem, 1.2rem + 1.6vw, 2.5rem);
+    line-height: 1.12;
+  }
+  .h3 {
+    @apply text-lg font-semibold tracking-tight text-foreground;
+  }
+  .lede {
+    @apply text-pretty text-lg leading-relaxed text-muted-foreground sm:text-xl;
+  }
+  .btn {
+    @apply inline-flex min-h-[2.75rem] items-center justify-center gap-2 rounded-lg px-5 text-[0.9375rem] font-semibold transition-colors duration-150;
+  }
+  .btn-primary {
+    @apply btn bg-primary text-primary-foreground shadow-elevation-1 hover:bg-primary/90;
+  }
+  .btn-quiet {
+    @apply btn border border-border-strong bg-card text-foreground hover:bg-accent;
+  }
+  /* A card with a folded corner: the mark's document, at page scale. */
+  .sheet {
+    @apply relative rounded-xl border border-border bg-card shadow-elevation-1;
+  }
+  .sheet-fold {
+    @apply sheet;
+    clip-path: polygon(0 0, calc(100% - 1.25rem) 0, 100% 1.25rem, 100% 100%, 0 100%);
+  }
+  .sheet-fold::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 1.25rem;
+    height: 1.25rem;
+    background: linear-gradient(225deg, transparent 50%, hsl(var(--border-strong)) 50%);
+    border-bottom-left-radius: 4px;
+  }
+  .rule {
+    @apply border-t border-border;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-2.5 py-0.5 text-xs font-medium text-muted-foreground;
+  }
+  .plan-badge {
+    @apply inline-flex items-center rounded-md border px-2 py-0.5 font-mono text-[0.6875rem] font-medium uppercase tracking-wider;
+  }
+  .ledger-row {
+    @apply grid grid-cols-[1fr_auto] items-baseline gap-4 border-b border-dashed border-border py-2.5 text-sm;
+  }
+  .figure {
+    @apply font-mono tabular-nums;
+  }
+  .prose {
+    @apply max-w-prose text-[1.0625rem] leading-[1.75] text-foreground;
+  }
+  .prose h2 {
+    @apply mb-3 mt-12 scroll-mt-24 text-2xl font-semibold tracking-tight;
+  }
+  .prose h3 {
+    @apply mb-2 mt-8 scroll-mt-24 text-lg font-semibold;
+  }
+  .prose p,
+  .prose ul,
+  .prose ol {
+    @apply my-4;
+  }
+  .prose ul {
+    @apply list-disc pl-6 marker:text-muted-foreground;
+  }
+  .prose ol {
+    @apply list-decimal pl-6 marker:text-muted-foreground;
+  }
+  .prose li {
+    @apply my-1.5 pl-1;
+  }
+  .prose strong {
+    @apply font-semibold text-foreground;
+  }
+  /* A wide table scrolls inside itself on a phone, never the page. */
+  .prose table {
+    @apply relative my-6 block w-full overflow-x-auto border-collapse text-left text-[0.9375rem];
+  }
+  .prose th {
+    @apply border-b border-border-strong py-2 pr-4 font-semibold;
+  }
+  .prose td {
+    @apply border-b border-border py-2 pr-4 align-top;
+  }
+  /* Pricing: Monthly / Yearly without JavaScript. Two radio buttons; the checked one decides. */
+  .price-year {
+    display: none;
+  }
+  .pricing-root:has(#interval-year:checked) .price-month {
+    display: none;
+  }
+  .pricing-root:has(#interval-year:checked) .price-year {
+    display: block;
+  }
+  .interval-switch input:checked + label {
+    @apply bg-primary text-primary-foreground shadow-elevation-1;
+  }
+  .interval-switch input:focus-visible + label {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+  }
+  /* Screenshots follow the theme: the light one in light mode, the dark one in dark mode. */
+  .shot-dark {
+    display: none;
+  }
+  .dark .shot-light {
+    display: none;
+  }
+  .dark .shot-dark {
+    display: block;
+  }
+}
+
+/* The Helm page wears Helm's identity (frontend/src/styles/helm.css); these few are the site's own. */
+.helm .helm-ink {
+  color: hsl(var(--helm-ink));
+}
+.helm .helm-accent-rule {
+  border-color: hsl(var(--helm-accent));
+}
+.helm .helm-accent-ring {
+  box-shadow: 0 0 0 2px hsl(var(--helm-accent));
+}
+
+@layer utilities {
+  .grid-paper {
+    background-image:
+      linear-gradient(hsl(var(--border) / 0.55) 1px, transparent 1px),
+      linear-gradient(90deg, hsl(var(--border) / 0.55) 1px, transparent 1px);
+    background-size: 32px 32px;
+    mask-image: radial-gradient(ellipse at 50% 0%, #000 30%, transparent 75%);
+  }
+}
+
+/* Subtle motion, and none at all for people who ask for none. */
+@media (prefers-reduced-motion: no-preference) {
+  .reveal {
+    animation: reveal 600ms cubic-bezier(0.2, 0, 0, 1) both;
+  }
+  .reveal-delay {
+    animation-delay: 120ms;
+  }
+  @keyframes reveal {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

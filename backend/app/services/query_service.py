@@ -1,5 +1,5 @@
 """
-Query preprocessing service for FlowPilot AI.
+Query preprocessing service for Servabo.
 ARCH-11.5 Step 3: Linguistic expansion and workspace-scoped derived vocabulary expansion.
 """
 

@@ -1,5 +1,7 @@
 # Next session prompt — FlowPilot AI hardening (after campaign session 4)
 
+_FlowPilot AI was renamed Servabo on 2026-10-16. This file is history and keeps the old name._
+
 Paste everything below the line into a new Claude Code session on this repository.
 
 ---

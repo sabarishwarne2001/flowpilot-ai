@@ -10,7 +10,7 @@ quota-refusal banner. So a Free owner clicking "Claim domain" saw "you are out
 of quota" and a generic "Something went wrong", and the lock-card data in the
 body was never read.
 
-These classes subclass `FlowPilotError`, so `domain_exception_handler` renders
+These classes subclass `ServaboError`, so `domain_exception_handler` renders
 them. `resolve_exception_mapping` reads `status_code` and `code` from the class,
 and the handler now forwards `details`, so the console receives:
 
@@ -23,10 +23,10 @@ from __future__ import annotations
 
 from typing import Any, Mapping, Optional
 
-from app.core.exceptions import FlowPilotError
+from app.core.exceptions import ServaboError
 
 
-class BillingAccessError(FlowPilotError):
+class BillingAccessError(ServaboError):
     """Base for refusals caused by what the organization pays for."""
 
     status_code = 402

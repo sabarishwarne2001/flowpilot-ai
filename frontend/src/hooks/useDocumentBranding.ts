@@ -2,7 +2,7 @@ import { useEffect } from "react";
 
 import { useOptionalTenant } from "@/routes/TenantContext";
 
-const DEFAULT_TITLE = "FlowPilot AI";
+const DEFAULT_TITLE = "Servabo";
 
 /**
  * Sets the document title from the active tenant.

@@ -88,7 +88,7 @@ ADDON_CATALOG: dict[str, AddonOffer] = {
         key=entitlements.CUSTOM_DOMAIN_ADDON,
         display_name="Custom domains",
         description=(
-            "Serve FlowPilot on your own hostname, with TLS certificates issued "
+            "Serve Servabo on your own hostname, with TLS certificates issued "
             "and renewed for you and branding shown before sign-in."
         ),
         monthly_price_micros=199_000_000,

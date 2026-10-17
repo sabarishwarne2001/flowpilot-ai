@@ -1,6 +1,6 @@
 ﻿<#
 .SYNOPSIS
-    FlowPilot AI â€” single-command local development launcher (Windows).
+    Servabo â€” single-command local development launcher (Windows).
 
 .DESCRIPTION
     Brings up the complete stack from a clean checkout:
@@ -10,7 +10,7 @@
       4. Runs alembic upgrade head.
       5. Seeds price books, quota tiers and the bootstrap admin.
       6. Starts the API and a single supervised worker (--loop all).
-      7. Starts the Vite dev server.
+      7. Starts the Vite dev server (and, with -Website, the public website on port 4321).
       8. Automatically opens the browser to http://localhost:5173.
 #>
 
@@ -20,6 +20,7 @@ param(
     [switch]$NoFrontend,
     [switch]$Stop,
     [switch]$SkipMigrations,
+    [switch]$Website,
     [int]$ApiPort = 8000,
     [int]$FrontendPort = 5173
 )
@@ -123,7 +124,7 @@ function Stop-Tracked {
 }
 
 Write-Host ''
-Write-Host '  FlowPilot AI â€” local development launcher' -ForegroundColor White
+Write-Host '  Servabo â€” local development launcher' -ForegroundColor White
 Write-Host '  ----------------------------------------' -ForegroundColor DarkGray
 
 if ($Stop) {
@@ -222,10 +223,10 @@ $hostDefaults = @{
     'POSTGRES_PORT'         = '5432'
     'POSTGRES_USER'         = 'postgres'
     'POSTGRES_PASSWORD'     = 'postgres'
-    'POSTGRES_DB'           = 'flowpilot'
+    'POSTGRES_DB'           = 'servabo'
     'REDIS_URL'             = 'redis://localhost:6379/0'
     'STORAGE_BACKEND'       = 'minio'
-    'S3_BUCKET'             = 'flowpilot-dev'
+    'S3_BUCKET'             = 'servabo-dev'
     'S3_ENDPOINT_URL'       = 'http://localhost:9000'
     'S3_ACCESS_KEY_ID'      = 'minioadmin'
     'S3_SECRET_ACCESS_KEY'  = 'minioadmin'
@@ -274,10 +275,29 @@ if (Test-Path $frontendDevEnv) {
 }
 
 # --- 4. Backing services ---------------------------------------------------
+# >>> one-release names: Docker data made before the rename (FlowPilot became Servabo on
+# 2026-10-16) lives in volumes named flowpilot_*. Keep using them, so nothing looks lost; README
+# "Local data from before the rename" says how to move to the new names. Remove next release.
+function Use-PreRenameDockerData {
+    if ($env:COMPOSE_PROJECT_NAME) { return }
+    docker volume inspect flowpilot_postgres_data 2>&1 | Out-Null
+    $hasOld = ($LASTEXITCODE -eq 0)
+    docker volume inspect servabo_postgres_data 2>&1 | Out-Null
+    $hasNew = ($LASTEXITCODE -eq 0)
+    if ($hasOld -and -not $hasNew) {
+        $env:COMPOSE_PROJECT_NAME = 'flowpilot'
+        foreach ($c in @('flowpilot-db', 'flowpilot-redis', 'flowpilot-minio', 'flowpilot-minio-init')) {
+            docker rm -f $c 2>&1 | Out-Null
+        }
+        Write-Warn2 'Using your Docker data from before the rename (volumes flowpilot_*); see README.'
+    }
+}
+# <<< one-release names
 Write-Step '4/8  Docker backing services'
 
 Push-Location $BackendDir
 try {
+    Use-PreRenameDockerData
     if ($Reset) {
         Write-Warn2 'Reset requested: destroying volumes.'
         docker compose down -v 2>&1 | Out-Null
@@ -341,8 +361,8 @@ try {
         $adminPassword = $seed.password
         Write-Ok "Admin account: $adminEmail ($($seed.status))"
     } catch {
-        $adminEmail = 'admin@flowpilot.local'
-        $adminPassword = 'FlowPilot!Dev123'
+        $adminEmail = 'admin@servabo.local'
+        $adminPassword = 'Servabo!Dev123'
         Write-Ok "Admin default: $adminEmail"
     }
 } finally { Pop-Location }
@@ -375,7 +395,26 @@ if (-not (Wait-ForPort 'API' $ApiPort 90)) {
     if (Test-Path $apiLog) {
         Get-Content -LiteralPath $apiLog -Tail 40 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
     }
-    $tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
+    # Website session: the public website (website/) on port 4321; the app's /pricing, /terms and
+# /privacy and its sign-in footer link here in development.
+if ($Website) {
+    $websiteDir = Join-Path $RepoRoot 'website'
+    if (-not (Test-Path (Join-Path $websiteDir 'node_modules'))) {
+        Write-Host '    installing website dependencies (first run) ...'
+        Push-Location $websiteDir
+        try { npm install } finally { Pop-Location }
+    }
+    $websiteLog = Join-Path $LogDir 'website.log'
+    $websiteProc = Start-Process -FilePath 'cmd.exe' `
+        -ArgumentList @('/c', "npm run dev > ""$websiteLog"" 2>&1") `
+        -WorkingDirectory $websiteDir `
+        -WindowStyle Hidden -PassThru
+    $tracked['website'] = $websiteProc.Id
+    Write-Ok "Website starting -> $websiteLog"
+    Wait-ForPort 'Website' 4321 120 | Out-Null
+}
+
+$tracked | ConvertTo-Json | Set-Content -LiteralPath $PidFile
     exit 1
 }
 
@@ -403,10 +442,13 @@ Write-Step '8/8  Ready'
 
 Write-Host ''
 Write-Host '  ---------------------------------------------------------------' -ForegroundColor DarkGray
-Write-Host '   FlowPilot AI is running' -ForegroundColor Green
+Write-Host '   Servabo is running' -ForegroundColor Green
 Write-Host '  ---------------------------------------------------------------' -ForegroundColor DarkGray
 if (-not $NoFrontend) {
     Write-Host "   App          http://localhost:$FrontendPort" -ForegroundColor White
+}
+if ($Website) {
+    Write-Host '   Website      http://localhost:4321' -ForegroundColor White
 }
 Write-Host "   API docs     http://localhost:$ApiPort/docs" -ForegroundColor White
 Write-Host "   Health       http://localhost:$ApiPort/api/v1/health" -ForegroundColor White

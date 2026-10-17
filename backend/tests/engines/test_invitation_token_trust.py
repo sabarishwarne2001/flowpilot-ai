@@ -3,7 +3,7 @@
     pytest tests/engines/test_invitation_token_trust.py -q
 
 An invitation token proves that its holder reads the invited mailbox only when
-FlowPilot's relay delivered it. An organization with its own SMTP sends its
+Servabo's relay delivered it. An organization with its own SMTP sends its
 invitations through that server (HARDENING-T2:D22), so whoever runs it reads
 every accept link. With the token alone, that person could create a verified,
 signed-in account for any address they invited (the one-step sign-up, F-222),
@@ -12,7 +12,7 @@ marked verified; the preview also told them whether an address had an account.
 A single-sign-on login by the real owner would later attach to that account.
 
 Now the send records, before the token leaves, that it went through a server
-FlowPilot does not run; such a token opens no one-step sign-up, verifies
+Servabo does not run; such a token opens no one-step sign-up, verifies
 nothing, and the preview does not say whether the address has an account.
 """
 

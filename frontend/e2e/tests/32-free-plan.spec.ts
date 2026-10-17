@@ -4,7 +4,7 @@
  * document; one workspace; two seats. The screen where the allowance is spent says
  * where the organization stands; a refusal says why and what to do next.
  *
- * Tenant P ("FlowPilot Platform Ops") is the seeded Free organization. These tests
+ * Tenant P ("Servabo Platform Ops") is the seeded Free organization. These tests
  * only exercise refusals, so no run spends that organization's monthly allowance.
  */
 import fs from "node:fs";

@@ -227,6 +227,22 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         description="Advance dunning state for past-due subscriptions (ARCH-15).",
     ),
     ScheduledJob(
+        job_type="billing.plan_changes",
+        interval_seconds=900,
+        description=(
+            "Make at Dodo the downgrades scheduled for a renewal due within the hour, so the "
+            "renewal is billed at the new price (website and payments session, C6)."
+        ),
+    ),
+    ScheduledJob(
+        job_type="billing.hold_notices",
+        interval_seconds=3600,
+        description=(
+            "Remind and warn owners whose Dodo renewal is on hold before the grace window "
+            "closes, and tell them when it has (website and payments session, C1)."
+        ),
+    ),
+    ScheduledJob(
         job_type="billing.addon_grace_sweep",
         interval_seconds=900,
         description=(

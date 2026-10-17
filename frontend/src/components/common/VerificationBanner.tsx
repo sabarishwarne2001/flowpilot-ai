@@ -1,5 +1,5 @@
 /**
- * Unverified-account banner for FlowPilot AI.
+ * Unverified-account banner for Servabo.
  *
  * An unverified user can sign in and see their own identity, but every
  * tenant-scoped request answers 403 (ARCH-03 §B.4). Without this banner that

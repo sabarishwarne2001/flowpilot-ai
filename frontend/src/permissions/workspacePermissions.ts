@@ -1,5 +1,5 @@
 /**
- * Workspace-level authorization logic for the FlowPilot AI frontend.
+ * Workspace-level authorization logic for the Servabo frontend.
  *
  * A faithful mirror of app/core/workspace_permissions.py.
  *

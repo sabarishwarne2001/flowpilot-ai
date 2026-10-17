@@ -4,7 +4,7 @@ import { Compass, ArrowLeft } from "lucide-react";
 import { ROUTES } from "@/constants/routes";
 
 /**
- * 404 Fallback page view for FlowPilot AI client router.
+ * 404 Fallback page view for Servabo client router.
  *
  * Intercepts invalid route allocations, and redirects client sessions
  * back to the dashboard portal workspace safely.

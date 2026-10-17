@@ -271,6 +271,9 @@ export function unitFor(unit: string, quantity: number): string {
 }
 
 /** What happens past a plan's included amount, in words (ALLOW_AND_BILL, ALLOW_AND_WARN, REFUSE). */
+/** Website and payments session (C8): the words for a ceiling, the same on plan cards, usage and the website. */
+export const HARD_LIMIT_NOTE = "Hard monthly limit — add seats or upgrade for more";
+
 export function overageLabel(policy: string): string {
   switch (policy.toUpperCase()) {
     case "ALLOW_AND_BILL":
@@ -278,7 +281,8 @@ export function overageLabel(policy: string): string {
     case "ALLOW_AND_WARN":
       return "Beyond this, usage continues and you are warned";
     case "REFUSE":
-      return "Beyond this, requests are refused";
+      // Website and payments session (C8): with Dodo, every metered allowance is a hard ceiling.
+      return HARD_LIMIT_NOTE;
     default:
       return `Overage: ${policy.toLowerCase().replace(/_/g, " ")}`;
   }

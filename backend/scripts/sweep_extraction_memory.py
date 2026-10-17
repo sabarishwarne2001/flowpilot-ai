@@ -5,8 +5,8 @@
     python scripts/sweep_extraction_memory.py --apply    # commit
     python scripts/sweep_extraction_memory.py --apply --workspace <uuid>
 
-Dispatched by deploy/bin/flowpilot-sweep (`extraction_memory`) from
-deploy/cron.d/flowpilot-sweepers. What it does is in
+Dispatched by deploy/bin/servabo-sweep (`extraction_memory`) from
+deploy/cron.d/servabo-sweepers. What it does is in
 app/services/extraction_memory/sweep.py.
 """
 

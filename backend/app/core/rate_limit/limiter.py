@@ -41,7 +41,7 @@ def resolve_identity(request: Request) -> RateLimitIdentity:
         auth_header = request.headers.get("authorization")
         if auth_header and auth_header.startswith("Bearer "):
             token = auth_header[7:].strip()
-            if token.startswith(("fp_live_", "fp_test_")):
+            if token.startswith(("svb_live_", "svb_test_")):
                 parsed = parse_api_key_token(token)
                 if parsed is not None:
                     return RateLimitIdentity("kid", str(parsed.key_id))

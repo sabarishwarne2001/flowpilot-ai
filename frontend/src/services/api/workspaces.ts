@@ -1,5 +1,5 @@
 /**
- * Workspace API service for FlowPilot AI.
+ * Workspace API service for Servabo.
  *
  * Replaces the tenant portion of the legacy services/api/workspace.ts, which
  * called GET /workspace and PUT /workspace — endpoints deleted in ARCH-01

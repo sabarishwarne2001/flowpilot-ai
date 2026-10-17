@@ -62,7 +62,7 @@ _PLACEHOLDER_MARKERS = (
     "letmein", "dev-secret", "test-secret",
 )
 _WEAK_DATABASE_PASSWORDS = frozenset(
-    {"postgres", "password", "flowpilot", "changeme", "admin", "root", "secret", "123456", "12345678"}
+    {"postgres", "password", "servabo", "changeme", "admin", "root", "secret", "123456", "12345678"}
 )
 _LOCAL_HOSTS = frozenset({"localhost", "127.0.0.1", "0.0.0.0", "::1", "[::1]"})
 
@@ -100,7 +100,7 @@ def normalise_environment(raw: object) -> str:
 def _derive(jwt_secret: str, label: str) -> bytes:
     return hmac.new(
         jwt_secret.encode("utf-8"),
-        f"flowpilot/development-derived/{label}".encode("utf-8"),
+        f"servabo/development-derived/{label}".encode("utf-8"),
         hashlib.sha256,
     ).digest()
 
@@ -307,7 +307,19 @@ def _billing_problems(settings: "Settings", environment: str) -> list[str]:
         if not settings.STRIPE_LIVEMODE and publishable.startswith("pk_live_"):
             problems.append("STRIPE_PUBLISHABLE_KEY: is a live-mode key but STRIPE_LIVEMODE is false.")
 
-    if _text(settings.DODO_API_KEY) and not _text(settings.DODO_WEBHOOK_SECRET):
+    # Website and payments session (C2): Dodo Payments is the gateway customers pay through.
+    if gateway == "DODO" and not _text(settings.DODO_API_KEY):
+        problems.append(
+            "DODO_API_KEY: is not set although BILLING_GATEWAY is DODO. No one could subscribe. "
+            "Create a key in the Dodo Payments dashboard (Developer > API keys), in test mode "
+            "until you go live."
+        )
+    if gateway == "DODO" and settings.STRIPE_LIVEMODE:
+        problems.append(
+            "STRIPE_LIVEMODE: is true although BILLING_GATEWAY is DODO. Payments go through Dodo; "
+            "set STRIPE_LIVEMODE=false and use DODO_LIVEMODE for live or test payments."
+        )
+    if (gateway == "DODO" or _text(settings.DODO_API_KEY)) and not _text(settings.DODO_WEBHOOK_SECRET):
         problems.append(
             "DODO_WEBHOOK_SECRET: is not set although DODO_API_KEY is. Payments could never be "
             "confirmed, because unsigned events must be refused."
