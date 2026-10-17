@@ -98,6 +98,9 @@ NOT_SETTINGS: dict[str, tuple[str, str]] = {
     "ARCH40_CONTRACT": ("backend/alembic/versions/arch40_step3_contract_ai_settings.py", "ARCH40_CONTRACT"),
     # One-off and host commands
     "GATEWAY_PRICE_ID_DEVELOPER": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_DEVELOPER"),
+    # Website and payments session (C11): yearly products, read by the same seed.
+    "GATEWAY_PRICE_ID_DEVELOPER_YEARLY": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_DEVELOPER_YEARLY"),
+    "GATEWAY_PRICE_ID_BUSINESS_YEARLY": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_BUSINESS_YEARLY"),
     "GATEWAY_PRICE_ID_BUSINESS": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_BUSINESS"),
     "GATEWAY_PRICE_ID_ENTERPRISE": ("backend/scripts/seed_quota_tiers.py", "GATEWAY_PRICE_ID_ENTERPRISE"),
     "SEED_ADMIN_EMAIL": ("backend/scripts/seed_admin.py", "SEED_ADMIN_EMAIL"),
