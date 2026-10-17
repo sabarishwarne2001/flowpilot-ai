@@ -246,7 +246,19 @@ uploaded through the API all reach `COMPLETED`.
 ## 9. Production on a VPS (Docker Compose)
 
 Read this section once, top to bottom, before your first deploy. It covers one Linux
-server running `backend/docker-compose.prod.yml` (owner decision N-007).
+server running `backend/docker-compose.prod.yml` (owner decision N-007), with Dodo Payments as the
+payment gateway and merchant of record, and the public website (`website/`) next to the app.
+Rewritten in the website and payments session (2026-10-17): Dodo is now the default gateway
+(`BILLING_GATEWAY=DODO`); Stripe remains supported for an existing Stripe account.
+
+**The pieces, and where each lives.**
+
+| Piece | Where | Address (example) |
+|---|---|---|
+| The app (web, API, workers, database) | one server (Hetzner, decided), this section | `https://app.servabo.app` |
+| The website (marketing, pricing, legal) | Cloudflare Pages, or the same server (`docs/website/DEPLOY.md`) | `https://servabo.app` |
+| Customers' documents | Cloudflare R2, EU jurisdiction (decided) | — |
+| Payments, tax, receipts | Dodo Payments (merchant of record) | Dodo's checkout and customer portal |
 
 **What was checked, and how.**
 
@@ -277,7 +289,8 @@ export COMPOSE="docker compose -f docker-compose.prod.yml --env-file .env.produc
 | Node.js | 22+, on any machine | builds the web app (`frontend/dist`), which Caddy serves |
 | File storage | AWS S3, Cloudflare R2 or Backblaze B2 (recommended), or the optional MinIO service | one server disk is not durable storage for customers' documents |
 | Outgoing email | an SMTP provider (Postmark, SES, ...) | the app **refuses to start** without one: invitations, verification and password-reset emails depend on it |
-| Payments | Stripe **test** keys and/or Dodo **test** keys | stay in test mode until you decide to go live; never put live keys on a server you are still testing |
+| Payments | a Dodo Payments account in **Test Mode**: the API key and the webhook secret | Dodo is the seller of record: it charges, adds and files tax, and sends receipts. Stay in test mode until you decide to go live; never put live keys on a server you are still testing |
+| Website | Node.js 22+ and a Cloudflare account (or the app server's Caddy) | `docs/website/DEPLOY.md`; the app links to it (`WEBSITE_URL`) for pricing, terms, privacy and refunds |
 | An AI key | `GROQ_API_KEY` from https://console.groq.com/keys | the app **refuses to start** without it: documents are read and Ask AI answers on this key (the platform serves Groq's GPT-OSS models, N-054) |
 
 Only ports 80, 443/tcp and 443/udp are published (by Caddy). Postgres, Redis, MinIO and the
@@ -329,14 +342,20 @@ the credentials the app stores encrypted for customers (email, ERP and similar) 
 The app **refuses to start** and prints every problem at once if: a secret is missing, short,
 a known default or reused; `CORS_ORIGINS` is not an explicit `https://` address (no `*`, no
 localhost); the database password is weak; debug logging is on; uploads would go to the
-container's own disk; Redis, the mail server or the reranker token is missing; the Stripe or
-Dodo keys disagree with the payment mode; or staging is in live payment mode. A refusal is
+container's own disk; Redis, the mail server or the reranker token is missing; Dodo is the gateway
+(the default) without `DODO_API_KEY` or `DODO_WEBHOOK_SECRET`, or with `STRIPE_LIVEMODE=true`; the
+Stripe or Dodo keys disagree with the payment mode; or staging is in live payment mode. A refusal is
 the app protecting you: fix the line it names.
+
+Two addresses matter beyond the app's own: `FRONTEND_URL` (the app, for example
+`https://app.servabo.app`) and `WEBSITE_URL` (the website, for example `https://servabo.app`; the
+app's Pricing, Terms, Privacy and Refund links and the legal footer of emails point there). The web
+app is built with the same website address: `VITE_WEBSITE_URL=https://servabo.app npm run build`.
 
 **4. Build the web app and the images.**
 
 ```bash
-( cd /srv/servabo/frontend && npm ci && npm run build && node scripts/check-no-sourcemaps.mjs --dist )
+( cd /srv/servabo/frontend && npm ci && VITE_WEBSITE_URL=https://servabo.app npm run build && node scripts/check-no-sourcemaps.mjs --dist )
 $COMPOSE build      # about 10 GB and 15 to 30 minutes the first time (F-045) - not run here
 ```
 
@@ -386,10 +405,26 @@ curl -fsS https://app.example.com/api/v1/health/ready      # {"status":"ready"} 
 **8. Create the plans and the first administrator, once** *(not run here)*.
 
 Plans first. The plan names, limits and prices are defined in `backend/scripts/seed_quota_tiers.py`
-(Developer $49, Business $299 and Enterprise $799 per seat per month at the time of writing);
-**confirm them before launch (N-011)**. In your Stripe (or Dodo) dashboard, in **test mode**,
-create the three products and prices, paste their ids into `GATEWAY_PRICE_ID_DEVELOPER`,
-`GATEWAY_PRICE_ID_BUSINESS` and `GATEWAY_PRICE_ID_ENTERPRISE` in `.env.production`, then:
+(Developer $49, Business $299 and Enterprise $799 per seat per month; Developer $490 and Business
+$2,990 per seat per year; add-ons: custom domains $199 and warehouse sync $300 a month);
+**confirm them before launch (N-011)**. Each is a product in your Dodo account. In **test mode**,
+let the setup script create them and print their ids:
+
+```bash
+$COMPOSE exec -T web python scripts/dodo_setup.py --create-test-products
+```
+
+Paste the seven lines it prints (`GATEWAY_PRICE_ID_DEVELOPER`, `_BUSINESS`, `_ENTERPRISE`,
+`_DEVELOPER_YEARLY`, `_BUSINESS_YEARLY`, `DODO_ADDON_PRODUCT_CUSTOM_DOMAIN`,
+`DODO_ADDON_PRODUCT_WAREHOUSE_SYNC`) into `.env.production`, run `$COMPOSE up -d`, then check them:
+
+```bash
+$COMPOSE exec -T web python scripts/dodo_setup.py      # every line must say OK
+```
+
+(If you created products by hand in Dodo's dashboard instead: each plan product's price is the price
+of ONE seat, recurring every month or year, tax not included, tax category SaaS; the script names
+anything that differs. It works on a test account only and refuses live mode.) Then publish the plans:
 
 ```bash
 $COMPOSE up -d      # hands the ids to the containers
@@ -397,7 +432,8 @@ $COMPOSE exec -T web python scripts/seed_price_book.py --version auto
 $COMPOSE exec -T web python scripts/seed_quota_tiers.py
 ```
 
-The second command refuses a paid plan that has no price id. Do not add `--allow-unpriced` in
+The second command refuses a paid plan that has no price id. It also publishes the yearly prices when
+both `_YEARLY` ids are set; without them the plan cards simply offer monthly billing. Do not add `--allow-unpriced` in
 production: it publishes a plan nobody can buy, and a published plan version cannot be
 changed.
 
@@ -416,17 +452,29 @@ password. (The compose file deliberately does not pass these two to the running 
 
 **9. Point billing at your server (test mode)** *(not run here)*.
 
-In Stripe (Developers, Webhooks) add the endpoint `https://app.example.com/api/v1/billing/webhooks/stripe`
-for the events `checkout.session.completed`, `customer.subscription.*`, `invoice.*`,
-`payment_intent.payment_failed`, `charge.refunded` and `charge.refund.updated` (the last two record
-refunds on the customer's invoice, N-069; `invoice.*` includes `invoice.created`, which closes each
-billing period: Servabo adds the period's overage to the renewal before Stripe charges it, section
-9.9), and copy its signing secret (`whsec_...`) into `STRIPE_WEBHOOK_SECRETS` (several secrets may be
-listed, separated by commas, while you rotate one). For Dodo the endpoint is
-`https://app.example.com/api/v1/billing/webhooks/dodo` and the secret goes in
-`DODO_WEBHOOK_SECRET`. Use the lowercase gateway name. After editing `.env.production`, run
-`$COMPOSE up -d`. The app refuses unsigned events, and refuses to start when a payment API key
-has no webhook secret.
+In Dodo's dashboard (Test Mode on): **Developer → Webhooks → Add endpoint**, URL
+`https://app.example.com/api/v1/billing/webhooks/dodo`, and subscribe to the `subscription.*`,
+`payment.*`, `refund.*` and `dispute.*` events. Copy the endpoint's signing secret (`whsec_...`) into
+`DODO_WEBHOOK_SECRET` and the test API key into `DODO_API_KEY`, keep `DODO_LIVEMODE=false`, then
+`$COMPOSE up -d`. The app refuses unsigned events and refuses to start when the key has no secret.
+`docs/billing/DODO.md` lists every event and what Servabo does with it.
+
+Then buy a plan yourself with Dodo's test card (Dodo's dashboard shows the test card numbers): the
+checkout page is Dodo's; back in Servabo the page says "Confirming your payment…" and then "Payment
+confirmed" with the plan. If it says the confirmation is late, the webhook is not arriving: check the
+endpoint URL and the secret, then `$COMPOSE logs worker-billing web`.
+
+*Stripe instead (an existing Stripe account only):* set `BILLING_GATEWAY=STRIPE`, add the endpoint
+`https://app.example.com/api/v1/billing/webhooks/stripe` for `checkout.session.completed`,
+`customer.subscription.*`, `invoice.*`, `payment_intent.payment_failed`, `charge.refunded` and
+`charge.refund.updated`, and put its secret in `STRIPE_WEBHOOK_SECRETS` (several, comma-separated,
+while you rotate one). Stripe products and prices go in the same `GATEWAY_PRICE_ID_*` settings.
+
+**9b. Put the website online.** Follow `docs/website/DEPLOY.md` (Cloudflare Pages, about fifteen
+minutes). The website and the app link to each other: the website's "Sign in" goes to the app
+(`PUBLIC_APP_URL`), and the app's pricing and legal links go to the website (`WEBSITE_URL`). Dodo
+reviews the website (pricing, terms, refund policy, contact) when it verifies your account, so it must
+be online before you apply for live payments.
 
 **10. Check it from outside** *(not run here)*.
 
@@ -584,7 +632,10 @@ bucket (versioning, above).
 Two kinds of recurring work:
 
 1. **Inside the stack.** `worker-scheduler` starts usage rollups, billing dunning, certificate
-   renewal, warehouse pushes and partner revenue share; the other workers run the queued jobs.
+   renewal, warehouse pushes and partner revenue share; on Dodo also `billing.plan_changes` (every 15
+   minutes: makes at Dodo the downgrades scheduled for a renewal due within the hour) and
+   `billing.hold_notices` (hourly: reminds owners whose renewal is on hold, warns them two days
+   before read-only, and tells them when it happens); the other workers run the queued jobs.
    `$COMPOSE up -d` starts them. **Never remove `worker-scheduler`**: nothing is billed without it.
 2. **On the server, by cron.** The nightly sweeps (data retention and erasure, obligation
    reminders, ERP retries, invitation and identity clean-up, and more) and the backups. The app does
@@ -678,12 +729,22 @@ prints nothing and `0` when the site is up.
 ### 9.8 Refunds, and a customer charged twice
 
 **Refunding a payment.** Refunds are made in the payment dashboard, never in Servabo (a refund is a
-money decision a person takes, usually after talking to the customer). In Stripe: Payments, open the
-payment, Refund, choose the amount (all or part) and a reason. Make sure the Stripe webhook includes
-`charge.refunded` and `charge.refund.updated` (section 9.2 step 9): Servabo then records the refund on
-the customer's invoice ("Refunded" or "Partially refunded"), tells the organization's owners and Billing
-members by email, and shows it in Platform admin, RevOps ("Refunded in the last 30 days"). Dodo Payments
-is the merchant of record and handles refunds in its own dashboard.
+money decision a person takes, usually after talking to the customer). In Dodo: **Payments**, open the
+payment, **Refund**, the amount (all or part) and a reason. Servabo receives `refund.succeeded`,
+records the refund on the customer's invoice ("Refunded" or "Partially refunded · $X"), tells the
+organization's owners and Billing members by email, and shows it in Platform admin, RevOps ("Refunded
+in the last 30 days"). The website's refund policy (`/refunds`) says what customers are promised: a
+14-day money-back guarantee on the first payment of a new subscription. (Stripe: Payments, open the
+payment, Refund; the webhook must include `charge.refunded` and `charge.refund.updated`.)
+
+**A disputed payment (chargeback; alert "Payment disputed").** The customer asked their bank to take
+the money back. Dodo handles the dispute with the bank as merchant of record; answer Dodo's emails
+with what they ask for (usually the invoice and proof the customer used the product). Servabo records
+the dispute, alerts you and tells the organization; nothing changes for the customer while it is open.
+If the dispute is **lost** (alert "Payment reversed"), the bank has taken the money back and the
+organization becomes read-only with the reason "payment reversed by your bank" until a later payment
+succeeds. If the customer pays you another way, lift it: Platform admin, RevOps, **Disputes**, the
+row, **Lift**, with a reason (recorded in the audit log). Dodo charges $30 per chargeback.
 
 **A customer charged twice (alert: "Customer charged twice").** Servabo refuses a new checkout while a
 paid subscription is live, but a checkout finished in a browser tab opened *before* the first purchase can
@@ -691,13 +752,13 @@ still create a second subscription at the gateway. Servabo keeps the first one (
 the alert), does not record the second, and emails you at once. The customer is paying for both until you
 act. Within the day:
 
-1. In the Stripe Dashboard open Customers and search for the customer id in the alert. You will see two
-   active subscriptions.
-2. **Keep the recorded one.** Open the *other* one (the id the alert says is not recorded): Actions,
-   Cancel subscription, **Immediately**.
-3. On that subscription's invoice, open the payment and **Refund** it in full (reason: duplicate).
+1. In Dodo's dashboard open **Subscriptions** and search for the subscription id the alert says is
+   *not* recorded (in Stripe: Customers, the customer id). You will see two active subscriptions.
+2. **Keep the recorded one.** Cancel the *other* one immediately.
+3. Open that subscription's payment and **Refund** it in full (reason: duplicate).
 4. If the customer meant to change plan with that second purchase, change the plan of the *recorded*
-   subscription in the billing portal (N-050) instead. Never cancel the recorded one to keep the
+   subscription instead: on Dodo the owner does it on Servabo's Billing page (Change plan); on Stripe,
+   in the billing portal (N-050). Never cancel the recorded one to keep the
    duplicate: Servabo would then show the organization on Free until the duplicate's next event.
 5. Email the customer: "You were charged twice for your Servabo subscription because a second
    checkout completed. We cancelled the duplicate and refunded {amount}; it reaches your card in 5 to
@@ -707,7 +768,22 @@ act. Within the day:
 
 ### 9.9 Billing periods, overage and replaying a payment event
 
-**What happens at the end of each billing period (nothing to do).** Stripe charges seats in advance:
+**What happens at the end of each billing period on Dodo (nothing to do).** Dodo charges the next
+period's seats in advance at each renewal; Servabo records the payment as an invoice issued by Dodo
+(the customer downloads Dodo's tax invoice from Billing, Invoices) and writes the statement for the
+month that ended. Dodo cannot take usage lines, so on Dodo the plans' allowances are **hard limits**:
+work stops at the limit and the customer adds seats or upgrades (the plan cards and the usage page say
+so); nothing is billed as overage. A downgrade the owner scheduled is made at Dodo an hour before the
+renewal, so the renewal is charged at the new price. An upgrade is charged at once for the days left,
+at the amount Dodo quoted and the owner confirmed.
+
+**A renewal declined on Dodo.** The subscription is "on hold" and the organization keeps full access
+for 13 days (`BILLING_ON_HOLD_GRACE_DAYS`) while Dodo retries the card. The owner is told at once,
+reminded a week before the end, warned two days before, and told when the organization becomes
+read-only. Updating the card in Dodo's portal (Billing, "Update payment method") charges the renewal
+and restores everything. Nothing for you to do unless the customer writes in.
+
+**Stripe (an existing Stripe account only).** Stripe charges seats in advance:
 at each period's end it opens the renewal invoice for the next month and charges it about an hour
 later. When Servabo receives that invoice (`invoice.created`), it writes the customer's statement for
 the month that just ended (Billing, Invoices: the seats, what the plan included for that many seats,
@@ -715,9 +791,9 @@ and any overage priced from the price book) and adds each overage line to the re
 pays it with the next month's seats. If that event arrives after Stripe has already charged the
 renewal, the overage goes on the following invoice instead; the statement says which. A subscription
 that ends (cancelled at period end) gets no renewal, so its last month's overage is not charged
-(N-071). Dodo cannot take usage lines yet: on Dodo, statements are written but overage is not billed.
+(N-071).
 
-**If a statement is missing.** Every hour the worker closes any period whose renewal never reached
+**If a statement is missing (Stripe).** Every hour the worker closes any period whose renewal never reached
 Servabo (more than two hours after it ended); its overage goes on the next invoice and the worker log
 shows `billing.assemble_invoice_backstop`. To close the period of one Stripe invoice by hand (the
 invoice id starts with `in_`):
@@ -731,10 +807,12 @@ with SessionLocal() as db, db.begin(): job_service.enqueue(db, job_type='billing
 List those events with their ids and errors:
 
 ```bash
-$COMPOSE exec -T db psql -U servabo -d servabo -c "SELECT id, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
+$COMPOSE exec -T db psql -U servabo -d servabo -c "SELECT id, gateway, event_type, last_error FROM stripe_inbound_events WHERE status = 'DEAD' ORDER BY processed_at DESC LIMIT 20"
 ```
 
-Once the cause is fixed, re-apply one by its id; a replay never charges anything twice:
+(The table keeps its historical name; it holds Dodo's events too, `gateway = 'DODO'`.) Once the cause is
+fixed, re-apply one by its id; a replay never charges anything twice, and on Dodo it re-reads the
+subscription or payment from Dodo rather than trusting the stored event:
 
 ```bash
 $COMPOSE exec api python -c "from app.db.session import SessionLocal; from app.services import job_service
