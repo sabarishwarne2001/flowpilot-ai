@@ -83,7 +83,11 @@ def test_a_backup_directory_made_before_the_rename_is_still_found(tmp_path: Path
     assert legacy_names.local_directory(tmp_path, ".servabo_backups") == tmp_path / ".servabo_backups"
 
 
-def test_an_env_file_that_still_names_flowpilot_shows_servabo(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+def test_an_env_file_that_still_names_flowpilot_shows_servabo(tmp_path: Path, caplog: pytest.LogCaptureFixture,
+                                                               monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(legacy_names, "_warned", False)  # the app's own start-up, earlier in the run, warned once
+    for name in ("PROJECT_NAME", "API_TITLE", "PLATFORM_SMTP_FROM_NAME"):
+        monkeypatch.delenv(name, raising=False)  # an earlier test may have loaded backend/.env into the environment
     dotenv = tmp_path / ".env"
     dotenv.write_text("PROJECT_NAME=FlowPilot AI\nAPI_TITLE=FlowPilot AI Core API\nPLATFORM_SMTP_FROM_NAME=FlowPilot AI\n")
     s = Settings(_env_file=str(dotenv))
