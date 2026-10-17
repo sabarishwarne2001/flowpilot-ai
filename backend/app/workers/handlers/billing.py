@@ -443,6 +443,25 @@ def handle_billing_plan_changes(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 # ============================================================================
+# billing.hold_notices (website and payments session, C1)
+# ============================================================================
+
+
+def handle_billing_hold_notices(payload: dict[str, Any]) -> dict[str, Any]:
+    """Remind, warn and tell owners of Dodo holds by the clock (`hold_notice_service.send_due`)."""
+    from app.services.billing import hold_notice_service
+
+    limit = _int(payload, "limit", 500)
+    with SessionLocal() as db:
+        with system_principal(job_name="jobs.billing.hold_notices"):
+            with db.begin():
+                sent = hold_notice_service.send_due(db, limit=limit)
+    outcome = {"sent": len(sent), "detail": [{k: str(v) for k, v in s.items()} for s in sent[:50]]}
+    logger.info("billing.hold_notices_complete", extra=outcome)
+    return outcome
+
+
+# ============================================================================
 # billing.addon_grace_sweep (ARCH-30 Tranche 2, D-6)
 # ============================================================================
 

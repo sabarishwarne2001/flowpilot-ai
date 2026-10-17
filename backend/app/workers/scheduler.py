@@ -235,6 +235,14 @@ DEFAULT_SCHEDULE: tuple[ScheduledJob, ...] = (
         ),
     ),
     ScheduledJob(
+        job_type="billing.hold_notices",
+        interval_seconds=3600,
+        description=(
+            "Remind and warn owners whose Dodo renewal is on hold before the grace window "
+            "closes, and tell them when it has (website and payments session, C1)."
+        ),
+    ),
+    ScheduledJob(
         job_type="billing.addon_grace_sweep",
         interval_seconds=900,
         description=(

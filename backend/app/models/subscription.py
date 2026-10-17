@@ -279,6 +279,10 @@ class Subscription(Base, UUIDMixin, TimestampMixin):
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
 
+    # ---- Website and payments session (C1): the notices a Dodo hold has had
+    hold_notice_step: Mapped[Optional[str]] = mapped_column(String(16), nullable=True)
+    hold_notice_grace_ends_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
     # ---- ARCH-30 Tranche 2 (D-11): end of full access after a failed renewal
     grace_ends_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
