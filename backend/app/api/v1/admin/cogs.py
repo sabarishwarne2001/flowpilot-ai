@@ -46,6 +46,7 @@ from app.schemas.cogs import (
     ConsolidatedReconciliationResponse,
     MarginFiguresResponse,
     MarginOrder,
+    PaymentFiguresResponse,
     PlatformMarginSummaryResponse,
     ProviderCostEntry,
     ProviderCostResponse,
@@ -204,6 +205,13 @@ def get_margin_summary(
         currency=summary.currency,
         organization_count=summary.organization_count,
         figures=_figures(summary.figures),
+        payments=PaymentFiguresResponse(
+            count=summary.payments.count,
+            received_micros=summary.payments.received_micros,
+            fees_micros=summary.payments.fees_micros,
+            refunded_micros=summary.payments.refunded_micros,
+            net_micros=summary.payments.net_micros,
+        ),
     )
 
 

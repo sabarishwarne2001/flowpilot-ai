@@ -28,6 +28,14 @@ export interface PlatformMarginSummary {
   readonly currency: string;
   readonly organization_count: number;
   readonly figures: MarginFigures;
+  /** Website and payments session (C12): payments received and Dodo Payments' fees on them. */
+  readonly payments?: {
+    readonly count: number;
+    readonly received_micros: number;
+    readonly fees_micros: number;
+    readonly refunded_micros: number;
+    readonly net_micros: number;
+  };
 }
 
 export interface TenantEconomicsEntry {

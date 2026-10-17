@@ -615,6 +615,31 @@ export const AdminMarginsHub: React.FC = () => {
               )} of revenue · $0.00 provider cost · ${formatNumber(figures.zero_byok_event_count)} events`}
             />
           </section>
+          {/* Website and payments session (C12): what the payment provider kept. */}
+          {summary.data?.payments ? (
+            <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-testid="margin-payments">
+              <Stat
+                label="Payments received"
+                value={formatMicros(summary.data.payments.received_micros)}
+                caption={`${formatNumber(summary.data.payments.count)} payments through Dodo Payments`}
+              />
+              <Stat
+                label="Payment fees"
+                value={formatMicros(summary.data.payments.fees_micros)}
+                caption="4% + 40¢, +1.5% international, +0.5% subscription"
+              />
+              <Stat
+                label="Refunded"
+                value={formatMicros(summary.data.payments.refunded_micros)}
+                caption="Given back on those payments"
+              />
+              <Stat
+                label="Net after fees"
+                value={formatMicros(summary.data.payments.net_micros)}
+                caption="Received, less fees and refunds"
+              />
+            </section>
+          ) : null}
         </>
       ) : null}
 
