@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Start (or restart) what the browser tests need besides the web app:
-# the Servabo API, the background worker and the local mail catcher.
+# the Servabo API, the background worker, the local mail catcher and, with
+# E2E_GATEWAY=dodo (the default), the stand-in Dodo Payments the API bills through.
 #
 #   frontend/e2e/scripts/start-stack.sh          # start / restart all three
 #   frontend/e2e/scripts/start-stack.sh stop     # stop them
@@ -43,6 +44,7 @@ stop_all() {
   stop_one smtp
   stop_one llm
   stop_one dns
+  stop_one dodo
 }
 
 if [[ "${1:-}" == "stop" ]]; then
@@ -91,6 +93,30 @@ export E2E_DNS_RECORDS="${E2E_DNS_RECORDS:-$LOG_DIR/dns-records.json}"
 nohup "$PY" -m scripts.e2e_dns serve --port "$DNS_PORT" --records "$E2E_DNS_RECORDS" >"$LOG_DIR/dns.log" 2>&1 &
 echo $! >"$RUN_DIR/dns.pid"
 export DNS_RESOLVERS="127.0.0.1:$DNS_PORT"
+
+# Website and payments session (C1): the journeys bill through Dodo by default, the production
+# gateway. A stand-in Dodo (backend/tests/fakes/fake_dodo.py) serves its API, its checkout page and
+# its customer portal on E2E_DODO_PORT, and sends signed webhooks to the API like Dodo does.
+# E2E_GATEWAY=stripe keeps the Stripe journeys (scripts/e2e_stand_in.py plays Stripe's side).
+E2E_GATEWAY="$(echo "${E2E_GATEWAY:-dodo}" | tr '[:upper:]' '[:lower:]')"
+export E2E_GATEWAY
+if [[ "$E2E_GATEWAY" == "dodo" ]]; then
+  DODO_PORT="${E2E_DODO_PORT:-8790}"
+  if port_busy "$DODO_PORT"; then
+    echo "port $DODO_PORT is already in use by a process this script did not start; stop it first" >&2
+    exit 1
+  fi
+  export E2E_DODO_URL="http://127.0.0.1:$DODO_PORT"
+  nohup "$PY" -m tests.fakes.fake_dodo --port "$DODO_PORT" \
+    --webhook-url "http://127.0.0.1:$API_PORT/api/v1/billing/webhooks/dodo" >"$LOG_DIR/dodo.log" 2>&1 &
+  echo $! >"$RUN_DIR/dodo.pid"
+  export BILLING_GATEWAY=DODO DODO_API_BASE="$E2E_DODO_URL" DODO_LIVEMODE=false
+  export DODO_API_KEY="${E2E_DODO_API_KEY:-e2e_dodo_test_key}"
+  DODO_WEBHOOK_SECRET="$("$PY" -c 'from tests.fakes.fake_dodo import DEFAULT_SECRET; print(DEFAULT_SECRET)')"
+  export DODO_WEBHOOK_SECRET
+else
+  export BILLING_GATEWAY=STRIPE
+fi
 
 nohup "$PY" -m uvicorn app.main:app --host 127.0.0.1 --port "$API_PORT" >"$LOG_DIR/api.log" 2>&1 &
 echo $! >"$RUN_DIR/api.pid"

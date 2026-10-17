@@ -6,9 +6,11 @@
  * their role allows and is stopped politely (and by the server) where it does not. One member is
  * removed and loses access at once.
  *
- * Stood in: the payment gateway's side of the seat change (`backend/scripts/e2e_stand_in.py` sets
- * the quantity as Stripe would and Servabo records it through its reconcile code); the page then
- * shows Servabo's own answer.
+ * On Dodo (the default) the seat change is made for real at the stand-in Dodo: its change-plan
+ * preview prices it, Servabo sends the new quantity, and the prorated charge's webhook becomes an
+ * invoice. On Stripe (E2E_GATEWAY=stripe) the gateway's side is stood in
+ * (`backend/scripts/e2e_stand_in.py` sets the quantity as Stripe would and Servabo records it
+ * through its reconcile code); the page then shows Servabo's own answer.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -18,7 +20,7 @@ import type { Page } from "@playwright/test";
 import { signUpVerified, tokenOf } from "../support/accounts";
 import { test, expect, expectHealthyPage } from "../support/fixtures";
 import { api, apiLogin, type ApiSession } from "../support/api";
-import { API_BASE, runId } from "../support/env";
+import { API_BASE, GATEWAY, runId } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
 import { invoicePdf, newCustomer, signInAs, standIn, uploadInBrowser, type Customer } from "../support/journey";
 
@@ -63,6 +65,7 @@ test.describe("Journey: a Business team", () => {
     await page.route(/\/billing\/seats$/, async (route) => {
       if (route.request().method() !== "PUT") return route.continue();
       bought.body = route.request().postDataJSON() as { seats?: number; confirmed_unit_price_micros?: number };
+      if (GATEWAY === "dodo") return route.continue();  // made at the stand-in Dodo
       standIn("seats", customer.orgSlug, "--seats", String(bought.body.seats));
       const state = await route.fetch({ url: route.request().url().replace(/\/seats$/, "/subscription"), method: "GET" });
       await route.fulfill({ response: state });
@@ -79,6 +82,14 @@ test.describe("Journey: a Business team", () => {
     await expect.poll(() => bought.body?.seats).toBe(4);
     expect(bought.body?.confirmed_unit_price_micros).toBe(299_000_000);
     await expect(seats).toContainText("4", { timeout: 15_000 });
+    if (GATEWAY === "dodo") {
+      // Dodo charged the three seats for the rest of the period: that payment is invoiced too.
+      await expect.poll(async () => {
+        const listed = await api<{ invoices?: unknown[] }>(customer.session, "GET",
+          `/organizations/${customer.orgId}/invoices`);
+        return (listed.body.invoices ?? []).length;
+      }, { timeout: 60_000 }).toBe(2);
+    }
 
     // Three people invited from the members page; each accepts by email.
     const admin = await inviteFromMembersPage(page, customer, "team-admin", "Admin", "Admin");

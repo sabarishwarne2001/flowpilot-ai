@@ -11,7 +11,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 import { api, listWorkItems, loginAs, resolveWorkspaceId, uploadFile } from "./support/api";
-import { API_BASE, BACKEND_DIR, STATE_FILE, TENANTS, USERS, type TenantKey, type UserKey } from "./support/env";
+import { API_BASE, BACKEND_DIR, GATEWAY, STATE_FILE, TENANTS, USERS, type TenantKey, type UserKey } from "./support/env";
 import { SAMPLE, samplePath, writeSampleDocuments, type SampleName } from "./support/sample-docs";
 
 const UPLOADS: Array<{ tenant: TenantKey; as: UserKey; files: SampleName[] }> = [
@@ -162,6 +162,12 @@ async function seedDocuments(): Promise<Record<string, unknown>> {
 export default async function globalSetup(): Promise<void> {
   await waitForApi();
   const seed = runSeed();
+  if (GATEWAY === "dodo") {
+    // The plans' products at the stand-in Dodo, under the product ids the seed configured.
+    execFileSync(pythonExecutable(), ["scripts/e2e_stand_in.py", "dodo-catalogue", "--gateway", "dodo"], {
+      cwd: BACKEND_DIR, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], timeout: 60_000,
+    });
+  }
   const documents = await seedDocuments();
   fs.mkdirSync(path.dirname(STATE_FILE), { recursive: true });
   fs.writeFileSync(STATE_FILE, JSON.stringify({ seed, documents }, null, 2));

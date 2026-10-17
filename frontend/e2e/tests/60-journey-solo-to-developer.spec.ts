@@ -6,20 +6,45 @@
  * upgrades to Developer, creates an API key, uploads through the API with it, and Servabo sends
  * the webhook for that document.
  *
- * Stood in: Stripe's hosted checkout page (the request Servabo makes is checked, the payment is
- * then confirmed by `backend/scripts/e2e_stand_in.py` through Servabo's own reconcile code), and
- * the customer's webhook receiver: the sandbox cannot host a public HTTPS endpoint, so the journey
+ * Stood in: the gateway's hosted checkout page. On Dodo (the default) it is the stand-in Dodo's
+ * page: the owner pays there, comes back to Servabo's return page, which waits for the payment's
+ * webhook and then names the plan (C13). On Stripe (E2E_GATEWAY=stripe) the request Servabo makes
+ * is checked and the payment is confirmed by `backend/scripts/e2e_stand_in.py` through Servabo's
+ * own reconcile code. Also stood in: the customer's webhook receiver: the sandbox cannot host a public HTTPS endpoint, so the journey
  * proves Servabo sent the signed delivery for the uploaded document (the receiving end, with its
  * signature check and retries, is proven live in `backend/tests/engines/test_webhooks_live.py`).
  */
 import fs from "node:fs";
 import path from "node:path";
 
+import type { Page } from "@playwright/test";
+
 import { test, expect, expectHealthyPage } from "../support/fixtures";
 import { api, apiLogin } from "../support/api";
-import { API_BASE, PASSWORD, runId } from "../support/env";
+import { API_BASE, DODO_ORIGIN, GATEWAY, PASSWORD, runId } from "../support/env";
 import { linkFrom, waitForMail } from "../support/mail";
 import { documents, invoicePdf, standIn, uploadInBrowser, type Customer } from "../support/journey";
+
+/** E2E_GATEWAY=stripe: Stripe's checkout page stands in, and the stand-in confirms the payment. */
+async function upgradeOnStripe(page: Page, customer: Customer): Promise<void> {
+  let checkout: Record<string, unknown> | null = null;
+  await page.route(/\/billing\/plans/, async (route) => {
+    const response = await route.fetch();
+    await route.fulfill({ response, json: { ...(await response.json()), checkout_available: true } });
+  });
+  await page.route(/\/billing\/checkout-session/, async (route) => {
+    checkout = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({ json: { url: new URL("/__checkout__", page.url()).toString(), kind: "checkout" } });
+  });
+  await page.route(/__checkout__/, (route) => route.fulfill({ contentType: "text/html", body: "<h1>Checkout</h1>" }));
+  await page.getByTestId("plan-cta-developer").click();
+  await page.getByRole("button", { name: "Continue to payment" }).click();
+  await expect(page).toHaveURL(/__checkout__/);
+  expect(checkout).toMatchObject({ quota_tier_key: "developer", seats: 1 });
+  standIn("subscribe", customer.orgSlug, "--plan", "developer", "--seats", "1");  // paid at the gateway
+  await page.goto(customer.org("billing"));
+  await expect(page.locator("main")).toContainText(/Developer/);
+}
 
 test.describe("Journey: a solo user upgrades to Developer and uses the API", () => {
   test.setTimeout(360_000);
@@ -74,23 +99,22 @@ test.describe("Journey: a solo user upgrades to Developer and uses the API", () 
     await expect(page).toHaveURL(new RegExp(`${customer.org("billing")}$`));
 
     // Upgrade to Developer: Servabo opens the gateway's checkout for one seat of Developer.
-    let checkout: Record<string, unknown> | null = null;
-    await page.route(/\/billing\/plans/, async (route) => {
-      const response = await route.fetch();
-      await route.fulfill({ response, json: { ...(await response.json()), checkout_available: true } });
-    });
-    await page.route(/\/billing\/checkout-session/, async (route) => {
-      checkout = route.request().postDataJSON() as Record<string, unknown>;
-      await route.fulfill({ json: { url: new URL("/__checkout__", page.url()).toString(), kind: "checkout" } });
-    });
-    await page.route(/__checkout__/, (route) => route.fulfill({ contentType: "text/html", body: "<h1>Checkout</h1>" }));
-    await page.getByTestId("plan-cta-developer").click();
-    await page.getByRole("button", { name: "Continue to payment" }).click();
-    await expect(page).toHaveURL(/__checkout__/);
-    expect(checkout).toMatchObject({ quota_tier_key: "developer", seats: 1 });
-    standIn("subscribe", customer.orgSlug, "--plan", "developer", "--seats", "1");  // paid at the gateway
-    await page.goto(customer.org("billing"));
-    await expect(page.locator("main")).toContainText(/Developer/);
+    if (GATEWAY === "dodo") {
+      await page.getByTestId("plan-cta-developer").click();
+      await page.getByRole("button", { name: "Continue to payment" }).click();
+      await expect(page).toHaveURL(new RegExp(`^${DODO_ORIGIN.replace(/\./g, "\\.")}/checkout/`), { timeout: 20_000 });
+      await expect(page.locator("body")).toContainText("Developer × 1: USD 49.00 per month");
+      await page.getByRole("button", { name: "Pay", exact: true }).click();
+      // Back in Servabo: confirmed once Dodo's webhook has been reconciled, then the plan is named.
+      const returned = page.getByTestId("checkout-return");
+      await expect(returned).toBeVisible({ timeout: 20_000 });
+      await expect(returned).toContainText("Payment confirmed", { timeout: 60_000 });
+      await expect(page.getByTestId("checkout-confirmed-plan")).toContainText(/developer plan with 1 seat/i);
+      await returned.getByRole("link", { name: "Back to billing" }).click();
+      await expect(page.locator("main")).toContainText(/Developer/);
+    } else {
+      await upgradeOnStripe(page, customer);
+    }
 
     // A webhook endpoint for finished documents, and an API key, both in the browser.
     await page.goto(customer.org("webhooks"));

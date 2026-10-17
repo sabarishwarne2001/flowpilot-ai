@@ -24,7 +24,8 @@ module reads (docs/billing/DODO.md lists them and where each comes from):
     GET   /products         POST /products   GET /products/{id}       for scripts/dodo_setup.py
 
 and plays the customer's side as Dodo would: a checkout page with a Pay button (`GET /checkout/{id}`),
-renewals that succeed or fail, the card fixed in the portal, cancellations, refunds and disputes.
+renewals that succeed or fail, the card fixed in the portal (`GET /portal/{customer}`: update the card,
+cancel), cancellations, refunds and disputes.
 Each one changes the stand-in's state and sends the events Dodo sends, signed as Standard Webhooks
 (`webhook-id`, `webhook-timestamp`, `webhook-signature: v1,<base64 HMAC-SHA256>`), either to a
 webhook URL or into `outbox` for a test to deliver through its own client. The control operations
@@ -388,6 +389,22 @@ class FakeDodo:
             joiner = "&" if "?" in target else "?"
             location = f"{target}{joiner}{urlencode({'subscription_id': sub['subscription_id'], 'status': status})}"
             return 303, location, b""
+        if seg[0] == "portal" and len(seg) == 2 and method == "GET":
+            customer = self.customers.get(seg[1])
+            if customer is None:
+                raise LookupError(seg[1])
+            mine = [s for s in self.subscriptions.values() if s["customer_id"] == customer["customer_id"]]
+            return 200, "text/html; charset=utf-8", _portal_page(customer, mine, (query.get("done") or [""])[0]).encode()
+        if seg[0] == "portal" and len(seg) == 3 and method == "POST" and seg[2] in ("card", "cancel"):
+            customer = self.customers.get(seg[1])
+            if customer is None:
+                raise LookupError(seg[1])
+            for sub in [s for s in self.subscriptions.values() if s["customer_id"] == customer["customer_id"]]:
+                if seg[2] == "card" and sub["status"] == "on_hold":
+                    self.fix_card(sub["subscription_id"])
+                elif seg[2] == "cancel" and sub["status"] == "active" and not sub["cancel_at_next_billing_date"]:
+                    self.cancel(sub["subscription_id"], at_period_end=True)
+            return 303, f"/portal/{customer['customer_id']}?done={seg[2]}", b""
         if seg[0] == "subscriptions" and len(seg) >= 2:
             sub = self.subscriptions.get(seg[1])
             if sub is None:
@@ -506,6 +523,11 @@ class FakeDodo:
 
     def _control(self, operation: str, body: dict[str, Any]) -> dict[str, Any]:
         """The customer's and Dodo's actions, for a script in another process."""
+        if operation == "checkout":
+            # As POST /checkouts, for a script that has no checkout of Servabo's to pay.
+            return {"session_id": self.checkout(product_id=body["product_id"], quantity=int(body.get("quantity", 1)),
+                                                email=body.get("email", "owner@example.com"),
+                                                metadata=body.get("metadata") or {})}
         if operation == "pay":
             return self._subscription_view(self.pay(body["checkout_id"], succeed=body.get("succeed", True)))
         if operation == "renew":
@@ -635,6 +657,23 @@ def _checkout_page(session: dict[str, Any], products: dict[str, dict[str, Any]])
 <p>Test mode stand-in for Dodo Payments. No card is charged.</p>
 <form method="post" action="/checkout/{session['session_id']}/pay"><button type="submit">Pay</button></form>
 <form method="post" action="/checkout/{session['session_id']}/pay?outcome=declined"><button type="submit">Decline the card</button></form>
+</main></body></html>"""
+
+
+def _portal_page(customer: dict[str, Any], subscriptions: list[dict[str, Any]], done: str) -> str:
+    from html import escape
+
+    rows = "".join(f"<li>{escape(s['product_id'])} &times; {s['quantity']}: {escape(s['status'])}"
+                   f"{' (cancels at the next billing date)' if s['cancel_at_next_billing_date'] else ''}</li>"
+                   for s in subscriptions)
+    said = {"card": "<p role='status'>Card updated. Any payment on hold was retried.</p>",
+            "cancel": "<p role='status'>Your subscription will end at the next billing date.</p>"}.get(done, "")
+    cid = escape(customer["customer_id"])
+    return f"""<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Dodo Payments test portal</title></head>
+<body><main><h1>Billing portal</h1><p>{escape(customer['email'])}</p>{said}<ul>{rows}</ul>
+<p>Test mode stand-in for Dodo Payments' customer portal. No card is charged.</p>
+<form method="post" action="/portal/{cid}/card"><button type="submit">Update card</button></form>
+<form method="post" action="/portal/{cid}/cancel"><button type="submit">Cancel subscription</button></form>
 </main></body></html>"""
 
 

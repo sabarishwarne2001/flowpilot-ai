@@ -24,6 +24,14 @@ export const MAIL_DIR = process.env.E2E_MAIL_DIR ?? path.join(E2E_DIR, ".mail");
 
 export const PASSWORD = "E2e-Servabo-Pass-2026!";
 
+/**
+ * The payment gateway the journeys bill through (website and payments session, C1): Dodo, the
+ * production gateway, unless E2E_GATEWAY=stripe. start-stack.sh reads the same variable.
+ */
+export const GATEWAY: "dodo" | "stripe" = (process.env.E2E_GATEWAY ?? "dodo").toLowerCase() === "stripe" ? "stripe" : "dodo";
+/** Where start-stack.sh serves the stand-in Dodo (its checkout page and customer portal). */
+export const DODO_ORIGIN = process.env.E2E_DODO_URL ?? `http://127.0.0.1:${process.env.E2E_DODO_PORT ?? 8790}`;
+
 export type UserKey =
   | "A.owner"
   | "A.admin"
