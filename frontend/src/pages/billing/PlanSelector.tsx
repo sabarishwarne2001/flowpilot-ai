@@ -11,7 +11,7 @@ import { ApiError } from "@/services/api/client";
 import { billingKeys, entitlementKeys } from "@/services/api/queryKeys";
 import { organizationBillingReturnPath } from "@/routes/tenantPaths";
 import type { PlanOption, PlanPriceOption, PortalSessionRequest } from "@/types/billing";
-import { describeEntitlement, entitlementRank } from "@/types/planEntitlements";
+import { HARD_LIMIT_NOTE, describeEntitlement, entitlementRank } from "@/types/planEntitlements";
 import {
   CORE_FEATURES,
   PLAN_FEATURE_LABELS,
@@ -615,6 +615,13 @@ const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: 
       }),
     )
     .filter((line): line is NonNullable<typeof line> => line !== null);
+  // Website and payments session (C8): the metered allowances stop at their ceiling (Dodo bills no overage).
+  const hardCeilings = plan.entitlements.some(
+    (entry) =>
+      !isPlanFeatureKey(entry.event_type) &&
+      !entry.event_type.startsWith("limit.") &&
+      entry.overage_policy.toUpperCase() === "REFUSE",
+  );
 
   return (
     <div className="mt-2 space-y-2">
@@ -645,6 +652,11 @@ const PlanFeatureList: React.FC<{ readonly plan: PlanOption; readonly previous: 
               {line.text}
             </li>
           ))}
+          {hardCeilings && (
+            <li className="text-[11px] font-medium text-foreground" data-testid={`plan-hard-limits-${plan.key}`}>
+              {HARD_LIMIT_NOTE}s.
+            </li>
+          )}
         </ul>
       ) : null}
     </div>
