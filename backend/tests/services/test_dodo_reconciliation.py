@@ -194,13 +194,16 @@ def test_two_checkouts_racing_record_one_subscription_and_alert_the_operator(dod
     b = dodo.pay(second)
     outcomes = deliver(dodo, client, db)
     assert not [o for o in outcomes if o[1].startswith("failed")], outcomes
+    # Whichever payment's events the worker reconciles first is kept (in this test all four rows
+    # share one transaction's timestamp, so either can be first); the other is flagged for refund.
     live = db.execute(select(Subscription).where(Subscription.gateway == "DODO",
                                                  Subscription.status == SubscriptionStatus.ACTIVE)).scalars().all()
-    assert [s.gateway_subscription_id for s in live] == [a["subscription_id"]]
+    assert len(live) == 1 and live[0].gateway_subscription_id in (a["subscription_id"], b["subscription_id"])
+    duplicate = b["subscription_id"] if live[0].gateway_subscription_id == a["subscription_id"] else a["subscription_id"]
     from app.models.operator_alert import OperatorAlert
 
     alerts = db.execute(select(OperatorAlert).where(OperatorAlert.kind == "DUPLICATE_SUBSCRIPTION")).scalars().all()
-    assert len(alerts) == 1 and b["subscription_id"] in alerts[0].body
+    assert len(alerts) == 1 and duplicate in alerts[0].body
 
 
 def test_a_customer_bound_to_the_organization_is_never_re_pointed(dodo, client, db, org) -> None:
