@@ -30,7 +30,8 @@ async function watchTransitions(page: Page): Promise<void> {
   await page.addInitScript(() => {
     const record = { calls: 0, values: [] as (string | null)[] };
     (window as unknown as { __vt: typeof record }).__vt = record;
-    const proto = Document.prototype as Document & { startViewTransition?: (...args: unknown[]) => unknown };
+    type Start = (...args: unknown[]) => unknown;
+    const proto = Document.prototype as unknown as { startViewTransition?: Start };
     const original = proto.startViewTransition;
     if (original) {
       proto.startViewTransition = function counted(this: Document, ...args: unknown[]) {
