@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
@@ -28,6 +28,18 @@ import { formatRelativeTime } from "@/utils/formatters";
 import type { CashPoint, HelmCalendar, HelmCockpit as Cockpit, HelmMandate, HelmWhatIf, Instrument, TrendPoint } from "@/types/helm";
 
 const NO_SCENARIO: Record<string, CashPoint[]> = {};
+const NO_PROBABILITY: Record<string, number> = {};
+const NO_DAYS: string[] = [];
+const NO_TRENDS: Record<string, TrendPoint[]> = {};
+
+// The heavy sections re-render only when their own data changes, not every time another query of
+// the page arrives (the entrance must not stall the main thread; spec 85).
+const MemoFlightPath = React.memo(FlightPath);
+const MemoPlanDiff = React.memo(PlanDiff);
+const MemoVisibility = React.memo(VisibilityMeter);
+const MemoWhatIf = React.memo(WhatIfPanel);
+const MemoHeatmap = React.memo(CalendarHeatmap);
+const MemoPillBars = React.memo(PillBars);
 const DAY_MS = 86_400_000;
 
 const MODE_WORDS = { watch: "Watch", propose: "Propose", act: "Act" } as const;
@@ -106,6 +118,17 @@ const holdingWeekAgo = (instruments: readonly Instrument[], trends: Record<strin
   return compared > 0 ? { change: now - then, compared } : null;
 };
 
+/** Active mandates, the same array while the mandates are (so the instruments grid can skip renders). */
+const activeCache = new WeakMap<readonly HelmMandate[], HelmMandate[]>();
+const activeOf = (mandates: readonly HelmMandate[]): HelmMandate[] => {
+  let found = activeCache.get(mandates);
+  if (!found) {
+    found = mandates.filter((m) => m.status === "ACTIVE");
+    activeCache.set(mandates, found);
+  }
+  return found;
+};
+
 const plural = (count: number, one: string, many: string): string => `${formatNumber(count)} ${count === 1 ? one : many}`;
 
 /** "Propose mode · Guard armed": the autonomy the active mandates run in, in words. */
@@ -150,6 +173,112 @@ const calendarDays = (calendar: HelmCalendar | undefined, direction: Direction, 
   return out;
 };
 
+/** The instruments, one per active mandate; re-rendered only when they change. */
+const InstrumentsGrid = React.memo(function InstrumentsGrid({
+  instruments,
+  active,
+  trends,
+  mandatesPath,
+}: {
+  readonly instruments: readonly Instrument[];
+  readonly active: readonly HelmMandate[];
+  readonly trends: Record<string, TrendPoint[]>;
+  readonly mandatesPath: string;
+}) {
+  const holding = instruments.filter((i) => i.state === "holding").length;
+  return (
+    <section aria-labelledby="helm-instruments" data-tour="instruments">
+      <div className="mb-3 flex items-baseline justify-between gap-2">
+        <h2 id="helm-instruments" className="helm-label">
+          Instruments
+        </h2>
+        {instruments.length > 0 ? (
+          <span className="helm-faint text-xs">
+            {formatNumber(holding)} holding · {formatNumber(instruments.filter((i) => i.state === "drifting").length)} drifting ·{" "}
+            {formatNumber(instruments.filter((i) => i.state === "breached").length)} breached
+          </span>
+        ) : null}
+      </div>
+      {active.length === 0 ? (
+        <div className="helm-panel p-6 text-sm">
+          <p>No mandate is active yet. A mandate is a rule Helm keeps true, such as never paying above the agreed price.</p>
+          <Link to={mandatesPath} className="helm-btn helm-btn-primary mt-4">
+            Choose mandates
+          </Link>
+        </div>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+          {instruments.map((instrument, index) => {
+            const points = trends[instrument.mandate_id] ?? [];
+            return (
+              <li
+                key={instrument.mandate_id}
+                className="helm-panel helm-panel-lift helm-enter flex min-w-0 flex-col gap-3 p-4"
+                style={{ ["--i" as string]: Math.min(index, 10) }}
+                data-testid="helm-instrument"
+                data-state={instrument.state}
+              >
+                <div className="flex items-start gap-3">
+                  <InstrumentRing state={instrument.state} />
+                  <div className="min-w-0 flex-1">
+                    <p className="line-clamp-2 text-sm font-semibold leading-snug" title={instrument.title}>
+                      {instrument.title}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <StateBadge state={instrument.state} />
+                      <span className="helm-chip px-2 text-xs">{MODE_WORDS[instrument.mode] ?? instrument.mode}</span>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <p className="helm-figure text-xl font-semibold leading-tight tracking-tight">{instrument.figure}</p>
+                  <p className="helm-muted mt-1 line-clamp-2 text-xs leading-relaxed" title={instrument.detail}>
+                    {instrument.detail}
+                  </p>
+                </div>
+                {points.length > 1 ? (
+                  <div className="mt-auto">
+                    <Sparkline
+                      values={points.map((p) => p.value)}
+                      tone={instrument.state}
+                      width={280}
+                      height={30}
+                      className="h-[30px] w-full"
+                      label={`${instrument.title}: over ${points.length} days, from ${formatCalendarDate(points[0]?.on)} to ${formatCalendarDate(points[points.length - 1]?.on)}, its figure ${
+                        (points[points.length - 1]?.value ?? 0) > (points[0]?.value ?? 0)
+                          ? "rose"
+                          : (points[points.length - 1]?.value ?? 0) < (points[0]?.value ?? 0)
+                            ? "fell"
+                            : "held steady"
+                      }.`}
+                    />
+                  </div>
+                ) : null}
+              </li>
+            );
+          })}
+          {active
+            .filter((m) => !instruments.some((i) => i.mandate_id === m.id))
+            .map((mandate) => (
+              <li key={mandate.id} className="helm-panel flex gap-3 p-4">
+                <InstrumentRing state="unknown" />
+                <div className="min-w-0">
+                  <p className="line-clamp-2 text-sm font-semibold" title={mandate.title}>
+                    {mandate.title}
+                  </p>
+                  <div className="mt-1.5">
+                    <StateBadge state="unknown" />
+                  </div>
+                  <p className="helm-muted mt-1.5 text-xs">Waiting for the next plan.</p>
+                </div>
+              </li>
+            ))}
+        </ul>
+      )}
+    </section>
+  );
+});
+
 export const HelmCockpit: React.FC = () => {
   const { organizationId, orgSlug, withBook } = useHelm();
   const book = useHelmBook();
@@ -182,10 +311,16 @@ export const HelmCockpit: React.FC = () => {
     queryFn: () => listHelmBacktests(organizationId, book.id),
   });
   const latestDone = replays.data?.find((row) => row.status === "DONE")?.id ?? null;
+  // The replay's history only feeds "Look back"; it is large, so it loads after the entrance.
+  const [settled, setSettled] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setSettled(true), 1_200);
+    return () => window.clearTimeout(timer);
+  }, []);
   const replay = useQuery({
     queryKey: helmKeys.backtest(organizationId, latestDone ?? "none"),
     queryFn: () => getHelmBacktest(organizationId, latestDone as string),
-    enabled: latestDone !== null,
+    enabled: latestDone !== null && settled,
   });
   const [lookBack, setLookBack] = useState(0);
   const history = replay.data?.result?.cash_history ?? {};
@@ -224,6 +359,8 @@ export const HelmCockpit: React.FC = () => {
   // A what-if belongs to the book it was asked about; switching books drops it.
   const [whatIf, setWhatIf] = useState<{ bookId: string; result: HelmWhatIf } | null>(null);
   const shownWhatIf = whatIf?.bookId === book.id ? whatIf.result : null;
+  const onWhatIf = useCallback((result: HelmWhatIf | null) => setWhatIf(result ? { bookId: book.id, result } : null), [book.id]);
+  const cashCurrencies = useMemo(() => Object.keys(cockpit.data?.summary.cash ?? {}).sort(), [cockpit.data]);
   const [direction, setDirection] = useState<Direction>("owe");
   const currency = cockpit.data ? primaryCurrencyOf(cockpit.data) : "INR";
   const heat = useMemo(() => calendarDays(calendar.data, direction, currency), [calendar.data, direction, currency]);
@@ -249,6 +386,14 @@ export const HelmCockpit: React.FC = () => {
     }
   }, [ready]);
 
+  const openDay = useCallback(
+    (iso: string): void => {
+      const target = withBook(helmPath(orgSlug, "ledger"));
+      navigate(`${target}${target.includes("?") ? "&" : "?"}view=${direction}&due=${iso}`);
+    },
+    [direction, navigate, orgSlug, withBook],
+  );
+
   if (cockpit.isLoading) {
     return <HelmSkeleton label="Reading the plan…" />;
   }
@@ -257,15 +402,14 @@ export const HelmCockpit: React.FC = () => {
   }
 
   const { plan, summary, actions, recent, value_held: valueHeld, mandates } = cockpit.data;
-  const trends = cockpit.data.trends ?? {};
+  const trends = cockpit.data.trends ?? NO_TRENDS;
   const instruments = summary.instruments ?? [];
-  const active = mandates.filter((m) => m.status === "ACTIVE");
+  const active = activeOf(mandates);
   const forecast = summary.forecast ?? summary.simulation ?? null;
   const readOnly = book.read_only;
   // With a what-if, both lines come from the same fresh simulation, so they differ only by the change.
   const flightPaths = shownWhatIf ? shownWhatIf.baseline.cash_paths : forecast?.cash_paths ?? {};
   const flightDays = Object.values(flightPaths)[0]?.length ?? 0;
-  const cashCurrencies = Object.keys(summary.cash ?? {}).sort();
   const today = summary.as_of ?? new Date().toISOString().slice(0, 10);
 
   // ---- The KPI strip: only figures that are in the data. ----
@@ -321,10 +465,6 @@ export const HelmCockpit: React.FC = () => {
       ? `Nothing ${direction === "owe" ? "we owe" : "owed to us"} falls due in the next 12 weeks.`
       : `Over the next 12 weeks, ${formatHelmMoney(heatTotal, currency)} ${direction === "owe" ? "we owe" : "is owed to us"} falls due on ${plural(heat.size, "day", "days")}` +
         (busiest ? `; the largest day is ${formatCalendarDate(busiest[0])}, with ${busiest[1].words}.` : ".");
-  const openDay = (iso: string): void => {
-    const target = withBook(helmPath(orgSlug, "ledger"));
-    navigate(`${target}${target.includes("?") ? "&" : "?"}view=${direction}&due=${iso}`);
-  };
 
   return (
     <div className="mx-auto max-w-[1400px] space-y-5">
@@ -523,15 +663,15 @@ export const HelmCockpit: React.FC = () => {
             </div>
             {shownWhatIf ? <span className="helm-chip helm-chip-accent">Showing a what-if</span> : null}
           </div>
-          <FlightPath
+          <MemoFlightPath
             paths={flightPaths}
             floors={floors}
             pins={pins}
             past={past}
             today={summary.as_of}
-            floorProbability={shownWhatIf ? shownWhatIf.baseline.floor_probability : forecast?.floor_probability ?? {}}
+            floorProbability={shownWhatIf ? shownWhatIf.baseline.floor_probability : forecast?.floor_probability ?? NO_PROBABILITY}
             scenario={shownWhatIf?.scenario.cash_paths ?? NO_SCENARIO}
-            runDays={summary.run_days ?? []}
+            runDays={summary.run_days ?? NO_DAYS}
             receipts={receipts}
           />
           {shownWhatIf ? (
@@ -600,7 +740,7 @@ export const HelmCockpit: React.FC = () => {
             {calendar.isError ? (
               <LoadFailed what="the calendar" onRetry={() => void calendar.refetch()} />
             ) : (
-              <CalendarHeatmap
+              <MemoHeatmap
                 key={direction}
                 today={today}
                 weeks={12}
@@ -620,7 +760,7 @@ export const HelmCockpit: React.FC = () => {
               </h2>
               <span className="helm-faint text-xs">{currency}, next 8 weeks</span>
             </div>
-            <PillBars
+            <MemoPillBars
               bars={weeks}
               caption={`The plan's payments in ${currency} for each of the next eight weeks, by the Monday each week starts on.`}
               periodHeader="Week of"
@@ -631,106 +771,18 @@ export const HelmCockpit: React.FC = () => {
         </div>
       </div>
 
-      <section aria-labelledby="helm-instruments" data-tour="instruments">
-        <div className="mb-3 flex items-baseline justify-between gap-2">
-          <h2 id="helm-instruments" className="helm-label">
-            Instruments
-          </h2>
-          {instruments.length > 0 ? (
-            <span className="helm-faint text-xs">
-              {formatNumber(holding)} holding · {formatNumber(instruments.filter((i) => i.state === "drifting").length)} drifting ·{" "}
-              {formatNumber(instruments.filter((i) => i.state === "breached").length)} breached
-            </span>
-          ) : null}
-        </div>
-        {active.length === 0 ? (
-          <div className="helm-panel p-6 text-sm">
-            <p>No mandate is active yet. A mandate is a rule Helm keeps true, such as never paying above the agreed price.</p>
-            <Link to={withBook(helmPath(orgSlug, "mandates"))} className="helm-btn helm-btn-primary mt-4">
-              Choose mandates
-            </Link>
-          </div>
-        ) : (
-          <ul className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {instruments.map((instrument, index) => {
-              const points = trends[instrument.mandate_id] ?? [];
-              return (
-                <li
-                  key={instrument.mandate_id}
-                  className="helm-panel helm-panel-lift helm-enter flex min-w-0 flex-col gap-3 p-4"
-                  style={{ ["--i" as string]: Math.min(index, 10) }}
-                  data-testid="helm-instrument"
-                  data-state={instrument.state}
-                >
-                  <div className="flex items-start gap-3">
-                    <InstrumentRing state={instrument.state} />
-                    <div className="min-w-0 flex-1">
-                      <p className="line-clamp-2 text-sm font-semibold leading-snug" title={instrument.title}>
-                        {instrument.title}
-                      </p>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        <StateBadge state={instrument.state} />
-                        <span className="helm-chip px-2 text-xs">{MODE_WORDS[instrument.mode] ?? instrument.mode}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="helm-figure text-xl font-semibold leading-tight tracking-tight">{instrument.figure}</p>
-                    <p className="helm-muted mt-1 line-clamp-2 text-xs leading-relaxed" title={instrument.detail}>
-                      {instrument.detail}
-                    </p>
-                  </div>
-                  {points.length > 1 ? (
-                    <div className="mt-auto">
-                      <Sparkline
-                        values={points.map((p) => p.value)}
-                        tone={instrument.state}
-                        width={280}
-                        height={30}
-                        className="h-[30px] w-full"
-                        label={`${instrument.title}: over ${points.length} days, from ${formatCalendarDate(points[0]?.on)} to ${formatCalendarDate(points[points.length - 1]?.on)}, its figure ${
-                          (points[points.length - 1]?.value ?? 0) > (points[0]?.value ?? 0)
-                            ? "rose"
-                            : (points[points.length - 1]?.value ?? 0) < (points[0]?.value ?? 0)
-                              ? "fell"
-                              : "held steady"
-                        }.`}
-                      />
-                    </div>
-                  ) : null}
-                </li>
-              );
-            })}
-            {active
-              .filter((m) => !instruments.some((i) => i.mandate_id === m.id))
-              .map((mandate) => (
-                <li key={mandate.id} className="helm-panel flex gap-3 p-4">
-                  <InstrumentRing state="unknown" />
-                  <div className="min-w-0">
-                    <p className="line-clamp-2 text-sm font-semibold" title={mandate.title}>
-                      {mandate.title}
-                    </p>
-                    <div className="mt-1.5">
-                      <StateBadge state="unknown" />
-                    </div>
-                    <p className="helm-muted mt-1.5 text-xs">Waiting for the next plan.</p>
-                  </div>
-                </li>
-              ))}
-          </ul>
-        )}
-      </section>
+      <InstrumentsGrid instruments={instruments} active={active} trends={trends} mandatesPath={withBook(helmPath(orgSlug, "mandates"))} />
 
       <div className="grid items-start gap-5 lg:grid-cols-2 xl:grid-cols-3">
         {!readOnly ? (
-          <WhatIfPanel
+          <MemoWhatIf
             key={book.id}
             organizationId={organizationId}
             bookId={book.id}
             currencies={cashCurrencies}
             holdable={holdable}
             result={shownWhatIf}
-            onResult={(result) => setWhatIf(result ? { bookId: book.id, result } : null)}
+            onResult={onWhatIf}
           />
         ) : null}
         <section aria-labelledby="helm-value" className="helm-panel p-5">
@@ -746,7 +798,7 @@ export const HelmCockpit: React.FC = () => {
             </p>
           ) : null}
         </section>
-        <VisibilityMeter visibility={summary.visibility} />
+        <MemoVisibility visibility={summary.visibility} />
       </div>
 
       <section aria-labelledby="helm-plan" className="helm-panel min-w-0 p-5" data-tour="plan">
@@ -760,7 +812,7 @@ export const HelmCockpit: React.FC = () => {
             </p>
           ) : null}
         </div>
-        <PlanDiff actions={actions} readOnly={readOnly} />
+        <MemoPlanDiff actions={actions} readOnly={readOnly} />
       </section>
 
       {recent.length > 0 ? (
@@ -768,7 +820,7 @@ export const HelmCockpit: React.FC = () => {
           <h2 id="helm-recent" className="helm-label">
             Done recently
           </h2>
-          <PlanDiff actions={recent} readOnly={readOnly} />
+          <MemoPlanDiff actions={recent} readOnly={readOnly} />
         </section>
       ) : null}
     </div>
