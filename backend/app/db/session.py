@@ -76,7 +76,10 @@ POOL_PROFILES: dict[str, PoolProfile] = {
 
 ROLE_ALIASES: dict[str, str] = {
     "worker-delivery": "worker-relay",
+    "worker-billing": "worker-relay",
+    # >>> one-release names: the billing worker's service role before it was renamed (C10).
     "worker-stripe": "worker-relay",
+    # <<< one-release names
     "migrate": "sweeper",
     "cron": "sweeper",
 }

@@ -200,19 +200,19 @@ services:
     command: ["python", "-m", "app.worker", "--loop", "scheduler"]
     restart: unless-stopped
 
-  worker-stripe:
+  worker-billing:
     build:
       context: .
       dockerfile: Dockerfile
       target: worker
-    container_name: servabo-worker-stripe
+    container_name: servabo-worker-billing
     environment:
       <<: *app-env
-      SERVICE_ROLE: worker-stripe
+      SERVICE_ROLE: worker-billing
     depends_on:
       migrate:
         condition: service_completed_successfully
-    command: ["python", "-m", "app.worker", "--loop", "stripe"]
+    command: ["python", "-m", "app.worker", "--loop", "billing"]
     restart: unless-stopped
 
   worker-ocr:

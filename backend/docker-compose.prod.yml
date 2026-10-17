@@ -390,7 +390,7 @@ services:
           memory: 768M
     restart: unless-stopped
 
-  worker-stripe:
+  worker-billing:
     build:
       context: .
       dockerfile: Dockerfile
@@ -398,9 +398,9 @@ services:
     image: servabo/worker:${IMAGE_TAG:-latest}
     environment:
       <<: *app-env
-      SERVICE_ROLE: worker-stripe
+      SERVICE_ROLE: worker-billing
     <<: *after-migrate
-    command: ["python", "-m", "app.worker", "--loop", "stripe"]
+    command: ["python", "-m", "app.worker", "--loop", "billing"]
     deploy:
       resources:
         limits:

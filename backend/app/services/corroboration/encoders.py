@@ -37,7 +37,7 @@ from app.services.corroboration import vocabulary as v
 logger = logging.getLogger("app.services.corroboration.encoders")
 
 #: Service roles whose profile forbids sentence_transformers (docker-compose SERVICE_ROLE).
-_FORBIDDEN_ROLES = frozenset({"worker-light", "worker-ocr", "worker-relay", "worker-delivery", "worker-stripe",
+_FORBIDDEN_ROLES = frozenset({"worker-light", "worker-ocr", "worker-relay", "worker-delivery", "worker-billing", "worker-stripe",
                               "sweeper", "scheduler"})
 
 

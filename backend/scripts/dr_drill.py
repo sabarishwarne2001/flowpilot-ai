@@ -65,7 +65,7 @@ TOPOLOGY: dict[str, int] = {
     "worker-relay": 2,
     "worker-delivery": 2,
     "worker-light": 2,
-    "worker-stripe": 1,
+    "worker-billing": 1,
     "worker-ocr": 2,
     "worker-enrich": 2,
     "sweeper": 1,
@@ -133,6 +133,7 @@ def drill_1_pool_budgets() -> None:
 
     for alias, target in (
         ("worker-delivery", "worker-relay"),
+        ("worker-billing", "worker-relay"),
         ("worker-stripe", "worker-relay"),
         ("migrate", "sweeper"),
         ("cron", "sweeper"),

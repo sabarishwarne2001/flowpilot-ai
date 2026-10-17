@@ -557,7 +557,7 @@ BACKUP=/srv/servabo/backups/servabo-YYYYMMDDTHHMMSSZ.dump.enc     # the file you
 ( cd "$(dirname "$BACKUP")" && sha256sum -c "$(basename "$BACKUP").sha256" )    # must say OK
 
 # 1. stop everything that writes
-$COMPOSE stop web worker-scheduler worker-light worker-relay worker-delivery worker-stripe worker-ocr worker-enrich
+$COMPOSE stop web worker-scheduler worker-light worker-relay worker-delivery worker-billing worker-ocr worker-enrich
 
 # 2. restore into a NEW database, leaving the current one untouched
 $COMPOSE exec -T db psql -U servabo -d postgres -c 'CREATE DATABASE servabo_restored'
@@ -668,7 +668,7 @@ prints nothing and `0` when the site is up.
 | `web` restarts in a loop | `$COMPOSE logs web`: a configuration refusal lists every setting to fix |
 | Emails never arrive | `PLATFORM_SMTP_*` in `.env.production`; then `$COMPOSE logs worker-delivery` |
 | AI features answer with an error | `GROQ_API_KEY` (or the customer's own key) is wrong or out of credit (a missing one stops the app from starting) |
-| Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-stripe web` |
+| Payments are not confirmed | webhook secret in `.env.production` (section 9.2 step 9); `$COMPOSE logs worker-billing web` |
 | The disk is filling up | `docker system df`; old images: `docker image prune`; old backups are pruned by the script |
 | A cron job seems not to run | `/srv/servabo/logs`, `grep CRON /var/log/syslog`, and your Healthchecks page |
 | People in one office are told "Rate limit exceeded" when signing in | `RATE_LIMIT_LOGIN_IP_PER_5MIN` in `.env.production` (default 20 per address per 5 minutes; decided N-018), then `$COMPOSE up -d web` |
