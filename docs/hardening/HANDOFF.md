@@ -401,68 +401,169 @@ planning chat, 2026-10-15)` or `DECIDED (flagship session)`); its defects are in
   `bank_match.mentions_document` and `mentions_payee`: a whole invoice number, or every distinctive
   word of the payee; never one shared word.
 
+## Website and payments session → next sessions
+
+This session (branch `claude/new-session-3qnrpb`, PR #25) renamed the product to **Servabo**, built
+the public website in `website/` and joined it to the app, and made **Dodo Payments** the real
+payment gateway. Its decisions are in NEEDS-OWNER.md as `DECIDED (website and payments session)`
+(and the owner's own as `DECIDED (owner, planning chat, 2026-10-15)`); its defects are in
+FINDINGS.md under "Website and payments session". Migrations `w1a1_servabo_database_names`,
+`w1a2_billing_disputes`, `w1a3_scheduled_plan_change`, `w1a4_hold_notices` (one head).
+
+**What changed (build on these):**
+- **Name.** Everything people see says Servabo. History files (FINDINGS, NEEDS-OWNER, STATE,
+  CHANGELOG entries before 2026-10-16) keep the old name; `backend/tests/core/test_the_old_name_is_gone.py`
+  fails when the old name appears anywhere else outside its allowlist. The old-prefix settings, `fp_live_`/
+  `fp_test_` API keys and the `--loop stripe` / `worker-stripe` names still work **for one release**
+  with a start-up warning; remove those aliases in the next release (`app/core/legacy_names.py`,
+  `api_key_secret.LEGACY_PREFIX`, `app/worker.py` `LOOP_ALIASES`, `app/db/session.py` `ROLE_ALIASES`).
+- **Renamed protocol identifiers** (each breaks once for an existing integration; the table with
+  old and new values is in CHANGELOG.md, the rename entry of 2026-10-16): the outgoing webhook
+  signature and delivery headers (`X-Servabo-*`), User-Agent strings, the API version and spend-limit
+  headers, the domain-verification TXT value and record names (`servabo-site-verification`,
+  `_servabo.`, `_servabo-challenge.`), the live-review WebSocket subprotocol (`servabo.review.v1`), the
+  refresh cookie (`servabo_refresh`: everyone signs in once more), API key prefixes (`svb_live_`,
+  `svb_test_`), browser storage keys and the sovereign licence format (`servabo-licence/1`).
+- **Website.** `website/` (Astro, static) with home, Helm, product, four solutions, pricing, security,
+  about, contact and the legal pages; its prices come from `backend/scripts/export_public_pricing.py`
+  (`website/src/data/pricing.json`, checked in CI), so the site and the app cannot disagree. Deploy:
+  `docs/website/DEPLOY.md`. The app's `/pricing`, `/terms` and `/privacy` now redirect to it
+  (`WEBSITE_URL` / `VITE_WEBSITE_URL`); emails carry its legal links. CI job `website`.
+- **Dodo is the default gateway** (`BILLING_GATEWAY=DODO`). Everything Servabo calls and receives is
+  in `docs/billing/DODO.md`. Checkout returns wait for the webhook; Dodo payments become invoices
+  issued by Dodo with a download; refunds and disputes are recorded (a lost dispute makes the
+  organization read-only until a later payment or the operator lifts it, RevOps → Disputes); plan
+  changes happen on Servabo's Billing page with Dodo's own quoted amount (upgrades now, downgrades at
+  the renewal, `billing.plan_changes`); a held renewal sends a reminder, a final notice and the
+  read-only notice (`billing.hold_notices`); customer details are sent to the Dodo customer; yearly
+  plans appear when their products are configured; the margin console counts Dodo's fees; every paid
+  plan keeps at least 55% after fees at its ceilings (Enterprise pages per seat 95,000).
+- **Usage on Dodo is hard limits.** Dodo cannot bill usage lines, so overage is refused, never billed
+  (the plan cards and usage page say so). Usage billing is a product decision for later (NEEDS-OWNER).
+- **Tests.** The stand-in Dodo is `backend/tests/fakes/fake_dodo.py` (API, checkout page, customer
+  portal, Standard Webhooks signing). The browser suite bills through it by default
+  (`E2E_GATEWAY=dodo`); CI also runs the customer journeys on Stripe. New journey 68 covers upgrade,
+  invoice download, scheduled downgrade, refund and cancellation on Dodo.
+  `tests/engines/test_dodo_concurrent_deliveries_live.py` delivers one subscription's whole life
+  twice, at once, to a real server with four reconciling workers.
+- **The database keeps historical names** (`stripe_inbound_events` holds Dodo events too, etc.;
+  DODO.md §7). Do not rename them without a reason a customer would notice.
+
+**Not yet verified against a real Dodo account** (everything was built from Dodo's documentation
+and proven against the stand-in): the ten points in DODO.md §6 — the payment's `refunds`/`disputes`
+fields, change-plan's body and `do_not_bill`, the preview amount equalling the charge, metadata after
+a plan change, the return URL's parameters, the products list's paging, how live and test keys
+differ, Dodo's own retry window, the webhook body's timestamp and the fee figures. The first session
+with a Dodo test account should run `scripts/dodo_setup.py`, one checkout, one upgrade, one
+downgrade, one refund and one card decline (Dodo's test cards), and compare with DODO.md.
+
+**What is left:**
+- Remove the one-release aliases (above) in the next release.
+- Usage billing on Dodo (if the owner wants overage billed rather than refused): Dodo's usage-based
+  billing or add-on quantities; a product decision first.
+- Real Dodo test-account verification (above) and Dodo's account verification (KYC; the website must
+  be online with pricing, terms, refund policy and contact).
+- The ledger performance item from the flagship section is unchanged.
+
 ## Owner launch checklist
 
-Only you can do these. They are in the order to do them; each says where the detailed steps are.
-Tick them in a copy of this file or in your notes. Nothing here needs code changes.
+Only you can do these. Do them in this order; each step says what you need, where to click and how
+you know it worked. Nothing here needs code changes. Rewritten in the website and payments session
+(2026-10-17) for Servabo, the website and Dodo Payments. Tick them in a copy of this file.
 
-**A. Accounts and keys (a day or two before the first deploy)**
-1. **Rotate every key ever pasted into a chat or committed** (session 3's history scan lists them in
-   SECURITY-REVIEW.md). Create new ones; the old ones must stop working.
-2. **Stripe, test mode first** (N-026, N-050, N-072, F-125):
-   - one per-seat monthly price for Developer ($49), Business ($299) and Enterprise ($799); put their
-     ids in `GATEWAY_PRICE_ID_DEVELOPER/BUSINESS/ENTERPRISE` in `.env.production` (read by
-     `seed_quota_tiers.py`);
-   - optional yearly prices: Developer $490, Business $2,990 per seat (N-051);
-   - Developers → Webhooks: the endpoint, the events and the signing secret exactly as RUNBOOK §9
-     step 9 lists them (`/api/v1/billing/webhooks/stripe`; the secret goes in `STRIPE_WEBHOOK_SECRETS`);
-   - Settings → Billing → Customer portal: allow customers to **switch plans** between Developer,
-     Business and Enterprise with **proration**, to **change quantities**, to update payment methods
-     and to cancel at the period's end (the plan picker opens the portal on the chosen plan and
-     seats, F-344);
-   - Billing → Revenue recovery → Retries: Smart Retries, and "if all retries fail" → **mark the
-     subscription as unpaid** (not cancel) (N-072);
-   - run one test checkout, one plan change in the portal and one cancellation; then switch to live
-     keys and repeat with a real card for one seat.
-3. **Postmark** for email (N-027): its SMTP server and token in the `PLATFORM_SMTP_*` settings of
-   `.env.production` (the app refuses to start without a mail server), the SPF and DKIM records it
-   gives you added at your DNS provider, and a sender signature for `no-reply@` your domain.
-4. **Operator alerts** (N-070): `OPERATOR_ALERT_EMAILS` = your address (the app refuses to start
-   without it in production).
-5. **Groq**: a key in `GROQ_API_KEY`; on Groq's and Google's price pages, check the prices in
-   `backend/scripts/seed_price_book.py` (N-054).
+**Step 1 — Rotate every key that was ever pasted into a chat or committed.**
+SECURITY-REVIEW.md lists them. In each provider's dashboard create a new key and delete the old
+one. *Done when:* every old key is deleted (the provider shows it as revoked).
 
-**B. Server (RUNBOOK §9)**
-6. A server of **4 vCPU, 16 GB RAM, 160 GB SSD** (COSTS.md), Docker installed.
-7. **DNS:** an A record for `app.YOUR-DOMAIN` pointing at the server **before** Caddy's first start
-   (Caddy gets the certificate on its first request); a mailbox for `admin@` (N-028).
-8. Follow RUNBOOK §9.1 to §9.3: clone, `.env.production` from the template, pin images by digest
-   (N-017), `docker compose up -d`, then `seed_quota_tiers.py` and `seed_price_book.py --version auto`
-   (also on every later deploy, §9.3).
-9. **Backups (§9.4):** create `/etc/servabo/backup.key` and copy it into your password manager
-   **now**; set `SERVABO_BACKUP_MIRROR_CMD` to copy each backup to another provider; run one backup
-   and one restore drill by hand and note the restore time.
-10. **Scheduled jobs and monitoring (§9.6):** install `/etc/servabo/sweepers.env` and the two cron
-    files, switch off the three point-in-time lines with the command given, create free
-    Healthchecks.io checks (uptime with a 1-minute period, the backup, the restore drill, the
-    retention sweep) and set `ALERT_WEBHOOK` for the sweeper watchdog. Check them once by hand.
-11. **The CPU-only image** (F-045): build it on a machine that can reach download.pytorch.org and
-    push it to your registry; use its digest.
+**Step 2 — Buy the domain and add it to Cloudflare.**
+Buy `servabo.app` (or your choice) at Cloudflare Registrar, or move an existing domain's DNS to
+Cloudflare (free plan). You will create two addresses: `servabo.app` for the website and
+`app.servabo.app` for the app. *Done when:* the domain shows "Active" in Cloudflare.
 
-**C. Before the first customer**
-12. **Legal:** have counsel replace the placeholder terms and privacy pages (`/terms`, `/privacy`;
-    N-029, N-073) and add a support or sales email to the pricing page footer.
-13. **Real-model spot checks** (sessions 2 and 3): a prompt-injection document, an invoice with many
-    line items, an Indian GST invoice, a photographed page and a handwritten page; check the fields
-    and the review queue. Real OCR (PaddleOCR) on scans was never run in the test sandbox.
-14. **Enterprise identity on a staging domain:** claim and verify a real domain with a TXT record
-    and sign in once through a real Okta or Entra ID test tenant (`branding.domain` and the live
-    IdP were stood in by tests).
-15. **One SQL check** for workspace regional settings saved before F-320 (HANDOFF, session 3).
-16. Merge the last pull request; deploy; sign up as a new customer yourself and go through the
-    first-run checklist end to end.
-17. **After any encryption-key rotation** (`EMAIL_ENCRYPTION_KEYS`): run the re-encryption sweep and
-    its `--verify` (RUNBOOK) before removing the old key; F-370 made it cover every secret.
-18. **Healthcare customers:** tell them the HIPAA redaction profile removes names, dates of birth,
-    SSNs, card numbers, emails and phone numbers; the other Safe Harbor identifiers need a manual
-    pass (N-077).
+**Step 3 — Put the website online (about 15 minutes).**
+Follow `docs/website/DEPLOY.md`, Option A (Cloudflare Pages). Set `PUBLIC_CONTACT_EMAIL`; leave the
+phone number empty unless you want it public (never commit it). *Done when:* `https://servabo.app`
+opens and its Pricing, Terms, Privacy and Refunds pages load. Have a lawyer read the terms, privacy
+and refund pages before the first paying customer (N-029, N-073).
+
+**Step 4 — Apply to Dodo Payments.**
+Sign up at dodopayments.com. Verification asks for your ID and a selfie, your bank account (in your
+own name) and your website: it must be online first (step 3). It takes 1–3 working days. Meanwhile
+everything below works in **Test Mode**. *Done when:* Dodo's dashboard shows your business verified.
+
+**Step 5 — Email, AI and alerts accounts.**
+- **Postmark** (N-027): create a server, add the SPF and DKIM records it shows you in Cloudflare
+  DNS, and a sender signature for `no-reply@servabo.app`. Keep its SMTP host and token for step 7.
+- **Groq**: create an API key at console.groq.com/keys. Check the model prices in
+  `backend/scripts/seed_price_book.py` against Groq's price page (N-054).
+- **Cloudflare R2** (decided: EU jurisdiction): create a bucket with "EU" jurisdiction and an API
+  token for it, for customers' documents.
+*Done when:* you have the Postmark token, the Groq key and the R2 bucket name, endpoint and keys in
+your password manager.
+
+**Step 6 — Rent the server (Hetzner, decided).**
+4 vCPU, 16 GB RAM, 160 GB disk, Ubuntu 24.04 (COSTS.md has the current price). In Cloudflare DNS add
+an **A record** `app` → the server's IP address, **DNS only** (grey cloud), **before** the first
+start, so the app can get its HTTPS certificate. *Done when:* `ping app.servabo.app` answers from
+your server's address.
+
+**Step 7 — Install Servabo on the server.**
+Follow RUNBOOK §9.2 steps 1 to 7 exactly: the user and folders, the code, `.env.production` from the
+template (secrets generated with the commands shown; Postmark, Groq, R2 from step 5;
+`OPERATOR_ALERT_EMAILS` = your own address; `FRONTEND_URL=https://app.servabo.app`,
+`WEBSITE_URL=https://servabo.app`; Dodo's **test** API key and `DODO_LIVEMODE=false`), the build, the
+migrations and the start. *Done when:* `https://app.servabo.app/api/v1/health/ready` says ready.
+
+**Step 8 — Create the plans in Dodo (test mode) and publish them.**
+RUNBOOK §9.2 step 8: `dodo_setup.py --create-test-products` creates the five plan products and two
+add-ons and prints seven lines for `.env.production`; then `dodo_setup.py` must say OK for all seven;
+then the two seed commands and the first administrator. *Done when:* signed in as a new user, the
+Billing page shows Developer $49, Business $299 and Enterprise $799 per seat.
+
+**Step 9 — Connect Dodo's webhooks and buy a plan with a test card.**
+RUNBOOK §9.2 step 9: add the webhook endpoint in Dodo (Test Mode), put its secret in
+`DODO_WEBHOOK_SECRET`, restart. Then, as a new customer, buy Developer with Dodo's test card.
+*Done when:* back in Servabo the page says "Payment confirmed", Billing shows the plan and the
+invoice "issued by Dodo Payments", and its "Download invoice" opens Dodo's PDF. Also try: upgrade to
+Business (the amount shown is what is charged), a refund from Dodo's dashboard (the invoice says
+"Refunded"), and cancelling in "Manage payment method" (Billing says the plan ends at the period's
+end). Compare what you see with `docs/billing/DODO.md` §6 and note anything different.
+
+**Step 10 — Backups, scheduled jobs and monitoring (same day as step 7).**
+RUNBOOK §9.4 and §9.6: create `/etc/servabo/backup.key` and copy it into your password manager
+**now**; set `SERVABO_BACKUP_MIRROR_CMD` to copy backups to another provider; install the sweeper
+cron files; create the free Healthchecks.io checks (uptime, backup, restore drill, retention sweep)
+and set `ALERT_WEBHOOK`. Run one backup and one restore drill by hand. *Done when:* the drill
+prints its restore time and every Healthchecks.io check is green.
+
+**Step 11 — Go live with Dodo.**
+Only after step 4 says verified and step 9 worked. In Dodo, switch off Test Mode, create the same
+seven products in live mode (same prices: plan products per seat, recurring, tax not included), a
+live webhook endpoint (same URL) and a live API key. In `.env.production`: the live key, the live
+webhook secret, the seven live product ids, `DODO_LIVEMODE=true`; restart, and run the seed commands
+again (step 8). Buy one seat of Developer with your own card, then refund it from Dodo's dashboard.
+*Done when:* your own live payment shows in Billing and the refund shows as "Refunded".
+
+**Step 12 — Before the first customer.**
+- **Legal:** a lawyer reads the website's terms, privacy and refund pages (`servabo.app/terms`,
+  `/privacy`, `/refunds`; N-029, N-073) and you publish their changes (edit `website/src/pages/`).
+- **Real-model spot checks** (sessions 2 and 3): a prompt-injection document, an invoice with many
+  line items, an Indian GST invoice, a photographed page and a handwritten page; check the fields
+  and the review queue. Real OCR (PaddleOCR) on scans was never run in the test sandbox.
+- **Enterprise identity on a staging domain:** claim and verify a real domain with a TXT record
+  (`servabo-site-verification=…`) and sign in once through a real Okta or Entra ID test tenant
+  (`branding.domain` and the live IdP were stood in by tests).
+- **One SQL check** for workspace regional settings saved before F-320 (HANDOFF, session 3).
+- **The CPU-only image** (F-045): build it on a machine that can reach download.pytorch.org, push it
+  to your registry and use its digest; pin the other images by digest too (RUNBOOK §9.2 step 11).
+- Merge the last pull request; deploy (RUNBOOK §9.3); sign up as a new customer yourself and go
+  through the first-run checklist end to end.
+
+**Later, whenever it applies**
+- **After any encryption-key rotation** (`EMAIL_ENCRYPTION_KEYS`): run the re-encryption sweep and
+  its `--verify` (RUNBOOK) before removing the old key; F-370 made it cover every secret.
+- **Healthcare customers:** tell them the HIPAA redaction profile removes names, dates of birth,
+  SSNs, card numbers, emails and phone numbers; the other Safe Harbor identifiers need a manual
+  pass (N-077).
+- **Next release:** remove the one-release aliases for the old name (HANDOFF, "Website and payments
+  session → next sessions").
